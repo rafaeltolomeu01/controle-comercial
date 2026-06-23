@@ -1,0 +1,25 @@
+{
+  "name": "controle-comercial-backend",
+  "version": "1.0.0",
+  "description": "Backend for Solicitação de Despesas module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "migrate": "knex migrate:latest",
+    "test": "echo \"No tests yet\"",
+    "start": "node src/index.js",
+    "prod": "node src/index.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "knex": "^2.4.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
