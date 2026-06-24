@@ -13,5 +13,15 @@ module.exports = {
         conn.run('PRAGMA foreign_keys = ON', done);
       }
     }
+  },
+  production: {
+    client: 'pg',
+    connection: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    },
+    migrations: {
+      directory: './migrations'
+    }
   }
 };

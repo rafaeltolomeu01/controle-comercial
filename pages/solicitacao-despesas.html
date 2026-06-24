@@ -1,0 +1,154 @@
+<div class="view-tabs no-print">
+            <a href="#despesas" class="view-tab-btn">Despesas de Campo</a>
+            <a href="#solicitacao-despesas" class="view-tab-btn active" id="tab-balance-solicitation-form">Solicitação de Saldo</a>
+            <a href="#despesas-dashboard" class="view-tab-btn" id="tab-balance-approvals-from-sol">Aprovação de Saldo</a>
+          </div>
+
+          <div class="card" id="balance-form-card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="card-title">Solicitação de Saldo</span>
+              <button class="btn btn-primary" id="btn-open-balance-form" type="button">+ Solicitar Saldo</button>
+            </div>
+            
+            <div id="balance-form-container" class="hidden" style="padding: 24px;">
+              <form id="solicitacao-despesas-form">
+                <!-- Empresa e Solicitante -->
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="sol-empresa">Empresa Vinculada *</label>
+                    <select id="sol-empresa" required>
+                      <option value="">Selecione uma Empresa...</option>
+                      <option value="J. A. Distribuidora">J. A. Distribuidora</option>
+                      <option value="JDS Distribuidora">JDS Distribuidora</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="sol-solicitante">Solicitante *</label>
+                    <input type="text" id="sol-solicitante" required placeholder="Ex: Rafael Tolomeu">
+                  </div>
+                </div>
+
+                <!-- Justificativa -->
+                <div class="form-group">
+                  <label for="sol-justificativa">Justificativa para Solicitação *</label>
+                  <textarea id="sol-justificativa" rows="3" required placeholder="Ex: Viagem para atendimento de clientes na rota de Governador Valadares."></textarea>
+                </div>
+
+                <!-- Valor Hotel e Alimentação -->
+                <div class="card" style="margin-top: 15px; margin-bottom: 15px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color);">
+                  <div class="card-header" style="padding: 10px 15px; border-bottom: 1px solid var(--border-color);">
+                    <span class="card-title" style="font-size: 0.85rem;">Hotel e Alimentação (Cálculo Automático)</span>
+                  </div>
+                  <div style="padding: 15px;">
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">Selecione o número de noites para calcular automaticamente o valor de hotel e alimentação:</p>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px;">
+                      <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: var(--bg-input);">
+                        <input type="radio" name="sol-noites" value="0" checked style="margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600;">Sem Hospedagem</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">R$ 0,00</span>
+                      </label>
+                      <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: var(--bg-input);">
+                        <input type="radio" name="sol-noites" value="1" style="margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600;">1 Noite</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">R$ 120,00</span>
+                      </label>
+                      <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: var(--bg-input);">
+                        <input type="radio" name="sol-noites" value="2" style="margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600;">2 Noites</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">R$ 240,00</span>
+                      </label>
+                      <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: var(--bg-input);">
+                        <input type="radio" name="sol-noites" value="3" style="margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600;">3 Noites</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">R$ 360,00</span>
+                      </label>
+                      <label style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; background: var(--bg-input);">
+                        <input type="radio" name="sol-noites" value="4" style="margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 600;">4 Noites</span>
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">R$ 480,00</span>
+                      </label>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px dashed var(--border-color);">
+                      <span style="font-size: 0.8rem; font-weight: 600;">Valor Hotel/Alimentação Calculado:</span>
+                      <span id="sol-hotel-alim-display" style="font-size: 1rem; font-weight: 700; color: var(--primary-color);">R$ 0,00</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Logística e Rota -->
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="sol-abastecimento">Valor para Abastecimento (R$)</label>
+                    <input type="number" id="sol-abastecimento" step="0.01" min="0" placeholder="Ex: 150.00">
+                  </div>
+                  <div class="form-group">
+                    <label for="sol-placa">Placa do Veículo *</label>
+                    <input type="text" id="sol-placa" required placeholder="Ex: ABC1D23" maxlength="7" style="text-transform: uppercase;">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="sol-rota">Rota / Cidades Destino *</label>
+                  <textarea id="sol-rota" rows="2" required placeholder="Ex: Governador Valadares, Teófilo Otoni, etc."></textarea>
+                </div>
+
+                <!-- Outras Despesas (Lista Dinâmica) -->
+                <div class="card" style="margin-top: 15px; margin-bottom: 15px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color);">
+                  <div class="card-header" style="padding: 10px 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <span class="card-title" style="font-size: 0.85rem;">Outras Despesas (Opcional)</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-add-extra" style="padding: 4px 10px; font-size: 0.75rem;">+ Adicionar Item</button>
+                  </div>
+                  <div style="padding: 15px;">
+                    <div id="sol-extras-container" style="display: flex; flex-direction: column; gap: 8px;">
+                      <!-- Rows added dynamically -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Resumo Financeiro e Enviar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(37,99,235,0.05); padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 20px;">
+                  <div>
+                    <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: block;">Total Geral Solicitado</span>
+                    <span id="sol-total-geral" style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color);">R$ 0,00</span>
+                  </div>
+                  <div style="display: flex; gap: 12px;">
+                    <button type="submit" class="btn btn-primary" style="height: 44px; padding: 0 24px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                      Enviar para Análise
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-balance-form" style="height: 44px; font-weight: 600; padding: 0 24px;">Cancelar</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Tabela de Histórico de Solicitações do Vendedor -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Minhas Controle de Comprovação</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Data</th>
+                    <th>Solicitante</th>
+                    <th>Placa</th>
+                    <th>Rota</th>
+                    <th style="text-align: right;">Hotel/Alim.</th>
+                    <th style="text-align: right;">Abastecimento</th>
+                    <th style="text-align: right;">Total Geral</th>
+                    <th>Status</th>
+                    <th style="text-align: center; width: 140px;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="balances-table-body">
+                  <!-- Injected dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>

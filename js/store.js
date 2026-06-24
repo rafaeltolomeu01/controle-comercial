@@ -208,10 +208,13 @@ const Store = {
     return null;
   },
 
-  setLoggedUser(user) {
+  setLoggedUser(user, token) {
     try {
       localStorage.setItem('controle_campo_logged_user', JSON.stringify(user));
       localStorage.setItem('controle_campo_auth', 'true');
+      if (token) {
+        localStorage.setItem('controle_campo_token', token);
+      }
     } catch(e) {
       console.error(e);
     }
@@ -220,6 +223,11 @@ const Store = {
   clearLoggedUser() {
     localStorage.removeItem('controle_campo_logged_user');
     localStorage.removeItem('controle_campo_auth');
+    localStorage.removeItem('controle_campo_token');
+  },
+
+  getToken() {
+    return localStorage.getItem('controle_campo_token') || '';
   },
 
   getActiveUnitId() {

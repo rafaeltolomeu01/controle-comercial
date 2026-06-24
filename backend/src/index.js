@@ -5,6 +5,8 @@ const knex = require('knex');
 const config = require('../knexfile');
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-controle-comercial';
 const configFilePath = path.join(__dirname, 'emails_config.json');
 
 const db = knex(config.development);
@@ -279,56 +281,111 @@ app.use(express.static(FRONTEND_ROOT, {
   maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0
 }));
 
-// Simulated authentication middleware (verified against SQLite 'usuarios' table)
-app.use(async (req, res, next) => {
-  const userId = req.header('X-User-Id');
-  const companyId = req.header('X-Company-Id') || '001';
-  const companyName = req.header('X-Company-Name') || req.header('X-Company-Id') || 'JDS Distribuidora';
+const multer = require('multer');
 
-  // Exclude login and register routes from auth check
+// Configure Multer storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const companyId = req.user ? req.user.empresa_id : '001';
+    const uploadPath = path.join(__dirname, '..', 'uploads', companyId);
+    
+    // Create directory recursively if it doesn't exist
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+// File filter (only allow images and safe documents)
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|pdf|docx|xlsx/;
+  const isMimeValid = allowedTypes.test(file.mimetype.toLowerCase());
+  const isExtValid = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+
+  if (isMimeValid && isExtValid) {
+    return cb(null, true);
+  }
+  cb(new Error('Tipo de arquivo não permitido. Apenas imagens e documentos (PDF, DOCX, XLSX) são aceitos.'));
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+// Servir arquivos estáticos da pasta uploads
+const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads');
+app.use('/uploads', express.static(UPLOADS_ROOT));
+
+// Real JWT Authentication Middleware
+app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
+  
   if (publicPaths.includes(req.path)) {
     return next();
   }
 
-  if (!userId) {
-    req.user = { id: 'demo_user', name: 'Demo User', profile: 'Vendedor', empresa_id: companyId, empresa_name: companyName, permissions: [] };
-    return next();
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Acesso negado: Token de autenticação ausente.' });
   }
 
   try {
-    let user = await db('usuarios').where({ id: userId, empresa_id: companyId }).first();
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Check if the user is still active in the database
+    const user = await db('usuarios').where({ id: decoded.id }).first();
     if (!user) {
-      // Fallback quando o nome/CNPJ da empresa foi alterado, mas o usuário já existe no banco.
-      user = await db('usuarios').where({ id: userId }).first();
-    }
-    if (!user) {
-      const profile = req.header('X-User-Profile') || 'Vendedor';
-      req.user = { id: userId, name: userId, profile, empresa_id: companyId, empresa_name: companyName, permissions: [] };
-      return next();
+      return res.status(404).json({ error: 'Acesso negado: Usuário não cadastrado.' });
     }
 
     if (user.status === 'AGUARDANDO LIBERAÇÃO') {
-      return res.status(403).json({ error: 'Acesso pendente de liberação gerencial.' });
+      return res.status(403).json({ error: 'Acesso negado: Seu acesso aguarda aprovação gerencial.' });
     }
     if (user.status === 'INATIVO') {
-      return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
+      return res.status(403).json({ error: 'Acesso negado: Seu acesso foi desativado por um administrador.' });
     }
 
     req.user = {
       id: user.id,
       name: user.name,
+      username: user.username,
       profile: user.profile,
       empresa_id: user.empresa_id,
-      empresa_name: companyName,
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
     };
     next();
   } catch (err) {
-    console.error('Auth middleware error:', err);
-    res.status(500).json({ error: 'Erro de autenticação interna' });
+    console.error('JWT Auth verification failed:', err.message);
+    return res.status(401).json({ error: 'Sessão expirada ou inválida. Por favor, faça login novamente.' });
   }
+});
+
+// Secure endpoint for physical file uploads
+app.post('/api/upload', (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: `Erro de upload: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+    }
+
+    const companyId = req.user ? req.user.empresa_id : '001';
+    const fileUrl = `/uploads/${companyId}/${req.file.filename}`;
+    res.json({ success: true, url: fileUrl });
+  });
 });
 
 // Helper to check company and role access to a request
@@ -1438,18 +1495,31 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     }
 
-    res.json({
+    const token = jwt.sign({
       id: user.id,
       name: user.name,
       username: user.username,
       profile: user.profile,
       unitId: user.unitId,
-      status: user.status,
-      permissions: JSON.parse(user.permissions || '[]'),
-      email: user.email || '',
-      phone: user.phone || '',
-      photo: user.photo || '',
-      empresa_id: user.empresa_id
+      empresa_id: user.empresa_id,
+      permissions: JSON.parse(user.permissions || '[]')
+    }, JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        profile: user.profile,
+        unitId: user.unitId,
+        status: user.status,
+        permissions: JSON.parse(user.permissions || '[]'),
+        email: user.email || '',
+        phone: user.phone || '',
+        photo: user.photo || '',
+        empresa_id: user.empresa_id
+      }
     });
   } catch (err) {
     console.error(err);
@@ -1460,7 +1530,15 @@ app.post('/api/login', async (req, res) => {
 // Register / Create User
 app.post('/api/usuarios', async (req, res) => {
   const { id, name, username, password, profile, unitId, email, phone, photo } = req.body;
-  const companyId = req.header('X-Company-Id') || '001';
+  
+  const actor = req.user || {};
+  const actorPerms = actor.permissions || [];
+  const canManageUsers = actor.profile === 'Administrador' || actorPerms.includes('Administrador') || actorPerms.includes('Usuários');
+  if (!canManageUsers) {
+    return res.status(403).json({ error: 'Acesso negado: você não tem permissão para cadastrar usuários.' });
+  }
+
+  const companyId = req.user.empresa_id;
 
   if (!name || !username || !password || !profile || !unitId) {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
@@ -1908,11 +1986,9 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('unitId', req.user.unitId);
       }
-    }
 
-    // If Vendedor, filter by user
-    if (req.user.profile === 'Vendedor') {
-      query = query.where('userId', req.user.id);
+      const permittedIds = await getPermittedSellerIds(req.user, db);
+      query = query.whereIn('userId', permittedIds);
     }
 
     const list = await query.orderBy('created_at', 'desc');
@@ -1935,6 +2011,14 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
 
+    const permittedSellerIds = await getPermittedSellerIds(req.user, db);
+    const actorPerms = req.user.permissions || [];
+    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    
+    if (!isActorAdmin && !permittedSellerIds.map(String).includes(String(record.userId))) {
+      return res.status(403).json({ error: 'Acesso negado: esta despesa está fora da sua cadeia de atendimento' });
+    }
+
     res.json(record);
   } catch (err) {
     console.error(err);
@@ -1942,7 +2026,7 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
   }
 });
 
-// Delete travel expense refund (only if pending and owner)
+// Delete travel expense refund (only if pending and owner/admin)
 app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -1958,8 +2042,12 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(400).json({ error: 'Apenas despesas com status Pendente podem ser excluídas.' });
     }
 
-    if (req.user.profile === 'Vendedor' && record.userId !== req.user.id) {
-      return res.status(403).json({ error: 'Acesso negado: esta despesa pertence a outro vendedor' });
+    const isOwner = String(record.userId) === String(req.user.id);
+    const actorPerms = req.user.permissions || [];
+    const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Acesso negado: você não é o proprietário desta despesa' });
     }
 
     await db('despesas_reembolsos').where({ id }).delete();
@@ -1968,7 +2056,7 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
     await db('auditoria_logs').insert({
       usuario_id: req.user.id,
       acao: 'EXCLUIU_DESPESA',
-      detalhes: `Vendedor ${req.user.name || req.user.id} excluiu comprovante de despesa #${id}`,
+      detalhes: `Usuário ${req.user.name || req.user.id} excluiu comprovante de despesa #${id}`,
       empresa_id: req.user.empresa_id
     });
 
@@ -1996,6 +2084,15 @@ app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
 
     if (!record) {
       return res.status(404).json({ error: 'Despesa não encontrada' });
+    }
+
+    const actorPerms = req.user.permissions || [];
+    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    if (!isActorAdmin) {
+      const permittedIds = await getPermittedSellerIds(req.user, db);
+      if (!permittedIds.map(String).includes(String(record.userId))) {
+        return res.status(403).json({ error: 'Acesso negado: esta despesa pertence a um vendedor fora da sua cadeia.' });
+      }
     }
 
     await db('despesas_reembolsos').where({ id }).update({

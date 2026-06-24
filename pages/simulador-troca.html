@@ -1,0 +1,275 @@
+<div class="view-tabs no-print">
+            <button class="view-tab-btn active" id="tab-exchange-nova-btn">Nova Troca</button>
+            <button class="view-tab-btn" id="tab-exchange-historico-btn">Histórico de Trocas</button>
+            <button class="view-tab-btn" id="tab-exchange-importar-btn" style="display: none;">Importar Planilha</button>
+          </div>
+
+          <!-- TAB CONTENT: NOVA TROCA -->
+          <div id="exchange-tab-nova" class="exchange-tab-content">
+            <!-- Passo 1: Identificação do Cliente -->
+            <div class="card" id="exchange-client-card">
+              <div class="card-header">
+                <span class="card-title">Relacionar troca para cliente</span>
+              </div>
+              <div style="padding: 24px;">
+                <form id="exchange-client-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="exchange-client-code">Código do Cliente *</label>
+                      <input type="text" id="exchange-client-code" required placeholder="Ex: 12345">
+                    </div>
+                    <div class="form-group">
+                      <label for="exchange-client-name">Nome Fantasia do Cliente *</label>
+                      <input type="text" id="exchange-client-name" required placeholder="Ex: MERCEARIA EXEMPLO">
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1; height: 44px; font-weight: 600;">Iniciar Seleção de Produtos</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Passo 2: Workspace de Lançamento (Escondido por padrão) -->
+            <div id="exchange-workspace" class="hidden">
+              <!-- Info do Cliente Atual -->
+              <div class="card" style="padding: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary-color);">
+                <div>
+                  <h4 style="margin: 0; font-family: var(--font-title); color: var(--primary-color);">Cliente em Atendimento</h4>
+                  <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;" id="exchange-active-client-label">CÓD: - | NOME: -</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="btn-exchange-change-client" type="button">Alterar Cliente</button>
+              </div>
+
+              <!-- Seleção por Categorias / Produtos -->
+              <div class="card hidden" id="exchange-categories-card">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="card-title" id="exchange-workspace-title">Selecione uma Categoria</span>
+                  <button class="btn btn-secondary btn-sm hidden" id="btn-exchange-back-categories" type="button">← Voltar para Categorias</button>
+                </div>
+                <div style="padding: 24px;">
+                  <!-- Grade de Categorias -->
+                  <div id="exchange-categories-grid" class="quick-actions-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
+                    <!-- Injected dynamically: Açaí, Picolés, Copo, Linha especial, Outros -->
+                  </div>
+
+                  <!-- Lista de Produtos de uma Categoria (Escondida por padrão) -->
+                  <div id="exchange-products-grid-container" class="hidden">
+                    <div style="margin-bottom: 16px; position: relative;">
+                  <input type="text" id="exchange-product-search" placeholder="Buscar produto nesta categoria..." style="width: 100%; height: 38px; padding-left: 12px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px;">
+                    </div>
+                    <div id="exchange-products-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
+                      <!-- Injected dynamically -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+             <!-- Carrinho de Itens Lançados -->
+             <div class="card" id="exchange-cart-card">
+               <div class="card-header">
+                 <span class="card-title">Produtos Relacionados para Troca/Devolução</span>
+               </div>
+               
+               <!-- Visualização Desktop: Tabela -->
+               <div class="exchange-cart-desktop-view table-responsive" style="padding: 0 12px;">
+                 <table class="exchange-cart-table" style="width: 100%; margin-top: 12px; font-size: 0.85rem;">
+                   <thead>
+                     <tr>
+                       <th>Código</th>
+                       <th>Produto</th>
+                       <th>Tipo</th>
+                       <th style="text-align: center;">Qtd</th>
+                       <th style="text-align: right;">Unitário/Caixa</th>
+                       <th style="text-align: right;">Total Item</th>
+                       <th style="text-align: center; width: 60px;">Ações</th>
+                     </tr>
+                   </thead>
+                   <tbody id="exchange-cart-tbody">
+                     <tr>
+                       <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum produto adicionado à troca ainda.</td>
+                     </tr>
+                   </tbody>
+                   <tfoot>
+                     <tr style="font-weight: bold; border-top: 2px solid var(--border-color); font-size: 1rem;">
+                       <td colspan="5">VALOR TOTAL DA TROCA:</td>
+                       <td id="exchange-cart-total-label" style="text-align: right; color: var(--primary-color);">R$ 0,00</td>
+                       <td></td>
+                     </tr>
+                   </tfoot>
+                 </table>
+               </div>
+
+               <!-- Visualização Mobile: Lista Inline de Itens -->
+               <div class="exchange-cart-mobile-view" style="display: none; padding: 12px;">
+                 <div id="exchange-cart-mobile-list" style="display: flex; flex-direction: column; gap: 8px;">
+                   <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">
+                     Nenhum produto adicionado à troca ainda.
+                   </div>
+                 </div>
+                 <!-- Botões de Ação para Celular -->
+                 <div style="display: flex; gap: 10px; margin-top: 12px; margin-bottom: 12px;">
+                   <button class="btn btn-secondary" id="btn-exchange-clear-mobile" type="button" style="flex: 1; min-height: 40px !important; margin: 0; width: auto !important;">Limpar Tudo</button>
+                   <button class="btn btn-primary" id="btn-exchange-add-item-trigger-mobile" type="button" style="flex: 2; min-height: 40px !important; font-weight: bold; margin: 0; width: auto !important;">+ Adicionar mais item</button>
+                 </div>
+                 <!-- Valor total visível caso não use rodapé sticky -->
+                 <div id="exchange-cart-mobile-total-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(255,255,255,0.02); border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
+                   <span>VALOR TOTAL DA TROCA:</span>
+                   <span id="exchange-cart-total-label-mobile" style="color: var(--primary-color);">R$ 0,00</span>
+                 </div>
+               </div>
+
+               <div class="exchange-cart-actions" style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                 <button class="btn btn-secondary" id="btn-exchange-clear" type="button">Limpar Tudo</button>
+                 <button class="btn btn-primary" id="btn-exchange-add-item-trigger" type="button" style="font-weight: bold; width: auto !important; min-height: 38px !important; margin: 0;">+ Adicionar mais item</button>
+                 <button class="btn btn-success" id="btn-exchange-finalize" type="button" style="font-weight: bold; padding: 0 30px; width: auto !important; min-height: 38px !important; margin: 0;">Finalizar Lançamento</button>
+               </div>
+             </div>
+            </div>
+
+            <!-- Passo 3: Recibo de Troca Finalizada (Escondido por padrão) -->
+            <div id="exchange-receipt-container" class="hidden">
+              <div class="card" style="border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.05); padding: 20px;">
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                  <div class="stat-icon" style="background-color: rgba(16, 185, 129, 0.14); color: var(--success); min-width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.25rem;">✓</div>
+                  <div>
+                    <h3 style="margin: 0; color: var(--success); font-family: var(--font-title);">Troca Finalizada com Sucesso!</h3>
+                    <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">Copie o texto gerado abaixo e envie ao seu supervisor pelo WhatsApp.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="padding: 24px;">
+                <span class="card-title" style="margin-bottom: 12px; display: block;">Visualização da Mensagem (Impressora Térmica 58mm)</span>
+                <textarea id="exchange-message-output" rows="18" readonly style="font-family: monospace; font-size: 0.8rem; width: 100%; max-width: 400px; margin: 0 auto; display: block; background-color: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; color: var(--text-main); line-height: 1.35; resize: none;"></textarea>
+                
+                <div style="display: flex; justify-content: center; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                  <button class="btn btn-primary" id="btn-exchange-copy-text" style="font-weight: 600; padding: 0 24px; height: 44px;">Copiar mensagem de texto</button>
+                  <button class="btn btn-secondary" id="btn-exchange-new-simulation" style="padding: 0 24px; height: 44px;">Nova Simulação</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB CONTENT: HISTÓRICO DE TROCAS -->
+          <div id="exchange-tab-historico" class="exchange-tab-content hidden">
+            <div class="card" style="padding: 16px; margin-bottom: 16px;">
+              <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+                  <label for="exchange-history-search">Buscar por Cliente (Código ou Nome)</label>
+                  <input type="text" id="exchange-history-search" placeholder="Filtrar por nome fantasia ou código..." style="width: 100%; height: 38px; padding-left: 12px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px;">
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Histórico de Simulações Finalizadas</span>
+              </div>
+              <div style="padding: 12px;">
+                <div id="exchange-history-list" style="display: flex; flex-direction: column; gap: 8px;">
+                  <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85rem;">Nenhuma simulação de troca encontrada.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB CONTENT: IMPORTADOR DE PRODUTOS -->
+          <div id="exchange-tab-importar" class="exchange-tab-content hidden">
+            <div class="card" style="padding: 24px;">
+              <span class="card-title">Importar Nova Planilha de Produtos</span>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">
+                Selecione uma planilha (Excel ou CSV) que possui a relação de produtos com seus respectivos preços (Caixa e Fracionado).
+                Na próxima etapa você poderá mapear as colunas da planilha para o banco de dados.
+              </p>
+              
+              <div style="border: 2px dashed var(--border-color); padding: 30px; border-radius: 8px; text-align: center; background: rgba(255,255,255,0.01);">
+                <input type="file" id="exchange-file-input" accept=".xlsx, .xls, .csv" style="display: none;">
+                <label for="exchange-file-input" class="btn btn-secondary" style="cursor: pointer; display: inline-block;">
+                  Selecionar Planilha (Excel ou CSV)
+                </label>
+                <div id="exchange-file-name" style="margin-top: 10px; font-weight: bold; color: var(--primary-color);">Nenhum arquivo selecionado</div>
+              </div>
+            </div>
+
+            <!-- Mapeador de Colunas (Escondido por padrão) -->
+            <div class="card hidden" id="exchange-mapper-card" style="padding: 24px;">
+              <span class="card-title">Mapear Colunas da Planilha</span>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">
+                Identifique a coluna correta para cada campo do produto do simulador de trocas.
+              </p>
+              
+              <form id="exchange-mapper-form">
+                <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                  <div class="form-group">
+                    <label for="map-codigo">Código do Produto *</label>
+                    <select id="map-codigo" required class="mapper-select"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="map-produto">Nome do Produto *</label>
+                    <select id="map-produto" required class="mapper-select"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="map-categoria">Categoria do Produto *</label>
+                    <select id="map-categoria" required class="mapper-select"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="map-preco-total">Valor por Caixa (Preço Total) *</label>
+                    <select id="map-preco-total" required class="mapper-select"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="map-quantidade-caixa">Quantidade na Caixa *</label>
+                    <select id="map-quantidade-caixa" required class="mapper-select"></select>
+                  </div>
+                  <div class="form-group">
+                    <label for="map-valor-unitario">Valor Unitário (Fracionado) *</label>
+                    <select id="map-valor-unitario" required class="mapper-select"></select>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end;">
+                  <button type="button" class="btn btn-secondary" id="btn-exchange-mapper-cancel">Cancelar</button>
+                  <button type="submit" class="btn btn-primary" style="padding: 0 30px;">Processar e Importar Produtos</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Lista de produtos importados -->
+            <div class="card">
+              <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="card-title">Produtos Importados no Simulador</span>
+                <div style="position: relative; width: 250px;">
+                  <input type="text" id="exchange-products-admin-search" placeholder="Buscar produto..." style="width: 100%; height: 32px; padding-left: 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 120px;">Código</th>
+                      <th>Produto</th>
+                      <th>Categoria</th>
+                      <th style="text-align: right; width: 130px;">Valor Caixa</th>
+                      <th style="text-align: center; width: 100px;">Qtd Caixa</th>
+                      <th style="text-align: right; width: 130px;">Valor Unitário</th>
+                    </tr>
+                  </thead>
+                  <tbody id="exchange-products-admin-tbody">
+                    <tr>
+                      <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">Nenhum produto cadastrado no simulador de trocas.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rodapé Fixo Mobile Estilo iFood -->
+          <div id="exchange-mobile-sticky-footer" class="exchange-mobile-footer" style="display: none;">
+            <div class="exchange-sticky-footer-content">
+              <div class="exchange-sticky-footer-left">
+                <span class="exchange-sticky-total-label">Total da Troca</span>
+                <span id="exchange-sticky-total-val" class="exchange-sticky-total-price">R$ 0,00</span>
+              </div>
+              <button class="btn btn-success" id="btn-exchange-sticky-finalize" type="button" style="font-weight: bold; width: auto !important; padding: 0 20px; height: 42px; min-height: 42px !important; margin: 0;">Finalizar</button>
+            </div>
+          </div>

@@ -1,0 +1,77 @@
+<div class="card" id="prospect-form-card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="card-title">Adicionar Novo Prospecto (Lead)</span>
+              <button class="btn btn-primary" id="btn-open-prospect-form" type="button">+ Cadastrar Lead</button>
+            </div>
+            <div id="prospect-form-container" class="hidden" style="padding: 24px;">
+            <form id="prospect-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="prosp-name">Nome do Comércio</label>
+                  <input type="text" id="prosp-name" required placeholder="Ex: Supermercado do João">
+                </div>
+                <div class="form-group">
+                  <label for="prosp-contact">Responsável</label>
+                  <input type="text" id="prosp-contact" required placeholder="Ex: João da Silva">
+                </div>
+                <div class="form-group">
+                  <label for="prosp-phone">Telefone</label>
+                  <input type="tel" id="prosp-phone" required placeholder="Ex: (11) 98888-8888">
+                </div>
+                <div class="form-group">
+                  <label for="prosp-city">Cidade</label>
+                  <input type="text" id="prosp-city" required placeholder="Ex: Belo Horizonte">
+                </div>
+                <div class="form-group">
+                  <label for="prosp-category">Categoria</label>
+                  <select id="prosp-category" required>
+                    <!-- Injected dynamically -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="prosp-competitor">Concorrente Atual</label>
+                  <input type="text" id="prosp-competitor" placeholder="Ex: Distribuidora X ou Nenhum">
+                </div>
+                <div class="form-group">
+                  <label for="prosp-unit">Unidade Responsável</label>
+                  <select id="prosp-unit" required>
+                    <!-- Injected dynamically -->
+                  </select>
+                </div>
+                <div class="form-group" id="group-prosp-seller">
+                  <label for="prosp-seller">Vendedor Vinculado</label>
+                  <select id="prosp-seller" required>
+                    <!-- Injected dynamically -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="prosp-photo">Foto da Fachada</label>
+                  <input type="file" id="prosp-photo" accept="image/*">
+                  <div id="prosp-photo-preview-container" style="display:none; margin-top:8px;">
+                    <img id="prosp-photo-preview" src="" style="max-height:80px; border-radius:4px; border:1px solid var(--border-color);">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="prosp-observation">Observação</label>
+                  <textarea id="prosp-observation" rows="2" placeholder="Informações adicionais..." style="resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex; gap:12px; margin-top:24px;">
+                <button type="submit" class="btn btn-primary" style="flex:1; height:44px; font-size:1rem; font-weight:600;">Registrar Lead Comercial</button>
+                <button type="button" class="btn btn-secondary" id="btn-cancel-prospect-form" style="height:44px; font-size:1rem; font-weight:600; padding:0 24px;">Cancelar</button>
+              </div>
+            </form>
+            </div>
+          </div>
+
+          <!-- Lista de leads (substitui o Kanban para não ficar extensa) -->
+          <div class="prospect-list-card" style="margin-top: 20px;">
+            <div class="prospect-list-header">
+              <div>
+                <h3>Leads cadastrados</h3>
+                <p>Visualização em lista. Clique em qualquer lead para abrir o dossiê completo.</p>
+              </div>
+              <div id="prospect-status-summary" class="prospect-status-summary"></div>
+            </div>
+            <div id="prospect-list-container" class="prospect-list-container"></div>
+          </div>

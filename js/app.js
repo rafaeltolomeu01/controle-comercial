@@ -131,10 +131,24 @@ const App = {
       if (loginWrapper) loginWrapper.style.display = 'none';
 
       // Activate corresponding view panel
-      const targetPanelId = `view-${hash.replace('#', '')}`;
+      const pageName = hash.replace('#', '');
+      const targetPanelId = `view-${pageName}`;
       const panel = document.getElementById(targetPanelId);
       if (panel) {
-        panel.classList.add('active');
+        if (panel.innerHTML.trim() === '') {
+          this.loadPageContent(pageName).then(() => {
+            panel.classList.add('active');
+            // Highlight links
+            document.querySelectorAll(`.nav-link[href="${hash}"]`).forEach(l => l.classList.add('active'));
+            document.querySelectorAll(`.mobile-nav-item[href="${hash}"]`).forEach(l => l.classList.add('active'));
+            this.onRouteChanged(hash);
+          }).catch(err => {
+            console.error('Failed to load page content:', err);
+          });
+          return;
+        } else {
+          panel.classList.add('active');
+        }
       }
 
       // Highlight links
@@ -147,6 +161,74 @@ const App = {
 
     window.addEventListener('hashchange', handleRoute);
     handleRoute();
+  },
+
+  async loadPageContent(pageName) {
+    const targetPanelId = `view-${pageName}`;
+    const panel = document.getElementById(targetPanelId);
+    if (!panel) return;
+
+    if (panel.innerHTML.trim() !== '') {
+      return; // Already loaded!
+    }
+
+    try {
+      panel.innerHTML = `
+        <div class="loading-wrapper-view" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: var(--text-muted);">
+          <div class="spinner" style="width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+          <span style="font-family: var(--font-title); font-size: 0.9rem;">Carregando página...</span>
+        </div>
+      `;
+
+      const response = await fetch(`pages/${pageName}.html`);
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+      const html = await response.text();
+      panel.innerHTML = html;
+
+      // Rebind specific elements for this page
+      this.setupEventListeners();
+      
+      // If it has inputs or dropdowns, we should populate them
+      if (pageName === 'movimentacao') {
+        this.fillMovEquipmentDropdown();
+        UI.populateMovementClientsDropdown();
+      } else if (pageName === 'chamados') {
+        this.fillEquipmentsDropdown();
+      } else if (pageName === 'usuarios') {
+        UI.renderUsers();
+      } else if (pageName === 'unidades') {
+        UI.renderUnits();
+      } else if (pageName === 'configuracoes') {
+        UI.renderConfigSettings();
+        this.loadConfigEmails();
+      } else if (pageName === 'empresa') {
+        this.loadCompanyIdentityForm();
+      } else if (pageName === 'simulador-troca') {
+        this.initSimuladorTroca();
+      } else if (pageName === 'solicitacao-despesas') {
+        this.initSolicitacaoForm();
+      }
+      
+      // Re-run identity settings in case page contains brand images/logos
+      this.setupIdentity();
+      
+      // Proactively populate unit dropdowns for new elements
+      UI.populateUnitDropdowns();
+      UI.populateConfigDropdowns();
+
+    } catch (err) {
+      console.error(`Error loading page ${pageName}:`, err);
+      panel.innerHTML = `
+        <div class="error-wrapper-view" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; gap: 16px; color: var(--danger);">
+          <span style="font-family: var(--font-title); font-size: 1rem; font-weight: 600;">Falha ao carregar módulo</span>
+          <p style="font-size: 0.8rem; text-align: center; max-width: 320px; color: var(--text-muted);">${err.message}</p>
+          <button class="btn btn-primary" onclick="window.location.reload()">Recarregar Sistema</button>
+        </div>
+      `;
+      throw err;
+    }
   },
 
   /**
@@ -421,7 +503,8 @@ const App = {
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebar-overlay');
-    if (btnToggleSidebar && sidebar && overlay) {
+    if (btnToggleSidebar && sidebar && overlay && !btnToggleSidebar.dataset.bound) {
+      btnToggleSidebar.dataset.bound = 'true';
       btnToggleSidebar.addEventListener('click', () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('open');
@@ -434,7 +517,8 @@ const App = {
 
     // 1. Login Form Submit
     const loginForm = document.getElementById('login-form');
-    if (loginForm) {
+    if (loginForm && !loginForm.dataset.bound) {
+      loginForm.dataset.bound = 'true';
       loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('login-username').value.trim();
@@ -453,7 +537,7 @@ const App = {
             })
           });
 
-          Store.setLoggedUser(result);
+          Store.setLoggedUser(result.user, result.token);
           this.isLoggedIn = true;
           UI.applyPermissions();
           window.location.hash = '#dashboard';
@@ -486,7 +570,8 @@ const App = {
 
     // 2. Logout trigger
     const logoutBtn = document.getElementById('sidebar-logout');
-    if (logoutBtn) {
+    if (logoutBtn && !logoutBtn.dataset.bound) {
+      logoutBtn.dataset.bound = 'true';
       logoutBtn.addEventListener('click', (e) => {
         e.preventDefault();
         Store.clearLoggedUser();
@@ -497,7 +582,8 @@ const App = {
 
     // Editar o próprio perfil pelo rodapé do menu
     const sidebarUserProfile = document.getElementById('sidebar-user-profile');
-    if (sidebarUserProfile) {
+    if (sidebarUserProfile && !sidebarUserProfile.dataset.bound) {
+      sidebarUserProfile.dataset.bound = 'true';
       sidebarUserProfile.addEventListener('click', () => {
         const loggedUser = Store.getLoggedUser();
         if (loggedUser && loggedUser.id) {
@@ -1211,21 +1297,13 @@ const App = {
         let defectPhotoUrl = '';
         const photoInput = document.getElementById('ticket-open-photo-defect');
         if (photoInput && photoInput.files && photoInput.files[0]) {
-          const file = photoInput.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/defeito.jpg`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          defectPhotoUrl = mockUrl;
+          defectPhotoUrl = await this.uploadFile(photoInput.files[0]);
         }
 
         let defectVideoUrl = '';
         const videoInput = document.getElementById('ticket-open-video-defect');
         if (videoInput && videoInput.files && videoInput.files[0]) {
-          const file = videoInput.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/defeito.mp4`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          defectVideoUrl = mockUrl;
+          defectVideoUrl = await this.uploadFile(videoInput.files[0]);
         }
 
         try {
@@ -1309,41 +1387,25 @@ const App = {
         let fotoAntesUrl = '';
         const fotoAntesEl = document.getElementById('ticket-foto-antes');
         if (fotoAntesEl && fotoAntesEl.files && fotoAntesEl.files[0]) {
-          const file = fotoAntesEl.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/antes.jpg`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          fotoAntesUrl = mockUrl;
+          fotoAntesUrl = await this.uploadFile(fotoAntesEl.files[0]);
         }
 
         let fotoDepoisUrl = '';
         const fotoDepoisEl = document.getElementById('ticket-foto-depois');
         if (fotoDepoisEl && fotoDepoisEl.files && fotoDepoisEl.files[0]) {
-          const file = fotoDepoisEl.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/depois.jpg`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          fotoDepoisUrl = mockUrl;
+          fotoDepoisUrl = await this.uploadFile(fotoDepoisEl.files[0]);
         }
 
         let fotoPlaquetaUrl = '';
         const fotoPlaquetaEl = document.getElementById('ticket-foto-plaqueta');
         if (fotoPlaquetaEl && fotoPlaquetaEl.files && fotoPlaquetaEl.files[0]) {
-          const file = fotoPlaquetaEl.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/plaqueta.jpg`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          fotoPlaquetaUrl = mockUrl;
+          fotoPlaquetaUrl = await this.uploadFile(fotoPlaquetaEl.files[0]);
         }
 
         let videoAtendimentoUrl = '';
         const videoAtendimentoEl = document.getElementById('ticket-video');
         if (videoAtendimentoEl && videoAtendimentoEl.files && videoAtendimentoEl.files[0]) {
-          const file = videoAtendimentoEl.files[0];
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/tickets/${ticketId}/atendimento.mp4`;
-          if (!window.TempPhotosCache) window.TempPhotosCache = {};
-          window.TempPhotosCache[mockUrl] = URL.createObjectURL(file);
-          videoAtendimentoUrl = mockUrl;
+          videoAtendimentoUrl = await this.uploadFile(videoAtendimentoEl.files[0]);
         }
 
         try {
@@ -1552,7 +1614,7 @@ const App = {
 
             const fileComprovante = document.getElementById('exp-comprovante-img').files[0];
             if (fileComprovante) {
-              foto_comprovante = await Store.fileToBase64(fileComprovante);
+              foto_comprovante = await this.uploadFile(fileComprovante);
             }
 
             if (finalidade === 'Abastecimento') {
@@ -1560,7 +1622,7 @@ const App = {
               km = parseInt(document.getElementById('exp-km').value, 10);
               const fileOdometro = document.getElementById('exp-odometro-img').files[0];
               if (fileOdometro) {
-                foto_odometro = await Store.fileToBase64(fileOdometro);
+                foto_odometro = await this.uploadFile(fileOdometro);
               }
             }
           }
@@ -1657,7 +1719,8 @@ const App = {
 
     // 13. Global Unit Selector Listener
     const globalUnitSelector = document.getElementById('global-unit-selector');
-    if (globalUnitSelector) {
+    if (globalUnitSelector && !globalUnitSelector.dataset.bound) {
+      globalUnitSelector.dataset.bound = 'true';
       globalUnitSelector.addEventListener('change', (e) => {
         Store.setActiveUnitId(e.target.value);
         this.refreshAllLists();
@@ -2578,6 +2641,49 @@ const App = {
     }
   },
 
+  getApiBaseUrl() {
+    let apiBase = window.API_BASE_URL;
+    if (!apiBase) {
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol;
+      if (protocol === 'file:') {
+        apiBase = 'http://localhost:3001';
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        apiBase = 'http://localhost:3001';
+      } else if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(hostname)) {
+        apiBase = `${protocol}//${hostname}:3001`;
+      } else {
+        apiBase = '';
+      }
+    }
+    return apiBase;
+  },
+
+  async uploadFile(file) {
+    if (!file) return '';
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = Store.getToken();
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const apiBase = this.getApiBaseUrl();
+    const res = await fetch(`${apiBase}/api/upload`, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Erro de upload: ${res.statusText}`);
+    }
+    const data = await res.json();
+    return data.url;
+  },
+
   /**
    * Helper to perform AJAX calls to the backend
    */
@@ -2596,20 +2702,12 @@ const App = {
       'X-Unit-Id': Store.getActiveUnitId ? Store.getActiveUnitId() : (user.unitId || 'all')
     };
 
-    let apiBase = window.API_BASE_URL;
-    if (!apiBase) {
-      const hostname = window.location.hostname;
-      const protocol = window.location.protocol;
-      if (protocol === 'file:') {
-        apiBase = 'http://localhost:3001';
-      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        apiBase = 'http://localhost:3001';
-      } else if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(hostname)) {
-        apiBase = `${protocol}//${hostname}:3001`;
-      } else {
-        apiBase = '';
-      }
+    const token = Store.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
+
+    const apiBase = this.getApiBaseUrl();
 
     const response = await fetch(`${apiBase}${endpoint}`, {
       ...options,
@@ -3408,13 +3506,13 @@ const App = {
           const file = e.target.files[0];
           if (file) {
             try {
-              const base64 = await Store.fileToBase64(file);
-              window.CurrentUserModalPhotoBase64 = base64;
-              preview.src = base64;
+              const url = await this.uploadFile(file);
+              window.CurrentUserModalPhotoBase64 = url;
+              preview.src = url;
               preview.style.display = 'block';
               placeholder.style.display = 'none';
             } catch (err) {
-              console.error('Erro ao converter foto:', err);
+              console.error('Erro ao fazer upload da foto:', err);
             }
           }
         });
@@ -4537,19 +4635,13 @@ const App = {
       const vTroca = document.getElementById('mov-video-troca').files[0];
 
       if (fAntigo) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio}/foto_antigo.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fAntigo);
-        foto_equipamento_url = mock;
+        foto_equipamento_url = await this.uploadFile(fAntigo);
       }
       if (fTroca) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio_novo}/foto_troca.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fTroca);
-        foto_antes_url = mock;
+        foto_antes_url = await this.uploadFile(fTroca);
       }
       if (vTroca) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio_novo}/video_troca.mp4`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(vTroca);
-        video_url = mock;
+        video_url = await this.uploadFile(vTroca);
       }
     } else if (tipo_solicitacao === 'Adição') {
       patrimonio = document.getElementById('mov-patrimonio-adicao').value.trim().toUpperCase();
@@ -4560,9 +4652,7 @@ const App = {
 
       const fInstalado = document.getElementById('mov-foto-instalado').files[0];
       if (fInstalado) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio}/foto_instalado.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fInstalado);
-        foto_equipamento_url = mock;
+        foto_equipamento_url = await this.uploadFile(fInstalado);
       }
     } else if (tipo_solicitacao === 'Recolha') {
       patrimonio = document.getElementById('mov-patrimonio-recolha').value.trim().toUpperCase();
@@ -4572,9 +4662,7 @@ const App = {
 
       const fRecolhido = document.getElementById('mov-foto-recolhido').files[0];
       if (fRecolhido) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio}/foto_recolhido.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fRecolhido);
-        foto_equipamento_url = mock;
+        foto_equipamento_url = await this.uploadFile(fRecolhido);
       }
     } else if (tipo_solicitacao === 'Adesivar') {
       patrimonio = document.getElementById('mov-patrimonio-adesivar').value.trim().toUpperCase();
@@ -4585,14 +4673,10 @@ const App = {
       const fAntes = document.getElementById('mov-foto-antes').files[0];
       const fDepois = document.getElementById('mov-foto-depois').files[0];
       if (fAntes) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio}/foto_antes.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fAntes);
-        foto_antes_url = mock;
+        foto_antes_url = await this.uploadFile(fAntes);
       }
       if (fDepois) {
-        const mock = `https://s3.amazonaws.com/controle-campo/equipamentos/${patrimonio}/foto_depois.jpg`;
-        window.TempPhotosCache[mock] = URL.createObjectURL(fDepois);
-        foto_depois_url = mock;
+        foto_depois_url = await this.uploadFile(fDepois);
       }
     }
 
