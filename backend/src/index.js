@@ -311,7 +311,7 @@ async function initDb() {
     });
   }
 
-  // Seed default admin user admin@controle.com if not exists
+  // Seed default admin user admin@controlecampo.com if not exists
   const initialAdminPerms = JSON.stringify([
     "Dashboard", "Clientes", "Produtos", "Estoque", "Financeiro", 
     "Solicitação de Saldo", "Aprovação de Saldo", "Despesas", 
@@ -327,8 +327,8 @@ async function initDb() {
       id: 'admin_initial_cnpj',
       name: 'Administrador sistema',
       username: 'admin',
-      email: 'admin@controle.com',
-      password: 'Admin@123',
+      email: 'admin@controlecampo.com',
+      password: '123456',
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -338,12 +338,12 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial CNPJ cadastrado.');
-  } else if (hasAdminCnpj.email !== 'admin@controle.com' || hasAdminCnpj.password !== 'Admin@123') {
+  } else if (hasAdminCnpj.email !== 'admin@controlecampo.com' || hasAdminCnpj.password !== '123456') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
       .update({
-        email: 'admin@controle.com',
-        password: 'Admin@123',
+        email: 'admin@controlecampo.com',
+        password: '123456',
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
@@ -361,8 +361,8 @@ async function initDb() {
       id: 'admin_initial_name',
       name: 'Administrador sistema',
       username: 'admin',
-      email: 'admin@controle.com',
-      password: 'Admin@123',
+      email: 'admin@controlecampo.com',
+      password: '123456',
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -372,73 +372,18 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial Nome cadastrado.');
-  } else if (hasAdminName.email !== 'admin@controle.com' || hasAdminName.password !== 'Admin@123') {
+  } else if (hasAdminName.email !== 'admin@controlecampo.com' || hasAdminName.password !== '123456') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
       .update({
-        email: 'admin@controle.com',
-        password: 'Admin@123',
+        email: 'admin@controlecampo.com',
+        password: '123456',
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
         permissions: initialAdminPerms
       });
     console.log('Database: Admin inicial Nome atualizado com novas credenciais.');
-
-
-  // Admin inicial adicional para ambientes onde o frontend ainda envia empresa_id = '001'.
-  // Isso evita depender do Shell do Render Free: ao reiniciar/deployar, o admin é criado/atualizado automaticamente.
-  const hasCompany001 = await db('empresas').where({ id: '001' }).first();
-  if (!hasCompany001) {
-    await db('empresas').insert({
-      id: '001',
-      name: 'Distribuidora JDS',
-      cnpj: '12.345.678/0001-90',
-      phone: '(11) 3200-9876',
-      email: 'contato@distribuidorajds.com.br'
-    });
-    console.log('Database: Empresa 001 seed cadastrada.');
-  }
-
-  const hasUnit001 = await db('unidades').where({ id: 'all', empresa_id: '001' }).first();
-  if (!hasUnit001) {
-    await db('unidades').insert({
-      id: 'all',
-      name: 'Unidade Geral',
-      empresa_id: '001'
-    }).catch(() => {});
-  }
-
-  const hasAdmin001 = await db('usuarios')
-    .where({ username: 'admin', empresa_id: '001' })
-    .first();
-
-  const admin001Data = {
-    name: 'Administrador sistema',
-    username: 'admin',
-    email: 'admin@controle.com',
-    password: 'Admin@123',
-    profile: 'Administrador',
-    unitId: 'all',
-    status: 'LIBERADO',
-    empresa_id: '001',
-    permissions: initialAdminPerms,
-    updated_at: new Date().toISOString()
-  };
-
-  if (!hasAdmin001) {
-    await db('usuarios').insert({
-      id: 'admin_initial_001',
-      ...admin001Data,
-      created_at: new Date().toISOString()
-    });
-    console.log('Database: Admin inicial 001 cadastrado.');
-  } else {
-    await db('usuarios')
-      .where({ username: 'admin', empresa_id: '001' })
-      .update(admin001Data);
-    console.log('Database: Admin inicial 001 atualizado.');
-  }
   }
 }
 
@@ -1638,6 +1583,98 @@ app.get('/api/me', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao carregar usuário logado' });
+  }
+});
+
+
+function isAdminUser(user) {
+  const perms = user && user.permissions ? user.permissions : [];
+  return user && (user.profile === 'Administrador' || perms.includes('Administrador'));
+}
+
+// Empresas - visível e gerenciável somente pelo Administrador
+app.get('/api/empresas', async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado: somente Administrador pode listar empresas.' });
+  }
+
+  try {
+    const empresas = await db('empresas').orderBy('name', 'asc');
+    res.json(empresas);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar empresas' });
+  }
+});
+
+app.post('/api/empresas', async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado: somente Administrador pode criar empresa.' });
+  }
+
+  const name = String(req.body.name || '').trim();
+  const cnpj = String(req.body.cnpj || '').trim();
+  const phone = String(req.body.phone || '').trim();
+  const email = String(req.body.email || '').trim();
+  const unidadeName = String(req.body.unidadeName || 'Unidade Geral').trim() || 'Unidade Geral';
+
+  if (!name) {
+    return res.status(400).json({ error: 'Nome da empresa é obrigatório.' });
+  }
+
+  const normalizedIdBase = cnpj || name;
+  const normalizedId = normalizedIdBase
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || ('empresa-' + Date.now());
+  const empresaId = cnpj || normalizedId;
+
+  try {
+    const existing = await db('empresas').where({ id: empresaId }).first();
+    if (existing) {
+      return res.status(400).json({ error: 'Já existe uma empresa com este CNPJ/ID.' });
+    }
+
+    const now = new Date().toISOString();
+    await db('empresas').insert({
+      id: empresaId,
+      name,
+      cnpj: cnpj || null,
+      phone: phone || null,
+      email: email || null,
+      created_at: now,
+      updated_at: now
+    });
+
+    const unidadeId = `${normalizedId || empresaId}-geral`;
+    const existingUnit = await db('unidades').where({ id: unidadeId }).first();
+    if (!existingUnit) {
+      await db('unidades').insert({
+        id: unidadeId,
+        name: unidadeName,
+        empresa_id: empresaId,
+        created_at: now,
+        updated_at: now
+      });
+    }
+
+    try {
+      await db('auditoria_logs').insert({
+        usuario_id: req.user.id || 'sistema',
+        acao: 'CRIOU_EMPRESA',
+        detalhes: `Empresa ${name} (${empresaId}) criada por ${req.user.name || req.user.username}`,
+        empresa_id: req.user.empresa_id || empresaId
+      });
+    } catch (auditErr) {
+      console.warn('Não foi possível registrar auditoria da empresa:', auditErr.message);
+    }
+
+    res.json({ success: true, empresa: { id: empresaId, name, cnpj, phone, email } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao criar empresa' });
   }
 });
 
