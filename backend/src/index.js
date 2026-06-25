@@ -9,240 +9,383 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-controle-comercial';
 const configFilePath = path.join(__dirname, 'emails_config.json');
 
-const db = knex(config.development);
+const db = knex(process.env.NODE_ENV === 'production' ? config.production : config.development);
 
-// Database startup schema updates
-(async () => {
-  try {
-    // 1. Alter usuarios table to support email, phone, photo
-    const hasEmail = await db.schema.hasColumn('usuarios', 'email');
-    if (!hasEmail) {
-      await db.schema.table('usuarios', table => {
-        table.string('email').nullable();
-        table.string('phone').nullable();
-        table.text('photo').nullable(); // base64 representation of profile photo
-      });
-      console.log('Database: Colunas email, phone e photo adicionadas à tabela usuarios.');
-    }
-
-    // 2. Create despesas_reembolsos table
-    const hasReembolsos = await db.schema.hasTable('despesas_reembolsos');
-    if (!hasReembolsos) {
-      await db.schema.createTable('despesas_reembolsos', function(table) {
-        table.string('id').primary();
-        table.string('empresa_id').notNullable();
-        table.string('userId').notNullable();
-        table.string('unitId').notNullable();
-        table.string('date').notNullable();
-        table.string('time').notNullable();
-        table.string('finalidade').notNullable();
-        table.string('operacao').notNullable();
-        table.string('descreva').nullable();
-        table.string('veiculo').nullable();
-        table.integer('km').nullable();
-        table.text('foto_odometro').nullable();
-        table.text('foto_comprovante').nullable();
-        table.decimal('value', 10, 2).nullable();
-        table.text('observation').nullable();
-        table.string('status').notNullable().defaultTo('Pendente');
-        table.timestamps(true, true);
-      });
-      console.log('Database: Tabela despesas_reembolsos criada com sucesso.');
-    }
-
-    // 3. Create exchange_products table
-    const hasExchangeProducts = await db.schema.hasTable('exchange_products');
-    if (!hasExchangeProducts) {
-      await db.schema.createTable('exchange_products', function(table) {
-        table.increments('id').primary();
-        table.string('company_id').notNullable();
-        table.string('unit_id').notNullable().defaultTo('all');
-        table.string('codigo').notNullable();
-        table.string('produto').notNullable();
-        table.string('categoria').notNullable().defaultTo('Outros');
-        table.decimal('preco_total', 10, 2).nullable();
-        table.string('unidade').nullable();
-        table.integer('quantidade_na_caixa').nullable();
-        table.decimal('valor_unitario', 10, 2).nullable();
-        table.boolean('active').notNullable().defaultTo(true);
-        table.timestamps(true, true);
-        table.unique(['company_id', 'unit_id', 'codigo']);
-      });
-      console.log('Database: Tabela exchange_products criada com sucesso.');
-    } else {
-      const hasUnitId = await db.schema.hasColumn('exchange_products', 'unit_id');
-      if (!hasUnitId) {
-        await db.schema.table('exchange_products', table => {
-          table.string('unit_id').notNullable().defaultTo('all');
-        });
-        console.log('Database: Coluna unit_id adicionada à tabela exchange_products.');
-      }
-    }
-
-    // 4. Create exchange_simulations table
-    const hasExchangeSimulations = await db.schema.hasTable('exchange_simulations');
-    if (!hasExchangeSimulations) {
-      await db.schema.createTable('exchange_simulations', function(table) {
-        table.increments('id').primary();
-        table.string('company_id').notNullable();
-        table.string('seller_id').notNullable();
-        table.string('cliente_codigo').notNullable();
-        table.string('cliente_nome_fantasia').notNullable();
-        table.decimal('total', 10, 2).notNullable().defaultTo(0);
-        table.text('generated_message').nullable();
-        table.timestamp('created_at').defaultTo(db.fn.now());
-      });
-      console.log('Database: Tabela exchange_simulations criada com sucesso.');
-    }
-
-    // 5. Create exchange_simulation_items table
-    const hasExchangeSimulationItems = await db.schema.hasTable('exchange_simulation_items');
-    if (!hasExchangeSimulationItems) {
-      await db.schema.createTable('exchange_simulation_items', function(table) {
-        table.increments('id').primary();
-        table.integer('simulation_id').unsigned().notNullable().references('id').inTable('exchange_simulations').onDelete('CASCADE');
-        table.integer('product_id').nullable();
-        table.string('codigo').notNullable();
-        table.string('produto').notNullable();
-        table.string('categoria').nullable();
-        table.string('tipo').notNullable(); // caixa, fracionado
-        table.integer('quantidade').notNullable();
-        table.decimal('valor_base', 10, 2).notNullable();
-        table.decimal('total_item', 10, 2).notNullable();
-        table.timestamp('created_at').defaultTo(db.fn.now());
-      });
-      console.log('Database: Tabela exchange_simulation_items criada com sucesso.');
-    }
-
-    // 6. Create user_hierarchy_links table
-    const hasUserHierarchyLinks = await db.schema.hasTable('user_hierarchy_links');
-    if (!hasUserHierarchyLinks) {
-      await db.schema.createTable('user_hierarchy_links', function(table) {
-        table.increments('id').primary();
-        table.string('company_id').notNullable();
-        table.string('parent_user_id').notNullable();
-        table.string('child_user_id').notNullable();
-        table.string('relation_type').notNullable(); // supervisor_seller, manager_supervisor
-        table.timestamps(true, true);
-        table.unique(['company_id', 'parent_user_id', 'child_user_id', 'relation_type']);
-      });
-      console.log('Database: Tabela user_hierarchy_links criada com sucesso.');
-    }
-
-
-    // 7. Create chamados_tecnicos table (histórico real dos chamados mecânicos)
-    const hasChamadosTecnicos = await db.schema.hasTable('chamados_tecnicos');
-    if (!hasChamadosTecnicos) {
-      await db.schema.createTable('chamados_tecnicos', function(table) {
-        table.string('id').primary();
-        table.string('empresa_id').notNullable();
-        table.string('unitId').notNullable().defaultTo('all');
-        table.string('userId').notNullable();
-        table.string('equipmentSerial').notNullable();
-        table.string('equipmentType').nullable();
-        table.string('client').nullable();
-        table.string('fantasyName').nullable();
-        table.string('city').nullable();
-        table.string('address').nullable();
-        table.string('title').notNullable();
-        table.string('priority').notNullable().defaultTo('Média');
-        table.text('observations').nullable();
-        table.string('defectPhoto').nullable();
-        table.string('defectVideo').nullable();
-        table.string('status').notNullable().defaultTo('Aberto');
-        table.string('mechanic').nullable();
-        table.string('date').nullable();
-        table.string('startTime').nullable();
-        table.string('endTime').nullable();
-        table.text('faultDescription').nullable();
-        table.text('solutionDescription').nullable();
-        table.string('eqStatusAfter').nullable();
-        table.string('gasCharge').nullable();
-        table.text('additionalNotes').nullable();
-        table.text('parts').notNullable().defaultTo('[]');
-        table.text('services').notNullable().defaultTo('[]');
-        table.string('fotoAntes').nullable();
-        table.string('fotoDepois').nullable();
-        table.string('fotoPlaqueta').nullable();
-        table.string('videoAtendimento').nullable();
-        table.timestamps(true, true);
-      });
-      console.log('Database: Tabela chamados_tecnicos criada com sucesso.');
-    } else {
-      // Garante compatibilidade com bancos antigos que já tinham a tabela, mas sem todas as colunas novas.
-      const chamadoColumns = {
-        empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
-        unitId: t => t.string('unitId').notNullable().defaultTo('all'),
-        userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
-        equipmentSerial: t => t.string('equipmentSerial').notNullable().defaultTo(''),
-        equipmentType: t => t.string('equipmentType').nullable(),
-        client: t => t.string('client').nullable(),
-        fantasyName: t => t.string('fantasyName').nullable(),
-        city: t => t.string('city').nullable(),
-        address: t => t.string('address').nullable(),
-        title: t => t.string('title').notNullable().defaultTo('Chamado mecânico'),
-        priority: t => t.string('priority').notNullable().defaultTo('Média'),
-        observations: t => t.text('observations').nullable(),
-        defectPhoto: t => t.string('defectPhoto').nullable(),
-        defectVideo: t => t.string('defectVideo').nullable(),
-        status: t => t.string('status').notNullable().defaultTo('Aberto'),
-        mechanic: t => t.string('mechanic').nullable(),
-        date: t => t.string('date').nullable(),
-        startTime: t => t.string('startTime').nullable(),
-        endTime: t => t.string('endTime').nullable(),
-        faultDescription: t => t.text('faultDescription').nullable(),
-        solutionDescription: t => t.text('solutionDescription').nullable(),
-        eqStatusAfter: t => t.string('eqStatusAfter').nullable(),
-        gasCharge: t => t.string('gasCharge').nullable(),
-        additionalNotes: t => t.text('additionalNotes').nullable(),
-        parts: t => t.text('parts').notNullable().defaultTo('[]'),
-        services: t => t.text('services').notNullable().defaultTo('[]'),
-        fotoAntes: t => t.string('fotoAntes').nullable(),
-        fotoDepois: t => t.string('fotoDepois').nullable(),
-        fotoPlaqueta: t => t.string('fotoPlaqueta').nullable(),
-        videoAtendimento: t => t.string('videoAtendimento').nullable()
-      };
-      for (const [col, addColumn] of Object.entries(chamadoColumns)) {
-        const exists = await db.schema.hasColumn('chamados_tecnicos', col);
-        if (!exists) {
-          await db.schema.table('chamados_tecnicos', table => addColumn(table));
-          console.log(`Database: Coluna ${col} adicionada à tabela chamados_tecnicos.`);
-        }
-      }
-    }
-
-    // Normalizar usuários antigos no banco de dados
-    const allUsers = await db('usuarios');
-    for (const u of allUsers) {
-      let needsUpdate = false;
-      const updates = {};
-
-      if (!u.empresa_id) {
-        updates.empresa_id = '001';
-        needsUpdate = true;
-      }
-      if (!u.unitId) {
-        updates.unitId = u.profile === 'Administrador' ? 'all' : '1';
-        needsUpdate = true;
-      }
-      if (!u.status) {
-        updates.status = 'LIBERADO';
-        needsUpdate = true;
-      }
-      if (!u.profile) {
-        updates.profile = 'Vendedor';
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
-        await db('usuarios').where({ id: u.id }).update(updates);
-        console.log(`Database: Usuário ${u.username} normalizado com sucesso.`);
-      }
-    }
-  } catch (err) {
-    console.error('Database schema check/alter error:', err);
+const insertAndGetId = async (tableName, record, idColumn = 'id') => {
+  if (db.client.config.client === 'sqlite3') {
+    const [insertedId] = await db(tableName).insert(record);
+    return insertedId;
+  } else {
+    const [res] = await db(tableName).insert(record).returning(idColumn);
+    return typeof res === 'object' ? res[idColumn] : res;
   }
-})();
+};
+
+async function initDb() {
+  // Check if in production and DATABASE_URL is missing
+  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not configured in production environment!");
+  }
+
+  // Verify connection
+  console.log('Database: Connecting and verifying connection...');
+  await db.raw('SELECT 1');
+  console.log('Database: Connection verified.');
+
+  // Run migrations programmatically
+  console.log('Database: Running migrations...');
+  await db.migrate.latest();
+  console.log('Database: Migrations completed.');
+
+  // 1. Alter usuarios table to support email, phone, photo
+  const hasEmail = await db.schema.hasColumn('usuarios', 'email');
+  if (!hasEmail) {
+    await db.schema.table('usuarios', table => {
+      table.string('email').nullable();
+      table.string('phone').nullable();
+      table.text('photo').nullable(); // base64 representation of profile photo
+    });
+    console.log('Database: Colunas email, phone e photo adicionadas à tabela usuarios.');
+  }
+
+  // 2. Create despesas_reembolsos table
+  const hasReembolsos = await db.schema.hasTable('despesas_reembolsos');
+  if (!hasReembolsos) {
+    await db.schema.createTable('despesas_reembolsos', function(table) {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('userId').notNullable();
+      table.string('unitId').notNullable();
+      table.string('date').notNullable();
+      table.string('time').notNullable();
+      table.string('finalidade').notNullable();
+      table.string('operacao').notNullable();
+      table.string('descreva').nullable();
+      table.string('veiculo').nullable();
+      table.integer('km').nullable();
+      table.text('foto_odometro').nullable();
+      table.text('foto_comprovante').nullable();
+      table.decimal('value', 10, 2).nullable();
+      table.text('observation').nullable();
+      table.string('status').notNullable().defaultTo('Pendente');
+      table.timestamps(true, true);
+    });
+    console.log('Database: Tabela despesas_reembolsos criada com sucesso.');
+  }
+
+  // 3. Create exchange_products table
+  const hasExchangeProducts = await db.schema.hasTable('exchange_products');
+  if (!hasExchangeProducts) {
+    await db.schema.createTable('exchange_products', function(table) {
+      table.increments('id').primary();
+      table.string('company_id').notNullable();
+      table.string('unit_id').notNullable().defaultTo('all');
+      table.string('codigo').notNullable();
+      table.string('produto').notNullable();
+      table.string('categoria').notNullable().defaultTo('Outros');
+      table.decimal('preco_total', 10, 2).nullable();
+      table.string('unidade').nullable();
+      table.integer('quantidade_na_caixa').nullable();
+      table.decimal('valor_unitario', 10, 2).nullable();
+      table.boolean('active').notNullable().defaultTo(true);
+      table.timestamps(true, true);
+      table.unique(['company_id', 'unit_id', 'codigo']);
+    });
+    console.log('Database: Tabela exchange_products criada com sucesso.');
+  } else {
+    const hasUnitId = await db.schema.hasColumn('exchange_products', 'unit_id');
+    if (!hasUnitId) {
+      await db.schema.table('exchange_products', table => {
+        table.string('unit_id').notNullable().defaultTo('all');
+      });
+      console.log('Database: Coluna unit_id adicionada à tabela exchange_products.');
+    }
+  }
+
+  // 4. Create exchange_simulations table
+  const hasExchangeSimulations = await db.schema.hasTable('exchange_simulations');
+  if (!hasExchangeSimulations) {
+    await db.schema.createTable('exchange_simulations', function(table) {
+      table.increments('id').primary();
+      table.string('company_id').notNullable();
+      table.string('seller_id').notNullable();
+      table.string('cliente_codigo').notNullable();
+      table.string('cliente_nome_fantasia').notNullable();
+      table.decimal('total', 10, 2).notNullable().defaultTo(0);
+      table.text('generated_message').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+    console.log('Database: Tabela exchange_simulations criada com sucesso.');
+  }
+
+  // 5. Create exchange_simulation_items table
+  const hasExchangeSimulationItems = await db.schema.hasTable('exchange_simulation_items');
+  if (!hasExchangeSimulationItems) {
+    await db.schema.createTable('exchange_simulation_items', function(table) {
+      table.increments('id').primary();
+      table.integer('simulation_id').unsigned().notNullable().references('id').inTable('exchange_simulations').onDelete('CASCADE');
+      table.integer('product_id').nullable();
+      table.string('codigo').notNullable();
+      table.string('produto').notNullable();
+      table.string('categoria').nullable();
+      table.string('tipo').notNullable(); // caixa, fracionado
+      table.integer('quantidade').notNullable();
+      table.decimal('valor_base', 10, 2).notNullable();
+      table.decimal('total_item', 10, 2).notNullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+    console.log('Database: Tabela exchange_simulation_items criada com sucesso.');
+  }
+
+  // 6. Create user_hierarchy_links table
+  const hasUserHierarchyLinks = await db.schema.hasTable('user_hierarchy_links');
+  if (!hasUserHierarchyLinks) {
+    await db.schema.createTable('user_hierarchy_links', function(table) {
+      table.increments('id').primary();
+      table.string('company_id').notNullable();
+      table.string('parent_user_id').notNullable();
+      table.string('child_user_id').notNullable();
+      table.string('relation_type').notNullable(); // supervisor_seller, manager_supervisor
+      table.timestamps(true, true);
+      table.unique(['company_id', 'parent_user_id', 'child_user_id', 'relation_type']);
+    });
+    console.log('Database: Tabela user_hierarchy_links criada com sucesso.');
+  }
+
+  // 7. Create chamados_tecnicos table (histórico real dos chamados mecânicos)
+  const hasChamadosTecnicos = await db.schema.hasTable('chamados_tecnicos');
+  if (!hasChamadosTecnicos) {
+    await db.schema.createTable('chamados_tecnicos', function(table) {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('unitId').notNullable().defaultTo('all');
+      table.string('userId').notNullable();
+      table.string('equipmentSerial').notNullable();
+      table.string('equipmentType').nullable();
+      table.string('client').nullable();
+      table.string('fantasyName').nullable();
+      table.string('city').nullable();
+      table.string('address').nullable();
+      table.string('title').notNullable();
+      table.string('priority').notNullable().defaultTo('Média');
+      table.text('observations').nullable();
+      table.string('defectPhoto').nullable();
+      table.string('defectVideo').nullable();
+      table.string('status').notNullable().defaultTo('Aberto');
+      table.string('mechanic').nullable();
+      table.string('date').nullable();
+      table.string('startTime').nullable();
+      table.string('endTime').nullable();
+      table.text('faultDescription').nullable();
+      table.text('solutionDescription').nullable();
+      table.string('eqStatusAfter').nullable();
+      table.string('gasCharge').nullable();
+      table.text('additionalNotes').nullable();
+      table.text('parts').notNullable().defaultTo('[]');
+      table.text('services').notNullable().defaultTo('[]');
+      table.string('fotoAntes').nullable();
+      table.string('fotoDepois').nullable();
+      table.string('fotoPlaqueta').nullable();
+      table.string('videoAtendimento').nullable();
+      table.timestamps(true, true);
+    });
+    console.log('Database: Tabela chamados_tecnicos criada com sucesso.');
+  } else {
+    // Garante compatibilidade com bancos antigos que já tinham a tabela, mas sem todas as colunas novas.
+    const chamadoColumns = {
+      empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
+      unitId: t => t.string('unitId').notNullable().defaultTo('all'),
+      userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
+      equipmentSerial: t => t.string('equipmentSerial').notNullable().defaultTo(''),
+      equipmentType: t => t.string('equipmentType').nullable(),
+      client: t => t.string('client').nullable(),
+      fantasyName: t => t.string('fantasyName').nullable(),
+      city: t => t.string('city').nullable(),
+      address: t => t.string('address').nullable(),
+      title: t => t.string('title').notNullable().defaultTo('Chamado mecânico'),
+      priority: t => t.string('priority').notNullable().defaultTo('Média'),
+      observations: t => t.text('observations').nullable(),
+      defectPhoto: t => t.string('defectPhoto').nullable(),
+      defectVideo: t => t.string('defectVideo').nullable(),
+      status: t => t.string('status').notNullable().defaultTo('Aberto'),
+      mechanic: t => t.string('mechanic').nullable(),
+      date: t => t.string('date').nullable(),
+      startTime: t => t.string('startTime').nullable(),
+      endTime: t => t.string('endTime').nullable(),
+      faultDescription: t => t.text('faultDescription').nullable(),
+      solutionDescription: t => t.text('solutionDescription').nullable(),
+      eqStatusAfter: t => t.string('eqStatusAfter').nullable(),
+      gasCharge: t => t.string('gasCharge').nullable(),
+      additionalNotes: t => t.text('additionalNotes').nullable(),
+      parts: t => t.text('parts').notNullable().defaultTo('[]'),
+      services: t => t.text('services').notNullable().defaultTo('[]'),
+      fotoAntes: t => t.string('fotoAntes').nullable(),
+      fotoDepois: t => t.string('fotoDepois').nullable(),
+      fotoPlaqueta: t => t.string('fotoPlaqueta').nullable(),
+      videoAtendimento: t => t.string('videoAtendimento').nullable()
+    };
+    for (const [col, addColumn] of Object.entries(chamadoColumns)) {
+      const exists = await db.schema.hasColumn('chamados_tecnicos', col);
+      if (!exists) {
+        await db.schema.table('chamados_tecnicos', table => addColumn(table));
+        console.log(`Database: Coluna ${col} adicionada à tabela chamados_tecnicos.`);
+      }
+    }
+  }
+
+  // Normalizar usuários antigos no banco de dados
+  const allUsers = await db('usuarios');
+  for (const u of allUsers) {
+    let needsUpdate = false;
+    const updates = {};
+
+    if (!u.empresa_id) {
+      updates.empresa_id = '001';
+      needsUpdate = true;
+    }
+    if (!u.unitId) {
+      updates.unitId = u.profile === 'Administrador' ? 'all' : '1';
+      needsUpdate = true;
+    }
+    if (!u.status) {
+      updates.status = 'LIBERADO';
+      needsUpdate = true;
+    }
+    if (!u.profile) {
+      updates.profile = 'Vendedor';
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      await db('usuarios').where({ id: u.id }).update(updates);
+      console.log(`Database: Usuário ${u.username} normalizado com sucesso.`);
+    }
+  }
+
+  // Remover todos os usuários mock/falsos padrão com senha '123'
+  await db('usuarios')
+    .whereIn('username', ['admin', 'supervisor', 'financeiro', 'conferente', 'resp_eq', 'mecanico', 'vendedor1', 'vendedor2', 'vendedor3'])
+    .andWhere('password', '123')
+    .delete();
+  console.log('Database: Usuários mock removidos.');
+
+  // Seed default company
+  const hasCompany = await db('empresas').where({ id: '12.345.678/0001-90' }).first();
+  if (!hasCompany) {
+    await db('empresas').insert({
+      id: '12.345.678/0001-90',
+      name: 'Distribuidora JDS',
+      cnpj: '12.345.678/0001-90',
+      phone: '(11) 3200-9876',
+      email: 'contato@distribuidorajds.com.br'
+    });
+    console.log('Database: Empresa JDS seed cadastrada.');
+  }
+
+  const hasCompanyFallback = await db('empresas').where({ id: 'Distribuidora JDS' }).first();
+  if (!hasCompanyFallback) {
+    await db('empresas').insert({
+      id: 'Distribuidora JDS',
+      name: 'Distribuidora JDS',
+      cnpj: '12.345.678/0001-90',
+      phone: '(11) 3200-9876',
+      email: 'contato@distribuidorajds.com.br'
+    });
+  }
+
+  // Seed default units
+  const hasUnit1 = await db('unidades').where({ id: '1' }).first();
+  if (!hasUnit1) {
+    await db('unidades').insert({
+      id: '1',
+      name: 'Distribuidora Minas Gerais',
+      empresa_id: '12.345.678/0001-90'
+    });
+  }
+  const hasUnit2 = await db('unidades').where({ id: '2' }).first();
+  if (!hasUnit2) {
+    await db('unidades').insert({
+      id: '2',
+      name: 'Distribuidora Espírito Santo',
+      empresa_id: '12.345.678/0001-90'
+    });
+  }
+
+  // Seed default admin user admin@controlecampo.com if not exists
+  const initialAdminPerms = JSON.stringify([
+    "Dashboard", "Clientes", "Produtos", "Estoque", "Financeiro", 
+    "Solicitação de Saldo", "Aprovação de Saldo", "Despesas", 
+    "Aprovação de Despesas", "Relatórios", "Usuários", "Configurações", "Administrador"
+  ]);
+
+  const hasAdminCnpj = await db('usuarios')
+    .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
+    .first();
+
+  if (!hasAdminCnpj) {
+    await db('usuarios').insert({
+      id: 'admin_initial_cnpj',
+      name: 'Administrador sistema',
+      username: 'admin',
+      email: 'admin@controlecampo.com',
+      password: '123456',
+      profile: 'Administrador',
+      unitId: 'all',
+      status: 'LIBERADO',
+      empresa_id: '12.345.678/0001-90',
+      permissions: initialAdminPerms,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    console.log('Database: Admin inicial CNPJ cadastrado.');
+  } else if (hasAdminCnpj.email !== 'admin@controlecampo.com' || hasAdminCnpj.password !== '123456') {
+    await db('usuarios')
+      .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
+      .update({
+        email: 'admin@controlecampo.com',
+        password: '123456',
+        name: 'Administrador sistema',
+        profile: 'Administrador',
+        status: 'LIBERADO',
+        permissions: initialAdminPerms
+      });
+    console.log('Database: Admin inicial CNPJ atualizado com novas credenciais.');
+  }
+
+  const hasAdminName = await db('usuarios')
+    .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
+    .first();
+
+  if (!hasAdminName) {
+    await db('usuarios').insert({
+      id: 'admin_initial_name',
+      name: 'Administrador sistema',
+      username: 'admin',
+      email: 'admin@controlecampo.com',
+      password: '123456',
+      profile: 'Administrador',
+      unitId: 'all',
+      status: 'LIBERADO',
+      empresa_id: 'Distribuidora JDS',
+      permissions: initialAdminPerms,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    console.log('Database: Admin inicial Nome cadastrado.');
+  } else if (hasAdminName.email !== 'admin@controlecampo.com' || hasAdminName.password !== '123456') {
+    await db('usuarios')
+      .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
+      .update({
+        email: 'admin@controlecampo.com',
+        password: '123456',
+        name: 'Administrador sistema',
+        profile: 'Administrador',
+        status: 'LIBERADO',
+        permissions: initialAdminPerms
+      });
+    console.log('Database: Admin inicial Nome atualizado com novas credenciais.');
+  }
+}
 
 const app = express();
 app.set('db', db);
@@ -324,6 +467,13 @@ app.use('/uploads', express.static(UPLOADS_ROOT));
 
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
+  // Somente rotas /api precisam de JWT.
+  // Arquivos do frontend (/, /index.html, /css, /js, /pages, manifest, sw) precisam continuar públicos
+  // para que a própria tela de login carregue e faça o bloqueio no navegador.
+  if (!req.path.startsWith('/api/')) {
+    return next();
+  }
+
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   
   if (publicPaths.includes(req.path)) {
@@ -359,6 +509,7 @@ app.use(async (req, res, next) => {
       username: user.username,
       profile: user.profile,
       empresa_id: user.empresa_id,
+      empresa_name: req.header('X-Company-Name') || user.empresa_id || '001',
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
     };
@@ -438,7 +589,10 @@ app.post('/api/despesas', async (req, res) => {
     extras
   } = req.body;
 
-  const targetEmpresaId = empresa_id || req.user.empresa_id || '001';
+  const targetEmpresaId = req.user.empresa_id;
+  if (!targetEmpresaId) {
+    return res.status(400).json({ error: 'Acesso negado: empresa do usuário não vinculada.' });
+  }
 
   if (!solicitante || !justificativa) {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
@@ -465,7 +619,7 @@ app.post('/api/despesas', async (req, res) => {
   };
 
   try {
-    const [id] = await db('despesas_solicitacoes').insert(newReq);
+    const id = await insertAndGetId('despesas_solicitacoes', newReq, 'id');
     
     // Insert items into despesas_solicitacoes_itens
     const itemsToInsert = [];
@@ -1126,7 +1280,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     }
 
     // 3. Insere a movimentação
-    const [newId] = await db('equipamentos_movimentacoes').insert({
+    const newId = await insertAndGetId('equipamentos_movimentacoes', {
       empresa: req.user.empresa_name || req.user.empresa_id,
       tipo_solicitacao,
       vendedor_solicitante,
@@ -2467,7 +2621,7 @@ app.post('/api/exchange/simulations', async (req, res) => {
   }
 
   try {
-    const [simulationId] = await db('exchange_simulations').insert({
+    const simulationId = await insertAndGetId('exchange_simulations', {
       company_id: companyId,
       seller_id: sellerId,
       cliente_codigo,
@@ -2568,5 +2722,13 @@ app.get('*', (req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
+(async () => {
+  try {
+    await initDb();
+    app.listen(PORT, () => console.log(`Backend rodando em http://localhost:${PORT}`));
+  } catch (err) {
+    console.error('FATAL: Database connection/migration failed. Server will not start.', err);
+    process.exit(1);
+  }
+})();
 
