@@ -430,6 +430,23 @@ app.use(express.static(FRONTEND_ROOT, {
   }
 }));
 
+// Rotas públicas do frontend. Precisam ficar ANTES do middleware JWT.
+// Sem isso, ao acessar / ou dar F5 em /#login, o backend responde JSON de token ausente
+// em vez de entregar a tela do sistema.
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
+});
+
 const multer = require('multer');
 
 // Configure Multer storage
