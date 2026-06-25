@@ -152,6 +152,34 @@ async function initDb() {
     console.log('Database: Tabela user_hierarchy_links criada com sucesso.');
   }
 
+
+  // 7A. Create prospeccoes table (leads precisam ficar no banco para admin/supervisor enxergar o que vendedor cadastrou)
+  const hasProspeccoes = await db.schema.hasTable('prospeccoes');
+  if (!hasProspeccoes) {
+    await db.schema.createTable('prospeccoes', function(table) {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('unit_id').notNullable().defaultTo('all');
+      table.string('user_id').notNullable();
+      table.string('name').notNullable();
+      table.string('contact').nullable();
+      table.string('phone').nullable();
+      table.string('city').nullable();
+      table.string('neighborhood').nullable();
+      table.string('address').nullable();
+      table.string('category').nullable();
+      table.string('competitor').nullable();
+      table.text('observation').nullable();
+      table.text('photo').nullable();
+      table.string('status').notNullable().defaultTo('prospectado');
+      table.string('loss_reason').nullable();
+      table.string('date').nullable();
+      table.string('time').nullable();
+      table.timestamps(true, true);
+    });
+    console.log('Database: Tabela prospeccoes criada com sucesso.');
+  }
+
   // 7. Create chamados_tecnicos table (histórico real dos chamados mecânicos)
   const hasChamadosTecnicos = await db.schema.hasTable('chamados_tecnicos');
   if (!hasChamadosTecnicos) {
@@ -429,23 +457,6 @@ app.use(express.static(FRONTEND_ROOT, {
     res.setHeader('Expires', '0');
   }
 }));
-
-// Rotas públicas do frontend. Precisam ficar ANTES do middleware JWT.
-// Sem isso, ao acessar / ou dar F5 em /#login, o backend responde JSON de token ausente
-// em vez de entregar a tela do sistema.
-app.get('/', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
-});
-
-app.get('/index.html', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
-});
 
 const multer = require('multer');
 
@@ -1603,98 +1614,6 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-
-function isAdminUser(user) {
-  const perms = user && user.permissions ? user.permissions : [];
-  return user && (user.profile === 'Administrador' || perms.includes('Administrador'));
-}
-
-// Empresas - visível e gerenciável somente pelo Administrador
-app.get('/api/empresas', async (req, res) => {
-  if (!isAdminUser(req.user)) {
-    return res.status(403).json({ error: 'Acesso negado: somente Administrador pode listar empresas.' });
-  }
-
-  try {
-    const empresas = await db('empresas').orderBy('name', 'asc');
-    res.json(empresas);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erro ao listar empresas' });
-  }
-});
-
-app.post('/api/empresas', async (req, res) => {
-  if (!isAdminUser(req.user)) {
-    return res.status(403).json({ error: 'Acesso negado: somente Administrador pode criar empresa.' });
-  }
-
-  const name = String(req.body.name || '').trim();
-  const cnpj = String(req.body.cnpj || '').trim();
-  const phone = String(req.body.phone || '').trim();
-  const email = String(req.body.email || '').trim();
-  const unidadeName = String(req.body.unidadeName || 'Unidade Geral').trim() || 'Unidade Geral';
-
-  if (!name) {
-    return res.status(400).json({ error: 'Nome da empresa é obrigatório.' });
-  }
-
-  const normalizedIdBase = cnpj || name;
-  const normalizedId = normalizedIdBase
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || ('empresa-' + Date.now());
-  const empresaId = cnpj || normalizedId;
-
-  try {
-    const existing = await db('empresas').where({ id: empresaId }).first();
-    if (existing) {
-      return res.status(400).json({ error: 'Já existe uma empresa com este CNPJ/ID.' });
-    }
-
-    const now = new Date().toISOString();
-    await db('empresas').insert({
-      id: empresaId,
-      name,
-      cnpj: cnpj || null,
-      phone: phone || null,
-      email: email || null,
-      created_at: now,
-      updated_at: now
-    });
-
-    const unidadeId = `${normalizedId || empresaId}-geral`;
-    const existingUnit = await db('unidades').where({ id: unidadeId }).first();
-    if (!existingUnit) {
-      await db('unidades').insert({
-        id: unidadeId,
-        name: unidadeName,
-        empresa_id: empresaId,
-        created_at: now,
-        updated_at: now
-      });
-    }
-
-    try {
-      await db('auditoria_logs').insert({
-        usuario_id: req.user.id || 'sistema',
-        acao: 'CRIOU_EMPRESA',
-        detalhes: `Empresa ${name} (${empresaId}) criada por ${req.user.name || req.user.username}`,
-        empresa_id: req.user.empresa_id || empresaId
-      });
-    } catch (auditErr) {
-      console.warn('Não foi possível registrar auditoria da empresa:', auditErr.message);
-    }
-
-    res.json({ success: true, empresa: { id: empresaId, name, cnpj, phone, email } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erro ao criar empresa' });
-  }
-});
-
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   const { username, password, empresa_id } = req.body;
@@ -2819,7 +2738,146 @@ app.get('/api/exchange/simulations/:id', async (req, res) => {
     console.error('Erro ao carregar detalhes da simulação:', err);
     res.status(500).json({ error: 'Erro ao carregar detalhes da simulação.' });
   }
-});// Client ficha route
+});
+// Prospeccoes / Leads - persistidos no PostgreSQL para aparecerem entre logins diferentes.
+function normalizeProspectRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    contact: row.contact || '',
+    phone: row.phone || '',
+    city: row.city || '',
+    neighborhood: row.neighborhood || '',
+    address: row.address || '',
+    category: row.category || '',
+    competitor: row.competitor || '',
+    observation: row.observation || '',
+    photo: row.photo || '',
+    status: row.status || 'prospectado',
+    unitId: row.unit_id || 'all',
+    userId: row.user_id || '',
+    lossReason: row.loss_reason || '',
+    date: row.date || '',
+    time: row.time || '',
+    createdAt: row.created_at || row.createdAt || ''
+  };
+}
+
+app.get('/api/prospeccoes', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const activeUnit = req.query.unitId || req.header('X-Unit-Id') || 'all';
+    const permittedIds = await getPermittedSellerIds(req.user, db);
+
+    let query = db('prospeccoes')
+      .where({ empresa_id: companyId })
+      .whereIn('user_id', permittedIds.map(String));
+
+    if (activeUnit && activeUnit !== 'all') {
+      query = query.andWhere('unit_id', activeUnit);
+    }
+
+    const rows = await query.orderBy('created_at', 'desc');
+    res.json(rows.map(normalizeProspectRow));
+  } catch (err) {
+    console.error('Erro ao listar prospecções:', err);
+    res.status(500).json({ error: 'Erro ao listar prospecções.' });
+  }
+});
+
+app.post('/api/prospeccoes', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const now = new Date();
+    const body = req.body || {};
+    const isAdminLike = ['Administrador', 'Gerente', 'Supervisor'].includes(req.user.profile) || (req.user.permissions || []).includes('Administrador');
+    const targetUserId = isAdminLike && body.userId ? String(body.userId) : String(req.user.id);
+    const permittedIds = await getPermittedSellerIds(req.user, db);
+
+    if (!permittedIds.map(String).includes(targetUserId)) {
+      return res.status(403).json({ error: 'Acesso negado: vendedor fora da sua permissão.' });
+    }
+
+    const targetUnitId = (req.user.profile === 'Vendedor' && req.user.unitId !== 'all')
+      ? req.user.unitId
+      : (body.unitId || req.header('X-Unit-Id') || req.user.unitId || 'all');
+
+    if (!body.name) {
+      return res.status(400).json({ error: 'Informe o nome do comércio/prospecto.' });
+    }
+
+    const record = {
+      id: body.id || ('PR-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900)),
+      empresa_id: companyId,
+      unit_id: targetUnitId,
+      user_id: targetUserId,
+      name: body.name,
+      contact: body.contact || '',
+      phone: body.phone || '',
+      city: body.city || '',
+      neighborhood: body.neighborhood || '',
+      address: body.address || '',
+      category: body.category || '',
+      competitor: body.competitor || '',
+      observation: body.observation || '',
+      photo: body.photo || '',
+      status: body.status || 'prospectado',
+      loss_reason: body.lossReason || body.loss_reason || '',
+      date: body.date || now.toISOString().split('T')[0],
+      time: body.time || now.toTimeString().slice(0, 5),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString()
+    };
+
+    await db('prospeccoes').insert(record);
+    res.status(201).json(normalizeProspectRow(record));
+  } catch (err) {
+    console.error('Erro ao criar prospecção:', err);
+    res.status(500).json({ error: 'Erro ao criar prospecção.' });
+  }
+});
+
+app.put('/api/prospeccoes/:id/status', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const permittedIds = await getPermittedSellerIds(req.user, db);
+    const prospect = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    if (!prospect) return res.status(404).json({ error: 'Lead não encontrado.' });
+    if (!permittedIds.map(String).includes(String(prospect.user_id))) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).update({
+      status: req.body.status || 'prospectado',
+      loss_reason: req.body.lossReason || req.body.loss_reason || prospect.loss_reason || '',
+      updated_at: new Date().toISOString()
+    });
+    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    res.json(normalizeProspectRow(updated));
+  } catch (err) {
+    console.error('Erro ao atualizar status da prospecção:', err);
+    res.status(500).json({ error: 'Erro ao atualizar status da prospecção.' });
+  }
+});
+
+app.delete('/api/prospeccoes/:id', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const permittedIds = await getPermittedSellerIds(req.user, db);
+    const prospect = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    if (!prospect) return res.status(404).json({ error: 'Lead não encontrado.' });
+    if (!permittedIds.map(String).includes(String(prospect.user_id))) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).del();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir prospecção:', err);
+    res.status(500).json({ error: 'Erro ao excluir prospecção.' });
+  }
+});
+
+// Client ficha route
 const clientesRoutes = require('./routes/clientes');
 app.use(clientesRoutes);
 
