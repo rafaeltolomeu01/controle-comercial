@@ -233,6 +233,24 @@ async function initDb() {
     }
   }
 
+
+  // 8. Create app_kv_store table (persistência geral do frontend no PostgreSQL)
+  // Esta tabela guarda os cadastros/configurações que antes ficavam apenas no localStorage
+  // até serem migrados para tabelas próprias. Evita perder dados entre celulares, PCs e logins.
+  const hasAppKvStore = await db.schema.hasTable('app_kv_store');
+  if (!hasAppKvStore) {
+    await db.schema.createTable('app_kv_store', function(table) {
+      table.increments('id').primary();
+      table.string('company_id').notNullable();
+      table.string('store_key').notNullable();
+      table.text('data_json').notNullable().defaultTo('[]');
+      table.string('updated_by').nullable();
+      table.timestamps(true, true);
+      table.unique(['company_id', 'store_key']);
+    });
+    console.log('Database: Tabela app_kv_store criada com sucesso.');
+  }
+
   // Normalizar usuários antigos no banco de dados
   const allUsers = await db('usuarios');
   for (const u of allUsers) {
@@ -309,36 +327,6 @@ async function initDb() {
       name: 'Distribuidora Espírito Santo',
       empresa_id: '12.345.678/0001-90'
     });
-  }
-
-
-  // Tabela real de prospecções/leads. Não pode depender de localStorage,
-  // senão o vendedor cadastra no celular e o admin nunca enxerga no computador.
-  const hasProspects = await db.schema.hasTable('prospeccoes');
-  if (!hasProspects) {
-    await db.schema.createTable('prospeccoes', function(table) {
-      table.string('id').primary();
-      table.string('empresa_id').notNullable();
-      table.string('unitId').notNullable().defaultTo('all');
-      table.string('userId').notNullable();
-      table.string('name').notNullable();
-      table.string('contact').nullable();
-      table.string('phone').nullable();
-      table.string('city').nullable();
-      table.string('neighborhood').nullable();
-      table.string('address').nullable();
-      table.string('category').nullable();
-      table.string('competitor').nullable();
-      table.text('observation').nullable();
-      table.text('photo').nullable();
-      table.string('status').notNullable().defaultTo('prospectado');
-      table.string('lossReason').nullable();
-      table.string('date').nullable();
-      table.string('time').nullable();
-      table.timestamp('createdAt').defaultTo(db.fn.now());
-      table.timestamps(true, true);
-    });
-    console.log('Database: Tabela prospeccoes criada com sucesso.');
   }
 
   // Seed default admin user admin@controlecampo.com if not exists
@@ -501,10 +489,14 @@ const upload = multer({
 const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads');
 app.use('/uploads', express.static(UPLOADS_ROOT));
 
+// Rotas do frontend devem ser públicas. A proteção real fica nas APIs e no próprio frontend.
+app.get(['/', '/index.html'], (req, res) => {
+  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
+});
+
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
-  // Nunca proteger páginas/arquivos do frontend aqui.
-  // Autenticação de tela é feita no JS; autenticação de dados fica só nas rotas /api.
+  // Nunca exigir JWT para arquivos/telas do frontend; exigir somente em /api.
   if (!req.path.startsWith('/api/')) {
     return next();
   }
@@ -540,10 +532,10 @@ app.use(async (req, res, next) => {
 
     req.user = {
       id: user.id,
-      name: user.name || user.username || user.email || 'Usuário',
+      name: user.name,
       username: user.username,
       profile: user.profile,
-      empresa_id: user.empresa_id || 'Distribuidora JDS',
+      empresa_id: user.empresa_id,
       empresa_name: req.header('X-Company-Name') || user.empresa_id || '001',
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
@@ -572,6 +564,98 @@ app.post('/api/upload', (req, res) => {
     const fileUrl = `/uploads/${companyId}/${req.file.filename}`;
     res.json({ success: true, url: fileUrl });
   });
+});
+
+
+// Persistência geral de listas/configurações do frontend no PostgreSQL.
+// Usa company_id do usuário logado para separar dados entre empresas.
+const ALLOWED_STORE_KEYS = new Set([
+  'company_identity',
+  'prospects',
+  'clients',
+  'equipments',
+  'movements',
+  'tickets',
+  'expenses',
+  'balances',
+  'units',
+  'client_categories',
+  'equipment_types',
+  'rejection_reasons',
+  'prospect_loss_reasons',
+  'expense_categories',
+  'notification_emails'
+]);
+
+function getStoreCompanyId(req) {
+  return req.user && req.user.empresa_id ? String(req.user.empresa_id) : '001';
+}
+
+app.get('/api/store', async (req, res) => {
+  try {
+    const companyId = getStoreCompanyId(req);
+    const rows = await db('app_kv_store').where({ company_id: companyId });
+    const payload = {};
+    for (const row of rows) {
+      try {
+        payload[row.store_key] = JSON.parse(row.data_json || 'null');
+      } catch (_) {
+        payload[row.store_key] = null;
+      }
+    }
+    res.json(payload);
+  } catch (err) {
+    console.error('Erro ao carregar store geral:', err);
+    res.status(500).json({ error: 'Erro ao carregar dados do banco.' });
+  }
+});
+
+app.get('/api/store/:key', async (req, res) => {
+  try {
+    const key = req.params.key;
+    if (!ALLOWED_STORE_KEYS.has(key)) {
+      return res.status(400).json({ error: 'Chave de armazenamento inválida.' });
+    }
+    const companyId = getStoreCompanyId(req);
+    const row = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+    if (!row) return res.json({ key, data: null });
+    res.json({ key, data: JSON.parse(row.data_json || 'null') });
+  } catch (err) {
+    console.error('Erro ao carregar item da store:', err);
+    res.status(500).json({ error: 'Erro ao carregar dado do banco.' });
+  }
+});
+
+app.post('/api/store/:key', async (req, res) => {
+  try {
+    const key = req.params.key;
+    if (!ALLOWED_STORE_KEYS.has(key)) {
+      return res.status(400).json({ error: 'Chave de armazenamento inválida.' });
+    }
+    const companyId = getStoreCompanyId(req);
+    const data = Object.prototype.hasOwnProperty.call(req.body || {}, 'data') ? req.body.data : req.body;
+    const dataJson = JSON.stringify(data == null ? null : data);
+    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+    const now = new Date().toISOString();
+    if (existing) {
+      await db('app_kv_store')
+        .where({ company_id: companyId, store_key: key })
+        .update({ data_json: dataJson, updated_by: req.user.id, updated_at: now });
+    } else {
+      await db('app_kv_store').insert({
+        company_id: companyId,
+        store_key: key,
+        data_json: dataJson,
+        updated_by: req.user.id,
+        created_at: now,
+        updated_at: now
+      });
+    }
+    res.json({ success: true, key });
+  } catch (err) {
+    console.error('Erro ao salvar item da store:', err);
+    res.status(500).json({ error: 'Erro ao salvar dado no banco.' });
+  }
 });
 
 // Helper to check company and role access to a request
@@ -1605,16 +1689,16 @@ app.get('/api/me', async (req, res) => {
     if (user.status === 'AGUARDANDO LIBERAÇÃO') return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
     res.json({
       id: user.id,
-      name: user.name || user.username || user.email || 'Usuário',
+      name: user.name,
       username: user.username,
       profile: user.profile,
-      unitId: user.unitId || 'all',
+      unitId: user.unitId,
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id || 'Distribuidora JDS'
+      empresa_id: user.empresa_id
     });
   } catch (err) {
     console.error(err);
@@ -1686,11 +1770,11 @@ app.post('/api/login', async (req, res) => {
 
     const token = jwt.sign({
       id: user.id,
-      name: user.name || user.username || user.email || 'Usuário',
+      name: user.name,
       username: user.username,
       profile: user.profile,
-      unitId: user.unitId || 'all',
-      empresa_id: user.empresa_id || 'Distribuidora JDS',
+      unitId: user.unitId,
+      empresa_id: user.empresa_id,
       permissions: JSON.parse(user.permissions || '[]')
     }, JWT_SECRET, { expiresIn: '24h' });
 
@@ -1698,16 +1782,16 @@ app.post('/api/login', async (req, res) => {
       token,
       user: {
         id: user.id,
-        name: user.name || user.username || user.email || 'Usuário',
+        name: user.name,
         username: user.username,
         profile: user.profile,
-        unitId: user.unitId || 'all',
+        unitId: user.unitId,
         status: user.status,
         permissions: JSON.parse(user.permissions || '[]'),
         email: user.email || '',
         phone: user.phone || '',
         photo: user.photo || '',
-        empresa_id: user.empresa_id || 'Distribuidora JDS'
+        empresa_id: user.empresa_id
       }
     });
   } catch (err) {
@@ -1866,20 +1950,20 @@ app.get('/api/usuarios/:id', async (req, res) => {
 
     res.json({
       id: user.id,
-      name: user.name || user.username || user.email || 'Usuário',
+      name: user.name,
       username: user.username,
       profile: user.profile,
       role: user.profile, // alias
       tipo: user.profile, // alias
       user_type: user.profile, // alias
-      unitId: user.unitId || 'all',
+      unitId: user.unitId,
       unit_id: user.unitId, // alias
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id || 'Distribuidora JDS',
+      empresa_id: user.empresa_id,
       company_id: user.empresa_id, // alias
       linked_users
     });
@@ -2406,127 +2490,6 @@ async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'em
   }
   return query;
 }
-
-
-// --- Prospecções / Leads Endpoints ---
-function normalizeProspect(row) {
-  if (!row) return row;
-  return {
-    id: row.id,
-    empresa_id: row.empresa_id,
-    unitId: row.unitId || 'all',
-    userId: row.userId,
-    name: row.name || '',
-    contact: row.contact || '',
-    phone: row.phone || '',
-    city: row.city || '',
-    neighborhood: row.neighborhood || '',
-    address: row.address || '',
-    category: row.category || '',
-    competitor: row.competitor || '',
-    observation: row.observation || '',
-    photo: row.photo || '',
-    status: row.status || 'prospectado',
-    lossReason: row.lossReason || '',
-    date: row.date || '',
-    time: row.time || '',
-    createdAt: row.createdAt || row.created_at || ''
-  };
-}
-
-app.get('/api/prospeccoes', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id || 'Distribuidora JDS';
-    const allowedIds = await getPermittedSellerIds(req.user, db);
-    const rows = await db('prospeccoes')
-      .where({ empresa_id: companyId })
-      .whereIn('userId', allowedIds)
-      .orderBy('createdAt', 'desc');
-    res.json(rows.map(normalizeProspect));
-  } catch (err) {
-    console.error('Erro ao listar prospecções:', err);
-    res.status(500).json({ error: 'Erro ao listar prospecções.' });
-  }
-});
-
-app.post('/api/prospeccoes', async (req, res) => {
-  try {
-    const actor = req.user || {};
-    const companyId = actor.empresa_id || 'Distribuidora JDS';
-    const allowedIds = await getPermittedSellerIds(actor, db);
-    const requestedUserId = String(req.body.userId || actor.id);
-    const userId = allowedIds.map(String).includes(requestedUserId) ? requestedUserId : String(actor.id);
-    const now = new Date();
-    const id = req.body.id || `PR-${Date.now()}`;
-    const record = {
-      id,
-      empresa_id: companyId,
-      unitId: req.body.unitId || actor.unitId || 'all',
-      userId,
-      name: String(req.body.name || '').trim(),
-      contact: req.body.contact || '',
-      phone: req.body.phone || '',
-      city: req.body.city || '',
-      neighborhood: req.body.neighborhood || '',
-      address: req.body.address || '',
-      category: req.body.category || '',
-      competitor: req.body.competitor || '',
-      observation: req.body.observation || '',
-      photo: req.body.photo || '',
-      status: req.body.status || 'prospectado',
-      lossReason: req.body.lossReason || '',
-      date: req.body.date || now.toISOString().slice(0, 10),
-      time: req.body.time || now.toTimeString().slice(0, 5),
-      createdAt: req.body.createdAt || now.toISOString(),
-      created_at: now,
-      updated_at: now
-    };
-    if (!record.name) return res.status(400).json({ error: 'Nome do comércio é obrigatório.' });
-    await db('prospeccoes').insert(record);
-    res.status(201).json(normalizeProspect(record));
-  } catch (err) {
-    console.error('Erro ao salvar prospecção:', err);
-    res.status(500).json({ error: 'Erro ao salvar prospecção.' });
-  }
-});
-
-app.patch('/api/prospeccoes/:id', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id || 'Distribuidora JDS';
-    const lead = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
-    const allowedIds = await getPermittedSellerIds(req.user, db);
-    if (!allowedIds.map(String).includes(String(lead.userId))) {
-      return res.status(403).json({ error: 'Acesso negado para alterar este lead.' });
-    }
-    const allowedFields = ['name','contact','phone','city','neighborhood','address','category','competitor','observation','photo','status','lossReason','unitId','userId'];
-    const changes = { updated_at: new Date() };
-    allowedFields.forEach(k => { if (Object.prototype.hasOwnProperty.call(req.body, k)) changes[k] = req.body[k]; });
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).update(changes);
-    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    res.json(normalizeProspect(updated));
-  } catch (err) {
-    console.error('Erro ao atualizar prospecção:', err);
-    res.status(500).json({ error: 'Erro ao atualizar prospecção.' });
-  }
-});
-
-app.delete('/api/prospeccoes/:id', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id || 'Distribuidora JDS';
-    const lead = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
-    const allowedIds = await getPermittedSellerIds(req.user, db);
-    if (!allowedIds.map(String).includes(String(lead.userId))) {
-      return res.status(403).json({ error: 'Acesso negado para excluir este lead.' });
-    }
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).del();
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Erro ao excluir prospecção:', err);
-    res.status(500).json({ error: 'Erro ao excluir prospecção.' });
-  }
-});
 
 // --- Chamados Mecânicos Endpoints ---
 app.post('/api/chamados', async (req, res) => {
