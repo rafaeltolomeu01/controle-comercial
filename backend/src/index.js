@@ -311,6 +311,36 @@ async function initDb() {
     });
   }
 
+
+  // Tabela real de prospecções/leads. Não pode depender de localStorage,
+  // senão o vendedor cadastra no celular e o admin nunca enxerga no computador.
+  const hasProspects = await db.schema.hasTable('prospeccoes');
+  if (!hasProspects) {
+    await db.schema.createTable('prospeccoes', function(table) {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('unitId').notNullable().defaultTo('all');
+      table.string('userId').notNullable();
+      table.string('name').notNullable();
+      table.string('contact').nullable();
+      table.string('phone').nullable();
+      table.string('city').nullable();
+      table.string('neighborhood').nullable();
+      table.string('address').nullable();
+      table.string('category').nullable();
+      table.string('competitor').nullable();
+      table.text('observation').nullable();
+      table.text('photo').nullable();
+      table.string('status').notNullable().defaultTo('prospectado');
+      table.string('lossReason').nullable();
+      table.string('date').nullable();
+      table.string('time').nullable();
+      table.timestamp('createdAt').defaultTo(db.fn.now());
+      table.timestamps(true, true);
+    });
+    console.log('Database: Tabela prospeccoes criada com sucesso.');
+  }
+
   // Seed default admin user admin@controlecampo.com if not exists
   const initialAdminPerms = JSON.stringify([
     "Dashboard", "Clientes", "Produtos", "Estoque", "Financeiro", 
@@ -473,9 +503,8 @@ app.use('/uploads', express.static(UPLOADS_ROOT));
 
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
-  // IMPORTANTE: autenticação JWT só deve proteger rotas de API.
-  // O frontend (/ , /index.html e hashes como /#login) precisa ser entregue sem token;
-  // quem bloqueia o painel é o JS do frontend validando /api/me depois.
+  // Nunca proteger páginas/arquivos do frontend aqui.
+  // Autenticação de tela é feita no JS; autenticação de dados fica só nas rotas /api.
   if (!req.path.startsWith('/api/')) {
     return next();
   }
@@ -511,10 +540,10 @@ app.use(async (req, res, next) => {
 
     req.user = {
       id: user.id,
-      name: user.name,
+      name: user.name || user.username || user.email || 'Usuário',
       username: user.username,
       profile: user.profile,
-      empresa_id: user.empresa_id,
+      empresa_id: user.empresa_id || 'Distribuidora JDS',
       empresa_name: req.header('X-Company-Name') || user.empresa_id || '001',
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
@@ -1576,16 +1605,16 @@ app.get('/api/me', async (req, res) => {
     if (user.status === 'AGUARDANDO LIBERAÇÃO') return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
     res.json({
       id: user.id,
-      name: user.name,
+      name: user.name || user.username || user.email || 'Usuário',
       username: user.username,
       profile: user.profile,
-      unitId: user.unitId,
+      unitId: user.unitId || 'all',
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id
+      empresa_id: user.empresa_id || 'Distribuidora JDS'
     });
   } catch (err) {
     console.error(err);
@@ -1657,11 +1686,11 @@ app.post('/api/login', async (req, res) => {
 
     const token = jwt.sign({
       id: user.id,
-      name: user.name,
+      name: user.name || user.username || user.email || 'Usuário',
       username: user.username,
       profile: user.profile,
-      unitId: user.unitId,
-      empresa_id: user.empresa_id,
+      unitId: user.unitId || 'all',
+      empresa_id: user.empresa_id || 'Distribuidora JDS',
       permissions: JSON.parse(user.permissions || '[]')
     }, JWT_SECRET, { expiresIn: '24h' });
 
@@ -1669,16 +1698,16 @@ app.post('/api/login', async (req, res) => {
       token,
       user: {
         id: user.id,
-        name: user.name,
+        name: user.name || user.username || user.email || 'Usuário',
         username: user.username,
         profile: user.profile,
-        unitId: user.unitId,
+        unitId: user.unitId || 'all',
         status: user.status,
         permissions: JSON.parse(user.permissions || '[]'),
         email: user.email || '',
         phone: user.phone || '',
         photo: user.photo || '',
-        empresa_id: user.empresa_id
+        empresa_id: user.empresa_id || 'Distribuidora JDS'
       }
     });
   } catch (err) {
@@ -1837,20 +1866,20 @@ app.get('/api/usuarios/:id', async (req, res) => {
 
     res.json({
       id: user.id,
-      name: user.name,
+      name: user.name || user.username || user.email || 'Usuário',
       username: user.username,
       profile: user.profile,
       role: user.profile, // alias
       tipo: user.profile, // alias
       user_type: user.profile, // alias
-      unitId: user.unitId,
+      unitId: user.unitId || 'all',
       unit_id: user.unitId, // alias
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id,
+      empresa_id: user.empresa_id || 'Distribuidora JDS',
       company_id: user.empresa_id, // alias
       linked_users
     });
@@ -2377,6 +2406,127 @@ async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'em
   }
   return query;
 }
+
+
+// --- Prospecções / Leads Endpoints ---
+function normalizeProspect(row) {
+  if (!row) return row;
+  return {
+    id: row.id,
+    empresa_id: row.empresa_id,
+    unitId: row.unitId || 'all',
+    userId: row.userId,
+    name: row.name || '',
+    contact: row.contact || '',
+    phone: row.phone || '',
+    city: row.city || '',
+    neighborhood: row.neighborhood || '',
+    address: row.address || '',
+    category: row.category || '',
+    competitor: row.competitor || '',
+    observation: row.observation || '',
+    photo: row.photo || '',
+    status: row.status || 'prospectado',
+    lossReason: row.lossReason || '',
+    date: row.date || '',
+    time: row.time || '',
+    createdAt: row.createdAt || row.created_at || ''
+  };
+}
+
+app.get('/api/prospeccoes', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id || 'Distribuidora JDS';
+    const allowedIds = await getPermittedSellerIds(req.user, db);
+    const rows = await db('prospeccoes')
+      .where({ empresa_id: companyId })
+      .whereIn('userId', allowedIds)
+      .orderBy('createdAt', 'desc');
+    res.json(rows.map(normalizeProspect));
+  } catch (err) {
+    console.error('Erro ao listar prospecções:', err);
+    res.status(500).json({ error: 'Erro ao listar prospecções.' });
+  }
+});
+
+app.post('/api/prospeccoes', async (req, res) => {
+  try {
+    const actor = req.user || {};
+    const companyId = actor.empresa_id || 'Distribuidora JDS';
+    const allowedIds = await getPermittedSellerIds(actor, db);
+    const requestedUserId = String(req.body.userId || actor.id);
+    const userId = allowedIds.map(String).includes(requestedUserId) ? requestedUserId : String(actor.id);
+    const now = new Date();
+    const id = req.body.id || `PR-${Date.now()}`;
+    const record = {
+      id,
+      empresa_id: companyId,
+      unitId: req.body.unitId || actor.unitId || 'all',
+      userId,
+      name: String(req.body.name || '').trim(),
+      contact: req.body.contact || '',
+      phone: req.body.phone || '',
+      city: req.body.city || '',
+      neighborhood: req.body.neighborhood || '',
+      address: req.body.address || '',
+      category: req.body.category || '',
+      competitor: req.body.competitor || '',
+      observation: req.body.observation || '',
+      photo: req.body.photo || '',
+      status: req.body.status || 'prospectado',
+      lossReason: req.body.lossReason || '',
+      date: req.body.date || now.toISOString().slice(0, 10),
+      time: req.body.time || now.toTimeString().slice(0, 5),
+      createdAt: req.body.createdAt || now.toISOString(),
+      created_at: now,
+      updated_at: now
+    };
+    if (!record.name) return res.status(400).json({ error: 'Nome do comércio é obrigatório.' });
+    await db('prospeccoes').insert(record);
+    res.status(201).json(normalizeProspect(record));
+  } catch (err) {
+    console.error('Erro ao salvar prospecção:', err);
+    res.status(500).json({ error: 'Erro ao salvar prospecção.' });
+  }
+});
+
+app.patch('/api/prospeccoes/:id', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id || 'Distribuidora JDS';
+    const lead = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+    const allowedIds = await getPermittedSellerIds(req.user, db);
+    if (!allowedIds.map(String).includes(String(lead.userId))) {
+      return res.status(403).json({ error: 'Acesso negado para alterar este lead.' });
+    }
+    const allowedFields = ['name','contact','phone','city','neighborhood','address','category','competitor','observation','photo','status','lossReason','unitId','userId'];
+    const changes = { updated_at: new Date() };
+    allowedFields.forEach(k => { if (Object.prototype.hasOwnProperty.call(req.body, k)) changes[k] = req.body[k]; });
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).update(changes);
+    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    res.json(normalizeProspect(updated));
+  } catch (err) {
+    console.error('Erro ao atualizar prospecção:', err);
+    res.status(500).json({ error: 'Erro ao atualizar prospecção.' });
+  }
+});
+
+app.delete('/api/prospeccoes/:id', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id || 'Distribuidora JDS';
+    const lead = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+    const allowedIds = await getPermittedSellerIds(req.user, db);
+    if (!allowedIds.map(String).includes(String(lead.userId))) {
+      return res.status(403).json({ error: 'Acesso negado para excluir este lead.' });
+    }
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).del();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir prospecção:', err);
+    res.status(500).json({ error: 'Erro ao excluir prospecção.' });
+  }
+});
 
 // --- Chamados Mecânicos Endpoints ---
 app.post('/api/chamados', async (req, res) => {
