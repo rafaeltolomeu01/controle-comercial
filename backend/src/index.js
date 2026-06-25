@@ -311,7 +311,7 @@ async function initDb() {
     });
   }
 
-  // Seed default admin user admin@controlecampo.com if not exists
+  // Seed default admin user admin@controle.com if not exists
   const initialAdminPerms = JSON.stringify([
     "Dashboard", "Clientes", "Produtos", "Estoque", "Financeiro", 
     "Solicitação de Saldo", "Aprovação de Saldo", "Despesas", 
@@ -327,8 +327,8 @@ async function initDb() {
       id: 'admin_initial_cnpj',
       name: 'Administrador sistema',
       username: 'admin',
-      email: 'admin@controlecampo.com',
-      password: '123456',
+      email: 'admin@controle.com',
+      password: 'Admin@123',
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -338,12 +338,12 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial CNPJ cadastrado.');
-  } else if (hasAdminCnpj.email !== 'admin@controlecampo.com' || hasAdminCnpj.password !== '123456') {
+  } else if (hasAdminCnpj.email !== 'admin@controle.com' || hasAdminCnpj.password !== 'Admin@123') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
       .update({
-        email: 'admin@controlecampo.com',
-        password: '123456',
+        email: 'admin@controle.com',
+        password: 'Admin@123',
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
@@ -361,8 +361,8 @@ async function initDb() {
       id: 'admin_initial_name',
       name: 'Administrador sistema',
       username: 'admin',
-      email: 'admin@controlecampo.com',
-      password: '123456',
+      email: 'admin@controle.com',
+      password: 'Admin@123',
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -372,18 +372,73 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial Nome cadastrado.');
-  } else if (hasAdminName.email !== 'admin@controlecampo.com' || hasAdminName.password !== '123456') {
+  } else if (hasAdminName.email !== 'admin@controle.com' || hasAdminName.password !== 'Admin@123') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
       .update({
-        email: 'admin@controlecampo.com',
-        password: '123456',
+        email: 'admin@controle.com',
+        password: 'Admin@123',
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
         permissions: initialAdminPerms
       });
     console.log('Database: Admin inicial Nome atualizado com novas credenciais.');
+
+
+  // Admin inicial adicional para ambientes onde o frontend ainda envia empresa_id = '001'.
+  // Isso evita depender do Shell do Render Free: ao reiniciar/deployar, o admin é criado/atualizado automaticamente.
+  const hasCompany001 = await db('empresas').where({ id: '001' }).first();
+  if (!hasCompany001) {
+    await db('empresas').insert({
+      id: '001',
+      name: 'Distribuidora JDS',
+      cnpj: '12.345.678/0001-90',
+      phone: '(11) 3200-9876',
+      email: 'contato@distribuidorajds.com.br'
+    });
+    console.log('Database: Empresa 001 seed cadastrada.');
+  }
+
+  const hasUnit001 = await db('unidades').where({ id: 'all', empresa_id: '001' }).first();
+  if (!hasUnit001) {
+    await db('unidades').insert({
+      id: 'all',
+      name: 'Unidade Geral',
+      empresa_id: '001'
+    }).catch(() => {});
+  }
+
+  const hasAdmin001 = await db('usuarios')
+    .where({ username: 'admin', empresa_id: '001' })
+    .first();
+
+  const admin001Data = {
+    name: 'Administrador sistema',
+    username: 'admin',
+    email: 'admin@controle.com',
+    password: 'Admin@123',
+    profile: 'Administrador',
+    unitId: 'all',
+    status: 'LIBERADO',
+    empresa_id: '001',
+    permissions: initialAdminPerms,
+    updated_at: new Date().toISOString()
+  };
+
+  if (!hasAdmin001) {
+    await db('usuarios').insert({
+      id: 'admin_initial_001',
+      ...admin001Data,
+      created_at: new Date().toISOString()
+    });
+    console.log('Database: Admin inicial 001 cadastrado.');
+  } else {
+    await db('usuarios')
+      .where({ username: 'admin', empresa_id: '001' })
+      .update(admin001Data);
+    console.log('Database: Admin inicial 001 atualizado.');
+  }
   }
 }
 
