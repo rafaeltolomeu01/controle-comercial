@@ -152,34 +152,6 @@ async function initDb() {
     console.log('Database: Tabela user_hierarchy_links criada com sucesso.');
   }
 
-
-  // 7A. Create prospeccoes table (leads precisam ficar no banco para admin/supervisor enxergar o que vendedor cadastrou)
-  const hasProspeccoes = await db.schema.hasTable('prospeccoes');
-  if (!hasProspeccoes) {
-    await db.schema.createTable('prospeccoes', function(table) {
-      table.string('id').primary();
-      table.string('empresa_id').notNullable();
-      table.string('unit_id').notNullable().defaultTo('all');
-      table.string('user_id').notNullable();
-      table.string('name').notNullable();
-      table.string('contact').nullable();
-      table.string('phone').nullable();
-      table.string('city').nullable();
-      table.string('neighborhood').nullable();
-      table.string('address').nullable();
-      table.string('category').nullable();
-      table.string('competitor').nullable();
-      table.text('observation').nullable();
-      table.text('photo').nullable();
-      table.string('status').notNullable().defaultTo('prospectado');
-      table.string('loss_reason').nullable();
-      table.string('date').nullable();
-      table.string('time').nullable();
-      table.timestamps(true, true);
-    });
-    console.log('Database: Tabela prospeccoes criada com sucesso.');
-  }
-
   // 7. Create chamados_tecnicos table (histórico real dos chamados mecânicos)
   const hasChamadosTecnicos = await db.schema.hasTable('chamados_tecnicos');
   if (!hasChamadosTecnicos) {
@@ -501,6 +473,13 @@ app.use('/uploads', express.static(UPLOADS_ROOT));
 
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
+  // IMPORTANTE: autenticação JWT só deve proteger rotas de API.
+  // O frontend (/ , /index.html e hashes como /#login) precisa ser entregue sem token;
+  // quem bloqueia o painel é o JS do frontend validando /api/me depois.
+  if (!req.path.startsWith('/api/')) {
+    return next();
+  }
+
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   
   if (publicPaths.includes(req.path)) {
@@ -2738,146 +2717,7 @@ app.get('/api/exchange/simulations/:id', async (req, res) => {
     console.error('Erro ao carregar detalhes da simulação:', err);
     res.status(500).json({ error: 'Erro ao carregar detalhes da simulação.' });
   }
-});
-// Prospeccoes / Leads - persistidos no PostgreSQL para aparecerem entre logins diferentes.
-function normalizeProspectRow(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    name: row.name,
-    contact: row.contact || '',
-    phone: row.phone || '',
-    city: row.city || '',
-    neighborhood: row.neighborhood || '',
-    address: row.address || '',
-    category: row.category || '',
-    competitor: row.competitor || '',
-    observation: row.observation || '',
-    photo: row.photo || '',
-    status: row.status || 'prospectado',
-    unitId: row.unit_id || 'all',
-    userId: row.user_id || '',
-    lossReason: row.loss_reason || '',
-    date: row.date || '',
-    time: row.time || '',
-    createdAt: row.created_at || row.createdAt || ''
-  };
-}
-
-app.get('/api/prospeccoes', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id;
-    const activeUnit = req.query.unitId || req.header('X-Unit-Id') || 'all';
-    const permittedIds = await getPermittedSellerIds(req.user, db);
-
-    let query = db('prospeccoes')
-      .where({ empresa_id: companyId })
-      .whereIn('user_id', permittedIds.map(String));
-
-    if (activeUnit && activeUnit !== 'all') {
-      query = query.andWhere('unit_id', activeUnit);
-    }
-
-    const rows = await query.orderBy('created_at', 'desc');
-    res.json(rows.map(normalizeProspectRow));
-  } catch (err) {
-    console.error('Erro ao listar prospecções:', err);
-    res.status(500).json({ error: 'Erro ao listar prospecções.' });
-  }
-});
-
-app.post('/api/prospeccoes', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id;
-    const now = new Date();
-    const body = req.body || {};
-    const isAdminLike = ['Administrador', 'Gerente', 'Supervisor'].includes(req.user.profile) || (req.user.permissions || []).includes('Administrador');
-    const targetUserId = isAdminLike && body.userId ? String(body.userId) : String(req.user.id);
-    const permittedIds = await getPermittedSellerIds(req.user, db);
-
-    if (!permittedIds.map(String).includes(targetUserId)) {
-      return res.status(403).json({ error: 'Acesso negado: vendedor fora da sua permissão.' });
-    }
-
-    const targetUnitId = (req.user.profile === 'Vendedor' && req.user.unitId !== 'all')
-      ? req.user.unitId
-      : (body.unitId || req.header('X-Unit-Id') || req.user.unitId || 'all');
-
-    if (!body.name) {
-      return res.status(400).json({ error: 'Informe o nome do comércio/prospecto.' });
-    }
-
-    const record = {
-      id: body.id || ('PR-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900)),
-      empresa_id: companyId,
-      unit_id: targetUnitId,
-      user_id: targetUserId,
-      name: body.name,
-      contact: body.contact || '',
-      phone: body.phone || '',
-      city: body.city || '',
-      neighborhood: body.neighborhood || '',
-      address: body.address || '',
-      category: body.category || '',
-      competitor: body.competitor || '',
-      observation: body.observation || '',
-      photo: body.photo || '',
-      status: body.status || 'prospectado',
-      loss_reason: body.lossReason || body.loss_reason || '',
-      date: body.date || now.toISOString().split('T')[0],
-      time: body.time || now.toTimeString().slice(0, 5),
-      created_at: now.toISOString(),
-      updated_at: now.toISOString()
-    };
-
-    await db('prospeccoes').insert(record);
-    res.status(201).json(normalizeProspectRow(record));
-  } catch (err) {
-    console.error('Erro ao criar prospecção:', err);
-    res.status(500).json({ error: 'Erro ao criar prospecção.' });
-  }
-});
-
-app.put('/api/prospeccoes/:id/status', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id;
-    const permittedIds = await getPermittedSellerIds(req.user, db);
-    const prospect = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    if (!prospect) return res.status(404).json({ error: 'Lead não encontrado.' });
-    if (!permittedIds.map(String).includes(String(prospect.user_id))) {
-      return res.status(403).json({ error: 'Acesso negado.' });
-    }
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).update({
-      status: req.body.status || 'prospectado',
-      loss_reason: req.body.lossReason || req.body.loss_reason || prospect.loss_reason || '',
-      updated_at: new Date().toISOString()
-    });
-    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    res.json(normalizeProspectRow(updated));
-  } catch (err) {
-    console.error('Erro ao atualizar status da prospecção:', err);
-    res.status(500).json({ error: 'Erro ao atualizar status da prospecção.' });
-  }
-});
-
-app.delete('/api/prospeccoes/:id', async (req, res) => {
-  try {
-    const companyId = req.user.empresa_id;
-    const permittedIds = await getPermittedSellerIds(req.user, db);
-    const prospect = await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).first();
-    if (!prospect) return res.status(404).json({ error: 'Lead não encontrado.' });
-    if (!permittedIds.map(String).includes(String(prospect.user_id))) {
-      return res.status(403).json({ error: 'Acesso negado.' });
-    }
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: companyId }).del();
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Erro ao excluir prospecção:', err);
-    res.status(500).json({ error: 'Erro ao excluir prospecção.' });
-  }
-});
-
-// Client ficha route
+});// Client ficha route
 const clientesRoutes = require('./routes/clientes');
 app.use(clientesRoutes);
 
