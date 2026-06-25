@@ -421,7 +421,13 @@ app.use(bodyParser.json({ limit: process.env.JSON_LIMIT || '25mb' }));
 const FRONTEND_ROOT = path.join(__dirname, '..', '..');
 app.use(express.static(FRONTEND_ROOT, {
   index: false,
-  maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0
+  maxAge: 0,
+  etag: false,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
 }));
 
 const multer = require('multer');
@@ -467,13 +473,6 @@ app.use('/uploads', express.static(UPLOADS_ROOT));
 
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
-  // Somente rotas /api precisam de JWT.
-  // Arquivos do frontend (/, /index.html, /css, /js, /pages, manifest, sw) precisam continuar públicos
-  // para que a própria tela de login carregue e faça o bloqueio no navegador.
-  if (!req.path.startsWith('/api/')) {
-    return next();
-  }
-
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   
   if (publicPaths.includes(req.path)) {
