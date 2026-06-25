@@ -403,6 +403,71 @@ async function initDb() {
       });
     console.log('Database: Admin inicial Nome atualizado com novas credenciais.');
   }
+
+  // Admin emergencial criado automaticamente para plano Free do Render.
+  // Não precisa Shell: ao subir o deploy, o initDb cria/atualiza este login no PostgreSQL.
+  const emergencyAdminPerms = JSON.stringify([
+    "Dashboard", "Clientes", "Equipamentos", "Chamados Mecânicos", "Despesas",
+    "Relatórios", "Simulador de Troca", "Usuários", "Configurações",
+    "Empresas", "Unidades", "Administrador"
+  ]);
+
+  const emergencyAdmins = [
+    {
+      id: 'admin_master_2026',
+      name: 'Administrador Geral',
+      username: 'master',
+      email: 'master@controle.com',
+      password: 'Master@2026',
+      empresa_id: '12.345.678/0001-90'
+    },
+    {
+      id: 'admin_master_jds_2026',
+      name: 'Administrador Geral',
+      username: 'master',
+      email: 'master@controle.com',
+      password: 'Master@2026',
+      empresa_id: 'Distribuidora JDS'
+    }
+  ];
+
+  for (const admin of emergencyAdmins) {
+    const existingById = await db('usuarios').where({ id: admin.id }).first();
+    const existingByLoginCompany = await db('usuarios')
+      .where({ username: admin.username, empresa_id: admin.empresa_id })
+      .first();
+
+    const adminData = {
+      name: admin.name,
+      username: admin.username,
+      email: admin.email,
+      password: admin.password,
+      profile: 'Administrador',
+      unitId: 'all',
+      status: 'LIBERADO',
+      empresa_id: admin.empresa_id,
+      permissions: emergencyAdminPerms,
+      updated_at: new Date().toISOString()
+    };
+
+    if (existingById) {
+      await db('usuarios').where({ id: admin.id }).update(adminData);
+      console.log(`Database: Admin emergencial ${admin.username} atualizado por ID.`);
+    } else if (existingByLoginCompany) {
+      await db('usuarios')
+        .where({ username: admin.username, empresa_id: admin.empresa_id })
+        .update(adminData);
+      console.log(`Database: Admin emergencial ${admin.username} atualizado por login/empresa.`);
+    } else {
+      await db('usuarios').insert({
+        id: admin.id,
+        ...adminData,
+        created_at: new Date().toISOString()
+      });
+      console.log(`Database: Admin emergencial ${admin.username} criado.`);
+    }
+  }
+
 }
 
 const app = express();
