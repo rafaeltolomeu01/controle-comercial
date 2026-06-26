@@ -613,10 +613,10 @@ app.use(async (req, res, next) => {
       return res.status(404).json({ error: 'Acesso negado: Usuário não cadastrado.' });
     }
 
-    if (normalizeUserStatus(user.status) === 'AGUARDANDO LIBERAÇÃO') {
+    if (user.status === 'AGUARDANDO LIBERAÇÃO') {
       return res.status(403).json({ error: 'Acesso negado: Seu acesso aguarda aprovação gerencial.' });
     }
-    if (normalizeUserStatus(user.status) === 'INATIVO') {
+    if (user.status === 'INATIVO') {
       return res.status(403).json({ error: 'Acesso negado: Seu acesso foi desativado por um administrador.' });
     }
 
@@ -640,35 +640,21 @@ app.use(async (req, res, next) => {
 
 // Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
-  const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-  if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+  try {
+    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
+    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
 
-  const normalizeBrasilApi = (d) => ({
-    cnpj: d.cnpj || digits,
-    razaoSocial: d.razao_social || '',
-    nomeFantasia: d.nome_fantasia || d.razao_social || '',
-    email: d.email || '',
-    telefone: d.ddd_telefone_1 || d.ddd_telefone_2 || d.telefone || '',
-    cep: d.cep || '',
-    logradouro: d.logradouro || '',
-    numero: d.numero || '',
-    complemento: d.complemento || '',
-    bairro: d.bairro || '',
-    municipio: d.municipio || '',
-    uf: d.uf || '',
-    cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-    cnaeDescricao: d.cnae_fiscal_descricao || '',
-    fonte: 'BrasilAPI'
-  });
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
+    const d = await response.json();
+    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
 
-  const normalizeReceitaWs = (d) => {
-    const atividade = Array.isArray(d.atividade_principal) && d.atividade_principal[0] ? d.atividade_principal[0] : {};
-    return {
+    res.json({
       cnpj: d.cnpj || digits,
-      razaoSocial: d.nome || '',
-      nomeFantasia: d.fantasia || d.nome || '',
+      razaoSocial: d.razao_social || '',
+      nomeFantasia: d.nome_fantasia || d.razao_social || '',
       email: d.email || '',
-      telefone: d.telefone || '',
+      telefone: d.ddd_telefone_1 || d.telefone || '',
       cep: d.cep || '',
       logradouro: d.logradouro || '',
       numero: d.numero || '',
@@ -676,41 +662,14 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       bairro: d.bairro || '',
       municipio: d.municipio || '',
       uf: d.uf || '',
-      cnaePrincipal: atividade.code ? String(atividade.code).replace(/\D/g, '') : '',
-      cnaeDescricao: atividade.text || '',
-      fonte: 'ReceitaWS'
-    };
-  };
-
-  const sources = [
-    { url: `https://brasilapi.com.br/api/cnpj/v1/${digits}`, normalizer: normalizeBrasilApi },
-    { url: `https://www.receitaws.com.br/v1/cnpj/${digits}`, normalizer: normalizeReceitaWs }
-  ];
-
-  const errors = [];
-  for (const source of sources) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 9000);
-      const response = await fetch(source.url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
-      clearTimeout(timeout);
-      if (!response.ok) {
-        errors.push(`${source.url}: HTTP ${response.status}`);
-        continue;
-      }
-      const data = await response.json();
-      if (data && (data.status === 'ERROR' || data.message === 'CNPJ inválido')) {
-        errors.push(data.message || 'não encontrado');
-        continue;
-      }
-      const result = source.normalizer(data);
-      if (result.razaoSocial || result.nomeFantasia || result.cnaePrincipal) return res.json(result);
-    } catch (err) {
-      errors.push(err.message || String(err));
-    }
+      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
+      cnaeDescricao: d.cnae_fiscal_descricao || '',
+      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
+    });
+  } catch (err) {
+    console.error('Erro ao consultar CNPJ:', err);
+    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
   }
-
-  return res.status(404).json({ error: 'CNPJ não encontrado nas fontes públicas. Preencha manualmente.', details: errors.slice(0, 3) });
 });
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
@@ -761,13 +720,11 @@ app.get('/api/uploads/:id', async (req, res) => {
 // Prospecções reais no banco. Admin/Gerente/Supervisor veem conforme perfil; vendedor vê apenas as próprias.
 app.get('/api/prospeccoes', async (req, res) => {
   try {
-    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
-    let q = db('prospeccoes').where({ empresa_id: req.user.empresa_id });
+    const isAdmin = isAdminUser(req.user);
+    let q = db('prospeccoes');
+    if (!isAdmin) q = q.where({ empresa_id: req.user.empresa_id });
     if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
-    if (!isAdmin) {
-      const allowedIds = await getPermittedSellerIds(req.user, db);
-      q = q.whereIn('userId', allowedIds.length ? allowedIds : [req.user.id]);
-    }
+    if (req.user.profile === 'Vendedor' && !isAdmin) q = q.andWhere({ userId: req.user.id });
     const rows = await q.orderBy('createdAt', 'desc');
     res.json(rows);
   } catch (err) {
@@ -821,16 +778,19 @@ app.post('/api/prospeccoes', async (req, res) => {
 
 app.put('/api/prospeccoes/:id', async (req, res) => {
   try {
-    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    const isAdmin = isAdminUser(req.user);
+    let existingQuery = db('prospeccoes').where({ id: req.params.id });
+    if (!isAdmin) existingQuery = existingQuery.andWhere({ empresa_id: req.user.empresa_id });
+    const existing = await existingQuery.first();
     if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
     if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id) return res.status(403).json({ error: 'Acesso negado.' });
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).update({
+    await db('prospeccoes').where({ id: req.params.id }).update({
       ...req.body,
       empresa_id: existing.empresa_id,
       id: existing.id,
       updated_at: new Date().toISOString()
     });
-    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    const updated = await db('prospeccoes').where({ id: req.params.id }).first();
     res.json(updated);
   } catch (err) {
     console.error('Erro ao atualizar prospecção:', err);
@@ -840,11 +800,13 @@ app.put('/api/prospeccoes/:id', async (req, res) => {
 
 app.delete('/api/prospeccoes/:id', async (req, res) => {
   try {
-    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    const isAdmin = isAdminUser(req.user);
+    let existingQuery = db('prospeccoes').where({ id: req.params.id });
+    if (!isAdmin) existingQuery = existingQuery.andWhere({ empresa_id: req.user.empresa_id });
+    const existing = await existingQuery.first();
     if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
-    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
     if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id && !isAdmin) return res.status(403).json({ error: 'Acesso negado.' });
-    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).delete();
+    await db('prospeccoes').where({ id: req.params.id }).delete();
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir prospecção:', err);
@@ -899,33 +861,6 @@ function getStoreCompanyId(req) {
 function safeParseStoreJson(value, fallback = null) {
   try { return JSON.parse(value || 'null'); } catch (_) { return fallback; }
 }
-
-
-async function getCompanyIdentity(companyId) {
-  const defaults = {
-    name: companyId || 'Distribuidora JDS',
-    logo: '',
-    cnpj: companyId || '001',
-    phone: '',
-    email: ''
-  };
-  try {
-    const row = await db('app_kv_store').where({ company_id: companyId, store_key: 'company_identity' }).first();
-    const data = row ? safeParseStoreJson(row.data_json, null) : null;
-    if (data && typeof data === 'object') return { ...defaults, ...data };
-  } catch (_) {}
-  return defaults;
-}
-
-function normalizeUserStatus(status) {
-  return String(status || '').trim().toUpperCase();
-}
-
-function isStatusAllowed(status) {
-  const s = normalizeUserStatus(status);
-  return !s || ['LIBERADO', 'ATIVO', 'ATIVA', 'ACTIVE', 'APPROVED'].includes(s);
-}
-
 
 app.get('/api/store', async (req, res) => {
   try {
@@ -2031,7 +1966,6 @@ app.get('/api/me', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
     if (user.status === 'INATIVO') return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     if (user.status === 'AGUARDANDO LIBERAÇÃO') return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
-    const companyIdentity = await getCompanyIdentity(user.empresa_id);
     res.json({
       id: user.id,
       name: user.name,
@@ -2043,8 +1977,7 @@ app.get('/api/me', async (req, res) => {
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id,
-      companyIdentity
+      empresa_id: user.empresa_id
     });
   } catch (err) {
     console.error(err);
@@ -2107,14 +2040,13 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
-    if (normalizeUserStatus(user.status) === 'AGUARDANDO LIBERAÇÃO') {
+    if (user.status === 'AGUARDANDO LIBERAÇÃO') {
       return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
     }
-    if (normalizeUserStatus(user.status) === 'INATIVO') {
+    if (user.status === 'INATIVO') {
       return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     }
 
-    const companyIdentity = await getCompanyIdentity(user.empresa_id);
     const token = jwt.sign({
       id: user.id,
       name: user.name,
@@ -2138,8 +2070,7 @@ app.post('/api/login', async (req, res) => {
         email: user.email || '',
         phone: user.phone || '',
         photo: user.photo || '',
-        empresa_id: user.empresa_id,
-        companyIdentity
+        empresa_id: user.empresa_id
       }
     });
   } catch (err) {
@@ -2823,7 +2754,13 @@ async function getPermittedSellerIds(user, dbInstance) {
     return [...new Set([String(userId), ...supervisorIds.map(String), ...directSellerIds.map(String), ...subSellerIds.map(String)])];
   }
 
-  // 4. Administrador (or other profiles) sees all users of the company
+  // 4. Administrador sees all users in the database. Other administrative/support profiles
+  // remain limited to their company by applyHierarchyScope when needed.
+  if (profile === 'Administrador' || (Array.isArray(user.permissions) && user.permissions.includes('Administrador'))) {
+    const allUsers = await dbInstance('usuarios').select('id');
+    return allUsers.map(u => String(u.id));
+  }
+
   const companyUsers = await dbInstance('usuarios')
     .where({ empresa_id: companyId })
     .select('id');
@@ -2852,8 +2789,8 @@ function normalizeChamado(row) {
 async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'empresa_id') {
   const actorPerms = user.permissions || [];
   const isAdmin = user.profile === 'Administrador' || actorPerms.includes('Administrador');
-  query.where(companyColumn, user.empresa_id || '001');
   if (!isAdmin) {
+    query.where(companyColumn, user.empresa_id || '001');
     const allowedIds = await getPermittedSellerIds(user, db);
     query.whereIn(ownerColumn, allowedIds);
   }
@@ -2940,7 +2877,10 @@ app.get('/api/chamados', async (req, res) => {
 
 app.get('/api/chamados/:id', async (req, res) => {
   try {
-    const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
+    const isAdmin = isAdminUser(req.user);
+    let chamadoQuery = db('chamados_tecnicos').where({ id: req.params.id });
+    if (!isAdmin) chamadoQuery = chamadoQuery.andWhere({ empresa_id: req.user.empresa_id || '001' });
+    const chamado = await chamadoQuery.first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
     const allowedIds = await getPermittedSellerIds(req.user, db);
     const staff = ['Administrador', 'Responsável Equipamentos', 'Mecânico'].includes(req.user.profile);
@@ -3081,8 +3021,9 @@ app.get('/api/exchange/products', async (req, res) => {
   const unitId = req.header('X-Unit-Id') || (req.user && req.user.unitId) || 'all';
 
   try {
-    let query = db('exchange_products')
-      .where({ company_id: companyId, active: true });
+    const isAdmin = isAdminUser(req.user);
+    let query = db('exchange_products').where({ active: true });
+    if (!isAdmin) query = query.andWhere({ company_id: companyId });
 
     if (unitId && unitId !== 'all') {
       query = query.where(function() {
