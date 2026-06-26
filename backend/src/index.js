@@ -152,6 +152,96 @@ async function initDb() {
     console.log('Database: Tabela user_hierarchy_links criada com sucesso.');
   }
 
+
+  // 7A. Tabela de arquivos enviados. No Render Free não existe disco persistente confiável,
+  // então guardamos o arquivo no PostgreSQL e servimos por URL /api/uploads/:id.
+  const hasUploads = await db.schema.hasTable('app_uploads');
+  if (!hasUploads) {
+    await db.schema.createTable('app_uploads', table => {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('user_id').nullable();
+      table.string('module').nullable();
+      table.string('filename').nullable();
+      table.string('mime_type').notNullable();
+      table.text('data_base64').notNullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+    console.log('Database: Tabela app_uploads criada com sucesso.');
+  }
+
+  // 7B. Tabela real de prospecções/leads.
+  const hasProspeccoes = await db.schema.hasTable('prospeccoes');
+  if (!hasProspeccoes) {
+    await db.schema.createTable('prospeccoes', table => {
+      table.string('id').primary();
+      table.string('empresa_id').notNullable();
+      table.string('unitId').notNullable().defaultTo('all');
+      table.string('userId').notNullable();
+      table.string('name').nullable();
+      table.string('contact').nullable();
+      table.string('phone').nullable();
+      table.string('city').nullable();
+      table.string('neighborhood').nullable();
+      table.string('address').nullable();
+      table.string('number').nullable();
+      table.string('zipcode').nullable();
+      table.string('category').nullable();
+      table.string('competitor').nullable();
+      table.text('observation').nullable();
+      table.text('photo').nullable();
+      table.string('status').notNullable().defaultTo('prospectado');
+      table.string('lossReason').nullable();
+      table.string('hasCnpj').notNullable().defaultTo('false');
+      table.string('cnpj').nullable();
+      table.string('razaoSocial').nullable();
+      table.string('nomeFantasia').nullable();
+      table.string('cnaePrincipal').nullable();
+      table.string('cnaeDescricao').nullable();
+      table.string('date').nullable();
+      table.string('time').nullable();
+      table.timestamp('createdAt').defaultTo(db.fn.now());
+      table.timestamps(true, true);
+    });
+    console.log('Database: Tabela prospeccoes criada com sucesso.');
+  } else {
+    const prospectColumns = {
+      empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
+      unitId: t => t.string('unitId').notNullable().defaultTo('all'),
+      userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
+      name: t => t.string('name').nullable(),
+      contact: t => t.string('contact').nullable(),
+      phone: t => t.string('phone').nullable(),
+      city: t => t.string('city').nullable(),
+      neighborhood: t => t.string('neighborhood').nullable(),
+      address: t => t.string('address').nullable(),
+      number: t => t.string('number').nullable(),
+      zipcode: t => t.string('zipcode').nullable(),
+      category: t => t.string('category').nullable(),
+      competitor: t => t.string('competitor').nullable(),
+      observation: t => t.text('observation').nullable(),
+      photo: t => t.text('photo').nullable(),
+      status: t => t.string('status').notNullable().defaultTo('prospectado'),
+      lossReason: t => t.string('lossReason').nullable(),
+      hasCnpj: t => t.string('hasCnpj').notNullable().defaultTo('false'),
+      cnpj: t => t.string('cnpj').nullable(),
+      razaoSocial: t => t.string('razaoSocial').nullable(),
+      nomeFantasia: t => t.string('nomeFantasia').nullable(),
+      cnaePrincipal: t => t.string('cnaePrincipal').nullable(),
+      cnaeDescricao: t => t.string('cnaeDescricao').nullable(),
+      date: t => t.string('date').nullable(),
+      time: t => t.string('time').nullable(),
+      createdAt: t => t.timestamp('createdAt').defaultTo(db.fn.now())
+    };
+    for (const [col, addColumn] of Object.entries(prospectColumns)) {
+      const exists = await db.schema.hasColumn('prospeccoes', col);
+      if (!exists) {
+        await db.schema.table('prospeccoes', table => addColumn(table));
+        console.log(`Database: Coluna ${col} adicionada à tabela prospeccoes.`);
+      }
+    }
+  }
+
   // 7. Create chamados_tecnicos table (histórico real dos chamados mecânicos)
   const hasChamadosTecnicos = await db.schema.hasTable('chamados_tecnicos');
   if (!hasChamadosTecnicos) {
@@ -234,9 +324,9 @@ async function initDb() {
   }
 
 
-  // 8. Create app_kv_store table (persistência geral do frontend no PostgreSQL)
-  // Esta tabela guarda os cadastros/configurações que antes ficavam apenas no localStorage
-  // até serem migrados para tabelas próprias. Evita perder dados entre celulares, PCs e logins.
+  // 8. Create app_kv_store table (cache central do frontend no PostgreSQL)
+  // Guarda listas/configurações que ainda são renderizadas no front para ficarem rápidas no celular,
+  // mas também persistidas no banco por empresa.
   const hasAppKvStore = await db.schema.hasTable('app_kv_store');
   if (!hasAppKvStore) {
     await db.schema.createTable('app_kv_store', function(table) {
@@ -403,71 +493,6 @@ async function initDb() {
       });
     console.log('Database: Admin inicial Nome atualizado com novas credenciais.');
   }
-
-  // Admin emergencial criado automaticamente para plano Free do Render.
-  // Não precisa Shell: ao subir o deploy, o initDb cria/atualiza este login no PostgreSQL.
-  const emergencyAdminPerms = JSON.stringify([
-    "Dashboard", "Clientes", "Equipamentos", "Chamados Mecânicos", "Despesas",
-    "Relatórios", "Simulador de Troca", "Usuários", "Configurações",
-    "Empresas", "Unidades", "Administrador"
-  ]);
-
-  const emergencyAdmins = [
-    {
-      id: 'admin_master_2026',
-      name: 'Administrador Geral',
-      username: 'master',
-      email: 'master@controle.com',
-      password: 'Master@2026',
-      empresa_id: '12.345.678/0001-90'
-    },
-    {
-      id: 'admin_master_jds_2026',
-      name: 'Administrador Geral',
-      username: 'master',
-      email: 'master@controle.com',
-      password: 'Master@2026',
-      empresa_id: 'Distribuidora JDS'
-    }
-  ];
-
-  for (const admin of emergencyAdmins) {
-    const existingById = await db('usuarios').where({ id: admin.id }).first();
-    const existingByLoginCompany = await db('usuarios')
-      .where({ username: admin.username, empresa_id: admin.empresa_id })
-      .first();
-
-    const adminData = {
-      name: admin.name,
-      username: admin.username,
-      email: admin.email,
-      password: admin.password,
-      profile: 'Administrador',
-      unitId: 'all',
-      status: 'LIBERADO',
-      empresa_id: admin.empresa_id,
-      permissions: emergencyAdminPerms,
-      updated_at: new Date().toISOString()
-    };
-
-    if (existingById) {
-      await db('usuarios').where({ id: admin.id }).update(adminData);
-      console.log(`Database: Admin emergencial ${admin.username} atualizado por ID.`);
-    } else if (existingByLoginCompany) {
-      await db('usuarios')
-        .where({ username: admin.username, empresa_id: admin.empresa_id })
-        .update(adminData);
-      console.log(`Database: Admin emergencial ${admin.username} atualizado por login/empresa.`);
-    } else {
-      await db('usuarios').insert({
-        id: admin.id,
-        ...adminData,
-        created_at: new Date().toISOString()
-      });
-      console.log(`Database: Admin emergencial ${admin.username} criado.`);
-    }
-  }
-
 }
 
 const app = express();
@@ -554,19 +579,19 @@ const upload = multer({
 const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads');
 app.use('/uploads', express.static(UPLOADS_ROOT));
 
-// Rotas do frontend devem ser públicas. A proteção real fica nas APIs e no próprio frontend.
-app.get(['/', '/index.html'], (req, res) => {
+app.get('/', (req, res) => {
+  res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
 });
 
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
-  // Nunca exigir JWT para arquivos/telas do frontend; exigir somente em /api.
-  if (!req.path.startsWith('/api/')) {
-    return next();
-  }
-
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
+  const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
+  if (isFrontendFile) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -612,6 +637,177 @@ app.use(async (req, res, next) => {
   }
 });
 
+
+// Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
+app.get('/api/cnpj/:cnpj', async (req, res) => {
+  try {
+    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
+    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
+    const d = await response.json();
+    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
+
+    res.json({
+      cnpj: d.cnpj || digits,
+      razaoSocial: d.razao_social || '',
+      nomeFantasia: d.nome_fantasia || d.razao_social || '',
+      email: d.email || '',
+      telefone: d.ddd_telefone_1 || d.telefone || '',
+      cep: d.cep || '',
+      logradouro: d.logradouro || '',
+      numero: d.numero || '',
+      complemento: d.complemento || '',
+      bairro: d.bairro || '',
+      municipio: d.municipio || '',
+      uf: d.uf || '',
+      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
+      cnaeDescricao: d.cnae_fiscal_descricao || '',
+      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
+    });
+  } catch (err) {
+    console.error('Erro ao consultar CNPJ:', err);
+    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
+  }
+});
+
+// Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
+app.post('/api/uploads/base64', async (req, res) => {
+  try {
+    const { dataUrl, filename, module } = req.body || {};
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      return res.status(400).json({ error: 'Arquivo base64 não enviado.' });
+    }
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Formato base64 inválido.' });
+
+    const mimeType = match[1];
+    const base64Data = match[2];
+    const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+    if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Tipo de arquivo não permitido.' });
+
+    const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    await db('app_uploads').insert({
+      id,
+      empresa_id: req.user.empresa_id,
+      user_id: req.user.id,
+      module: module || 'geral',
+      filename: filename || id,
+      mime_type: mimeType,
+      data_base64: base64Data
+    });
+    res.json({ success: true, id, url: `/api/uploads/${id}` });
+  } catch (err) {
+    console.error('Erro ao salvar upload base64:', err);
+    res.status(500).json({ error: 'Erro ao salvar arquivo.' });
+  }
+});
+
+app.get('/api/uploads/:id', async (req, res) => {
+  try {
+    const file = await db('app_uploads').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    if (!file) return res.status(404).json({ error: 'Arquivo não encontrado.' });
+    res.setHeader('Content-Type', file.mime_type);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(Buffer.from(file.data_base64, 'base64'));
+  } catch (err) {
+    console.error('Erro ao abrir upload:', err);
+    res.status(500).json({ error: 'Erro ao abrir arquivo.' });
+  }
+});
+
+// Prospecções reais no banco. Admin/Gerente/Supervisor veem conforme perfil; vendedor vê apenas as próprias.
+app.get('/api/prospeccoes', async (req, res) => {
+  try {
+    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
+    let q = db('prospeccoes').where({ empresa_id: req.user.empresa_id });
+    if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
+    if (req.user.profile === 'Vendedor' && !isAdmin) q = q.andWhere({ userId: req.user.id });
+    const rows = await q.orderBy('createdAt', 'desc');
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao listar prospecções:', err);
+    res.status(500).json({ error: 'Erro ao listar prospecções.' });
+  }
+});
+
+app.post('/api/prospeccoes', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = b.id || ('PR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase());
+    const now = new Date();
+    const row = {
+      id,
+      empresa_id: req.user.empresa_id,
+      unitId: b.unitId || req.user.unitId || 'all',
+      userId: req.user.profile === 'Vendedor' ? req.user.id : (b.userId || req.user.id),
+      name: b.name || b.nomeFantasia || b.razaoSocial || '',
+      contact: b.contact || '',
+      phone: b.phone || '',
+      city: b.city || '',
+      neighborhood: b.neighborhood || '',
+      address: b.address || '',
+      number: b.number || '',
+      zipcode: b.zipcode || '',
+      category: b.category || '',
+      competitor: b.competitor || '',
+      observation: b.observation || '',
+      photo: b.photo || '',
+      status: b.status || 'prospectado',
+      lossReason: b.lossReason || '',
+      hasCnpj: b.hasCnpj ? 'true' : 'false',
+      cnpj: b.cnpj || '',
+      razaoSocial: b.razaoSocial || '',
+      nomeFantasia: b.nomeFantasia || '',
+      cnaePrincipal: b.cnaePrincipal || '',
+      cnaeDescricao: b.cnaeDescricao || '',
+      date: b.date || now.toISOString().slice(0, 10),
+      time: b.time || now.toTimeString().slice(0, 5),
+      createdAt: b.createdAt || now.toISOString(),
+      updated_at: now.toISOString()
+    };
+    await db('prospeccoes').insert(row);
+    res.status(201).json(row);
+  } catch (err) {
+    console.error('Erro ao criar prospecção:', err);
+    res.status(500).json({ error: 'Erro ao criar prospecção.' });
+  }
+});
+
+app.put('/api/prospeccoes/:id', async (req, res) => {
+  try {
+    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
+    if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id) return res.status(403).json({ error: 'Acesso negado.' });
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).update({
+      ...req.body,
+      empresa_id: existing.empresa_id,
+      id: existing.id,
+      updated_at: new Date().toISOString()
+    });
+    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    res.json(updated);
+  } catch (err) {
+    console.error('Erro ao atualizar prospecção:', err);
+    res.status(500).json({ error: 'Erro ao atualizar prospecção.' });
+  }
+});
+
+app.delete('/api/prospeccoes/:id', async (req, res) => {
+  try {
+    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
+    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
+    if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id && !isAdmin) return res.status(403).json({ error: 'Acesso negado.' });
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir prospecção:', err);
+    res.status(500).json({ error: 'Erro ao excluir prospecção.' });
+  }
+});
+
 // Secure endpoint for physical file uploads
 app.post('/api/upload', (req, res) => {
   upload.single('file')(req, res, (err) => {
@@ -633,7 +829,7 @@ app.post('/api/upload', (req, res) => {
 
 
 // Persistência geral de listas/configurações do frontend no PostgreSQL.
-// Usa company_id do usuário logado para separar dados entre empresas.
+// O aplicativo mostra primeiro o cache local para não sumir nada no celular e sincroniza aqui em segundo plano.
 const ALLOWED_STORE_KEYS = new Set([
   'company_identity',
   'prospects',
@@ -656,18 +852,16 @@ function getStoreCompanyId(req) {
   return req.user && req.user.empresa_id ? String(req.user.empresa_id) : '001';
 }
 
+function safeParseStoreJson(value, fallback = null) {
+  try { return JSON.parse(value || 'null'); } catch (_) { return fallback; }
+}
+
 app.get('/api/store', async (req, res) => {
   try {
     const companyId = getStoreCompanyId(req);
     const rows = await db('app_kv_store').where({ company_id: companyId });
     const payload = {};
-    for (const row of rows) {
-      try {
-        payload[row.store_key] = JSON.parse(row.data_json || 'null');
-      } catch (_) {
-        payload[row.store_key] = null;
-      }
-    }
+    for (const row of rows) payload[row.store_key] = safeParseStoreJson(row.data_json, null);
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -678,13 +872,10 @@ app.get('/api/store', async (req, res) => {
 app.get('/api/store/:key', async (req, res) => {
   try {
     const key = req.params.key;
-    if (!ALLOWED_STORE_KEYS.has(key)) {
-      return res.status(400).json({ error: 'Chave de armazenamento inválida.' });
-    }
+    if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
     const row = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
-    if (!row) return res.json({ key, data: null });
-    res.json({ key, data: JSON.parse(row.data_json || 'null') });
+    res.json({ key, data: row ? safeParseStoreJson(row.data_json, null) : null });
   } catch (err) {
     console.error('Erro ao carregar item da store:', err);
     res.status(500).json({ error: 'Erro ao carregar dado do banco.' });
@@ -694,18 +885,18 @@ app.get('/api/store/:key', async (req, res) => {
 app.post('/api/store/:key', async (req, res) => {
   try {
     const key = req.params.key;
-    if (!ALLOWED_STORE_KEYS.has(key)) {
-      return res.status(400).json({ error: 'Chave de armazenamento inválida.' });
-    }
+    if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
     const data = Object.prototype.hasOwnProperty.call(req.body || {}, 'data') ? req.body.data : req.body;
     const dataJson = JSON.stringify(data == null ? null : data);
-    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
     const now = new Date().toISOString();
+    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
     if (existing) {
-      await db('app_kv_store')
-        .where({ company_id: companyId, store_key: key })
-        .update({ data_json: dataJson, updated_by: req.user.id, updated_at: now });
+      await db('app_kv_store').where({ company_id: companyId, store_key: key }).update({
+        data_json: dataJson,
+        updated_by: req.user.id,
+        updated_at: now
+      });
     } else {
       await db('app_kv_store').insert({
         company_id: companyId,
