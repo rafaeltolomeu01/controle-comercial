@@ -746,19 +746,12 @@ const App = {
           });
 
           Store.setLoggedUser(result.user, result.token);
-          if (result.user && result.user.empresa_id) {
-            const currentIdentity = Store.getCompanyIdentity();
-            if (/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(result.user.empresa_id)) {
-              currentIdentity.cnpj = result.user.empresa_id;
-            } else {
-              currentIdentity.name = result.user.empresa_id;
-            }
-            Store.saveCompanyIdentity(currentIdentity);
-            UI.applyCompanyIdentity(currentIdentity);
-          }
+          // Não use empresa_id como nome visual da empresa.
+          // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
           if (Store.syncAllFromBackend) {
-            await Store.syncAllFromBackend();
+            await Store.syncAllFromBackend({ forceRemote: true });
+            UI.applyCompanyIdentity(Store.getCompanyIdentity());
           }
           UI.applyPermissions();
           this.startAutoSync();

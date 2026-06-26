@@ -265,9 +265,9 @@ const UI = {
     };
     const money = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
     const expenseRows = [
-      { label: 'Pendentes', value: expenses.filter(e => e.status === 'Pendente').reduce((a, e) => a + UI.safeNumber(e.value), 0) },
-      { label: 'Aprovadas', value: expenses.filter(e => (e.status || '').includes('Aprov')).reduce((a, e) => a + UI.safeNumber(e.value), 0) },
-      { label: 'Reprovadas', value: expenses.filter(e => (e.status || '').includes('Reprov')).reduce((a, e) => a + UI.safeNumber(e.value), 0) }
+      { label: 'Pendentes', value: expenses.filter(e => e.status === 'Pendente').reduce((a, e) => a + (Number(e.value) || 0), 0) },
+      { label: 'Aprovadas', value: expenses.filter(e => (e.status || '').includes('Aprov')).reduce((a, e) => a + (Number(e.value) || 0), 0) },
+      { label: 'Reprovadas', value: expenses.filter(e => (e.status || '').includes('Reprov')).reduce((a, e) => a + (Number(e.value) || 0), 0) }
     ];
     const balanceRows = [
       { label: 'Pendentes', value: balances.filter(b => b.status === 'Pendente').length },
@@ -318,7 +318,8 @@ const UI = {
     if (summary) {
       summary.innerHTML = Object.keys(statusLabels).map(key => `
         <span class="prospect-summary-pill ${key}">${statusLabels[key]}: <strong>${counts[key]}</strong></span>
-      `).join('');
+      `;
+      }).join('');
     }
 
     if (!prospects.length) {
@@ -692,30 +693,17 @@ const UI = {
       if (exp.status === 'Aprovado') statusClass = 'badge-success';
       if (exp.status === 'Reprovado') statusClass = 'badge-danger';
 
-      const safeDateBR = (value) => {
-        if (!value) return '—';
-        const raw = String(value);
-        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-          const [y, m, d] = raw.slice(0, 10).split('-');
-          return `${d}/${m}/${y}`;
-        }
-        const dt = new Date(raw);
-        return Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('pt-BR');
-      };
-      const dateTimeStr = `${safeDateBR(exp.date || exp.created_at || exp.createdAt)}${exp.time ? ' / ' + exp.time : ''}`;
+      // Date formatting: input type="date" yields YYYY-MM-DD, convert to DD/MM/YYYY
+      const dateParts = exp.date ? exp.date.split('-') : [];
+      const formattedDate = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : (exp.date || '');
+      const dateTimeStr = `${formattedDate}${exp.time ? ' / ' + exp.time : ''}`;
 
       // Finalidade: Outro shows Outro (descreva)
       const finalidadeStr = exp.finalidade === 'Outro' ? `Outro (${exp.descreva || ''})` : (exp.finalidade || '');
 
       // Valor: Outro has no value, displays "-"
-      const numericValue = Number(exp.value ?? exp.valor ?? 0);
-      const valorStr = Number.isFinite(numericValue) ?
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numericValue) : '-';
-      const perms = Array.isArray(user?.permissions) ? user.permissions : [];
-      const isAdmin = user?.profile === 'Administrador' || perms.includes('Administrador');
-      const isOwner = String(exp.userId || exp.usuario_id || '') === String(user?.id || '');
-      const canDelete = String(exp.status || '').toLowerCase() === 'pendente' && (isOwner || isAdmin);
-      const deleteBtn = canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.deleteRegisteredExpense('${exp.id}')">Excluir</button>` : '';
+      const valorStr = (exp.value !== undefined && exp.value !== null && exp.value !== '') ?
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(exp.value) : '-';
 
       return `
         <tr class="mobile-summary-row" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
@@ -727,10 +715,9 @@ const UI = {
           <td style="font-weight: 600;">${valorStr}</td>
           <td><span class="badge-status ${statusClass}">${exp.status}</span></td>
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.generateExpenseComprovantePdf('${exp.id}')">
+            <button class="btn btn-secondary btn-sm" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
               PDF
             </button>
-            ${deleteBtn}
           </td>
         </tr>
       `;
@@ -1370,12 +1357,17 @@ const UI = {
         return;
       }
 
-      container.innerHTML = items.map(item => `
+      container.innerHTML = items.map(item => {
+        const raw = (item && typeof item === 'object') ? (item.name || item.nome || item.label || item.value || item.categoria || item.descricao || item.produto || item.id || '') : item;
+        const text = String(raw || '').trim();
+        const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeArg = text.replace(/'/g, "\\'");
+        return `
         <li style="display:flex; justify-content:space-between; align-items:center; padding: 6px 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
-          <span>${item}</span>
-          <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${item.replace(/'/g, "\\'")}')">Excluir</button>
-        </li>
-      `).join('');
+          <span>${safeText || 'Sem nome'}</span>
+          <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${safeArg}')">Excluir</button>
+        </li>`;
+      }).join('');
     };
 
     renderList('config-client-categories-list', clientCategories, 'client_categories');
@@ -1582,8 +1574,8 @@ const UI = {
     if (!grid) return;
     grid.innerHTML = categories.map(cat => {
       return `
-        <button class="exchange-category-btn" onclick="App.selectExchangeCategory('${cat.replace(/'/g, "\\'")}')" type="button">
-          ${cat}
+        <button class="exchange-category-btn" onclick="App.selectExchangeCategory('${String(cat || '').replace(/'/g, "\\'")}')" type="button">
+          ${String(cat || 'Sem categoria')}
         </button>
       `;
     }).join('');

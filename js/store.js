@@ -167,7 +167,11 @@ const Store = {
           if (key === 'company_identity') {
             const localIdentity = this.getCompanyIdentity();
             const remoteIdentity = payload[key] || {};
-            const mergedIdentity = forceRemote ? remoteIdentity : { ...remoteIdentity, ...localIdentity };
+            // A identidade da empresa deve vir do banco.
+            // Se o admin alterar nome/logo/CNPJ, todos os usuários vinculados recebem a alteração.
+            // O localStorage não pode vencer o banco, senão vendedor continua vendo nome antigo.
+            const hasRemoteIdentity = remoteIdentity && typeof remoteIdentity === 'object' && Object.keys(remoteIdentity).length > 0;
+            const mergedIdentity = hasRemoteIdentity ? { ...localIdentity, ...remoteIdentity } : localIdentity;
             localStorage.setItem(IDENTITY_KEY, JSON.stringify(mergedIdentity));
             continue;
           }
