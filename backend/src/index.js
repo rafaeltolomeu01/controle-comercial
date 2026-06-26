@@ -591,7 +591,7 @@ app.get('/index.html', (req, res) => {
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
-  if (isFrontendFile) return next();
+  if (isFrontendFile || req.path.startsWith('/api/uploads/')) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -706,7 +706,7 @@ app.post('/api/uploads/base64', async (req, res) => {
 
 app.get('/api/uploads/:id', async (req, res) => {
   try {
-    const file = await db('app_uploads').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
+    const file = await db('app_uploads').where({ id: req.params.id }).first();
     if (!file) return res.status(404).json({ error: 'Arquivo não encontrado.' });
     res.setHeader('Content-Type', file.mime_type);
     res.setHeader('Cache-Control', 'private, max-age=3600');
