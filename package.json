@@ -1,0 +1,9 @@
+{
+  "name": "controle-comercial-root",
+  "version": "1.0.0",
+  "description": "Root package.json for Controle Comercial",
+  "scripts": {
+    "build": "npm install --prefix backend && npm run migrate --prefix backend",
+    "start": "npm start --prefix backend"
+  }
+}

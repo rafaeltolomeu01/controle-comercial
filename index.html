@@ -48,11 +48,14 @@
       <form id="login-form">
         <div class="form-group" style="text-align: left;">
           <label for="login-username">E-mail ou Usuário</label>
-          <input type="text" id="login-username" value="admin" required placeholder="Digite o e-mail ou usuário">
+          <input type="text" id="login-username" value="" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="Digite o e-mail ou usuário">
         </div>
         <div class="form-group" style="text-align: left; margin-bottom: 20px;">
           <label for="login-password">Senha de Acesso</label>
-          <input type="password" id="login-password" value="" placeholder="Digite a senha" style="letter-spacing: 0.1em;">
+          <div style="position:relative; display:flex; align-items:center;">
+            <input type="password" id="login-password" value="" autocomplete="new-password" placeholder="Digite a senha" style="letter-spacing: 0.1em; padding-right: 46px; width:100%;">
+            <button type="button" id="btn-toggle-login-password" aria-label="Mostrar senha" title="Mostrar senha" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:var(--text-muted); cursor:pointer; padding:8px; font-size:1.05rem; line-height:1;">👁️</button>
+          </div>
         </div>
         
         <button type="submit" class="btn btn-primary btn-block">Entrar no Painel</button>

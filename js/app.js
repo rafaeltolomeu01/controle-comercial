@@ -2,16 +2,20 @@ const App = {
   currentRoute: '',
   isLoggedIn: false,
   logoBase64Cache: null,
+  autoSyncIntervalId: null,
+  autoSyncInProgress: false,
 
   /**
    * Initialize Application
    */
-  init() {
+  async init() {
     window.TempPhotosCache = window.TempPhotosCache || {};
-    this.checkAuthentication();
-    if (this.isLoggedIn) {
-      this.validateSessionStatus();
-    }
+
+    // Nunca confiar apenas no localStorage. Antes de montar o sistema,
+    // valida o token no backend. Isso impede entrar direto no painel com
+    // usuário antigo, token inválido ou dados "undefined".
+    await this.bootstrapAuthentication();
+
     // Periodic validation every 5 seconds
     setInterval(() => {
       if (this.isLoggedIn && window.location.hash !== '#login') {
@@ -27,7 +31,61 @@ const App = {
     UI.populateMovementClientsDropdown(); // Populate client dropdown in movement form
     this.setupEventListeners();
     this.setupClientCnpjLookup();
+    this.setupProspectCnpjLookup();
+    this.setupLoginUX();
     this.refreshAllLists();
+    this.startAutoSync();
+  },
+
+  /**
+   * Login UX: campos limpos e botão de visualizar senha.
+   */
+  setupLoginUX() {
+    const usernameInput = document.getElementById('login-username');
+    const passwordInput = document.getElementById('login-password');
+    const toggleBtn = document.getElementById('btn-toggle-login-password');
+
+    if (usernameInput) {
+      usernameInput.value = '';
+      usernameInput.setAttribute('autocomplete', 'off');
+      usernameInput.setAttribute('autocapitalize', 'none');
+      usernameInput.setAttribute('spellcheck', 'false');
+    }
+    if (passwordInput) {
+      passwordInput.value = '';
+      passwordInput.setAttribute('autocomplete', 'new-password');
+    }
+
+    if (toggleBtn && passwordInput && toggleBtn.dataset.bound !== '1') {
+      toggleBtn.dataset.bound = '1';
+      toggleBtn.addEventListener('click', () => {
+        const showing = passwordInput.type === 'text';
+        passwordInput.type = showing ? 'password' : 'text';
+        toggleBtn.textContent = showing ? '👁️' : '🙈';
+        toggleBtn.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
+        toggleBtn.setAttribute('title', showing ? 'Mostrar senha' : 'Ocultar senha');
+      });
+    }
+  },
+
+  /**
+   * Atualiza dados do banco a cada minuto, sem apagar o que está na tela.
+   * Assim o celular fica responsivo com cache local e sincroniza em segundo plano.
+   */
+  startAutoSync() {
+    if (this.autoSyncIntervalId) return;
+    this.autoSyncIntervalId = setInterval(async () => {
+      if (!this.isLoggedIn || window.location.hash === '#login' || this.autoSyncInProgress) return;
+      this.autoSyncInProgress = true;
+      try {
+        if (Store.syncAllFromBackend) await Store.syncAllFromBackend({ forceRemote: true });
+        await this.refreshAllLists();
+      } catch (err) {
+        console.warn('Sincronização automática falhou:', err.message || err);
+      } finally {
+        this.autoSyncInProgress = false;
+      }
+    }, 60000);
   },
 
   /**
@@ -48,18 +106,55 @@ const App = {
    */
   checkAuthentication() {
     const loggedUser = Store.getLoggedUser();
-    this.isLoggedIn = loggedUser !== null;
+    const token = Store.getToken();
+    this.isLoggedIn = Boolean(loggedUser && loggedUser.id && token);
+  },
+
+  async bootstrapAuthentication() {
+    const appContainer = document.getElementById('app-container');
+    const loginWrapper = document.getElementById('login-wrapper-container');
+    if (appContainer) appContainer.style.display = 'none';
+    if (loginWrapper) loginWrapper.style.display = 'flex';
+
+    const token = Store.getToken();
+    if (!token) {
+      Store.clearLoggedUser();
+      this.isLoggedIn = false;
+      window.location.hash = '#login';
+      return false;
+    }
+
+    try {
+      const fresh = await this.fetchFromApi('/api/me');
+      if (!fresh || !fresh.id) throw new Error('Sessão inválida');
+      Store.setLoggedUser(fresh, token);
+      this.isLoggedIn = true;
+      if (Store.syncAllFromBackend) {
+        // Carrega do banco sem apagar itens locais recém-criados no celular.
+        await Store.syncAllFromBackend();
+      }
+      if (!window.location.hash || window.location.hash === '#login') {
+        window.location.hash = '#dashboard';
+      }
+      return true;
+    } catch (err) {
+      console.warn('Sessão inválida ou expirada:', err);
+      Store.clearLoggedUser();
+      this.isLoggedIn = false;
+      window.location.hash = '#login';
+      return false;
+    }
   },
 
   /**
    * Refresh all cached datasets
    */
   async refreshAllLists() {
-    const prospects = Store.getProspects();
+    if (!this.isLoggedIn) return;
     const clients = Store.getClients();
     const equipments = Store.getEquipments();
     UI.renderDashboard();
-    UI.renderProspects(prospects);
+    await this.loadProspects();
     UI.renderClients(clients);
     UI.renderApprovals(clients);
     UI.renderEquipments(equipments);
@@ -189,6 +284,8 @@ const App = {
 
       // Rebind specific elements for this page
       this.setupEventListeners();
+      this.setupClientCnpjLookup();
+      this.setupProspectCnpjLookup();
       
       // If it has inputs or dropdowns, we should populate them
       if (pageName === 'movimentacao') {
@@ -476,16 +573,127 @@ const App = {
       setStatus('Consultando CNPJ...', 'var(--primary-color)');
 
       try {
-        const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-        if (!response.ok) throw new Error('CNPJ não localizado na API.');
-        const data = await response.json();
-        fillFromCnpj(data);
+        const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
+        fillFromCnpj({
+          nome_fantasia: data.nomeFantasia,
+          razao_social: data.razaoSocial,
+          email: data.email,
+          ddd_telefone_1: data.telefone,
+          municipio: data.municipio,
+          uf: data.uf,
+          cep: data.cep,
+          logradouro: data.logradouro,
+          numero: data.numero,
+          bairro: data.bairro
+        });
         setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ:', error);
         setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
+
+    cnpjInput.addEventListener('input', () => {
+      cnpjInput.value = formatCnpj(cnpjInput.value);
+      clearTimeout(timer);
+      timer = setTimeout(lookup, 700);
+    });
+    cnpjInput.addEventListener('blur', lookup);
+  },
+
+  setupProspectCnpjLookup() {
+    const checkbox = document.getElementById('prosp-has-cnpj');
+    const fields = document.getElementById('prosp-cnpj-fields');
+    const cnpjInput = document.getElementById('prosp-cnpj');
+    if (!checkbox || !fields || !cnpjInput || checkbox.dataset.lookupBound === '1') return;
+    checkbox.dataset.lookupBound = '1';
+
+    const statusEl = document.getElementById('prosp-cnpj-status');
+    let timer = null;
+    let lastLookup = '';
+
+    const setStatus = (msg, color = 'var(--text-muted)') => {
+      if (statusEl) {
+        statusEl.textContent = msg || '';
+        statusEl.style.color = color;
+      }
+    };
+
+    const formatCnpj = (value) => {
+      const digits = (value || '').replace(/\D/g, '').slice(0, 14);
+      return digits
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2');
+    };
+
+    const setValue = (id, value, lock = false) => {
+      const el = document.getElementById(id);
+      if (!el || value === undefined || value === null || String(value).trim() === '') return;
+      el.value = String(value).trim();
+      if (lock) {
+        el.readOnly = true;
+        el.dataset.cnpjApiLockedProspect = '1';
+        el.style.backgroundColor = 'rgba(255,255,255,0.04)';
+      }
+    };
+
+    const unlock = () => {
+      document.querySelectorAll('[data-cnpj-api-locked-prospect="1"]').forEach(el => {
+        el.readOnly = false;
+        el.removeAttribute('data-cnpj-api-locked-prospect');
+        el.style.backgroundColor = '';
+      });
+    };
+
+    const fill = (data) => {
+      setValue('prosp-razao-social', data.razaoSocial, true);
+      setValue('prosp-nome-fantasia', data.nomeFantasia, true);
+      setValue('prosp-name', data.nomeFantasia || data.razaoSocial, false);
+      setValue('prosp-phone', data.telefone, false);
+      setValue('prosp-city', data.municipio, false);
+      setValue('prosp-zipcode', data.cep, true);
+      setValue('prosp-address', data.logradouro, true);
+      setValue('prosp-number', data.numero, true);
+      setValue('prosp-neighborhood', data.bairro, true);
+      setValue('prosp-cnae', data.cnaePrincipal, true);
+      setValue('prosp-cnae-desc', data.cnaeDescricao, true);
+    };
+
+    const lookup = async () => {
+      const digits = (cnpjInput.value || '').replace(/\D/g, '');
+      if (digits.length !== 14) {
+        setStatus(digits.length ? 'Digite os 14 números do CNPJ.' : '');
+        return;
+      }
+      if (digits === lastLookup) return;
+      lastLookup = digits;
+
+      unlock();
+      setStatus('Consultando CNPJ...', 'var(--primary-color)');
+      try {
+        const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
+        fill(data);
+        setStatus('CNPJ encontrado. Endereço, CNAE e dados principais preenchidos.', 'var(--success-color, #10b981)');
+      } catch (error) {
+        console.error('Erro ao consultar CNPJ na prospecção:', error);
+        setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+      }
+    };
+
+    checkbox.addEventListener('change', () => {
+      fields.style.display = checkbox.checked ? 'grid' : 'none';
+      if (!checkbox.checked) {
+        cnpjInput.value = '';
+        setStatus('');
+        unlock();
+        ['prosp-razao-social','prosp-nome-fantasia','prosp-zipcode','prosp-address','prosp-number','prosp-neighborhood','prosp-cnae','prosp-cnae-desc'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+      }
+    });
 
     cnpjInput.addEventListener('input', () => {
       cnpjInput.value = formatCnpj(cnpjInput.value);
@@ -538,12 +746,32 @@ const App = {
           });
 
           Store.setLoggedUser(result.user, result.token);
+          if (result.user && result.user.empresa_id) {
+            const currentIdentity = Store.getCompanyIdentity();
+            if (/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(result.user.empresa_id)) {
+              currentIdentity.cnpj = result.user.empresa_id;
+            } else {
+              currentIdentity.name = result.user.empresa_id;
+            }
+            Store.saveCompanyIdentity(currentIdentity);
+            UI.applyCompanyIdentity(currentIdentity);
+          }
           this.isLoggedIn = true;
+          if (Store.syncAllFromBackend) {
+            await Store.syncAllFromBackend();
+          }
           UI.applyPermissions();
+          this.startAutoSync();
+          const loginUserEl = document.getElementById('login-username');
+          const loginPassEl = document.getElementById('login-password');
+          if (loginUserEl) loginUserEl.value = '';
+          if (loginPassEl) loginPassEl.value = '';
           window.location.hash = '#dashboard';
           this.refreshAllLists();
         } catch (err) {
           console.error(err);
+          Store.clearLoggedUser();
+          this.isLoggedIn = false;
           // If 403 status is returned, show the pending message
           if (err.message.includes('liberação') || err.message.includes('aguarda')) {
             alert('Acesso negado: Seu acesso aguarda aprovação gerencial.');
@@ -576,6 +804,10 @@ const App = {
         e.preventDefault();
         Store.clearLoggedUser();
         this.isLoggedIn = false;
+        const loginUserEl = document.getElementById('login-username');
+        const loginPassEl = document.getElementById('login-password');
+        if (loginUserEl) loginUserEl.value = '';
+        if (loginPassEl) loginPassEl.value = '';
         window.location.hash = '#login';
       });
     }
@@ -594,13 +826,26 @@ const App = {
 
     // 3. Company Identity Form Submit
     const identityForm = document.getElementById('company-identity-form');
-    if (identityForm) {
-      identityForm.addEventListener('submit', (e) => {
+    if (identityForm && identityForm.dataset.bound !== '1') {
+      identityForm.dataset.bound = '1';
+      identityForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        let logoValue = this.logoBase64Cache;
+        try {
+          if (logoValue && String(logoValue).startsWith('data:')) {
+            logoValue = await this.uploadBase64ToDatabase(logoValue, 'logo-empresa.png', 'empresa');
+            this.logoBase64Cache = logoValue;
+          }
+        } catch (err) {
+          console.error('Erro ao salvar logo:', err);
+          alert('Não consegui salvar a logo. Tente uma imagem menor ou outro formato.');
+          return;
+        }
+
         const config = {
           name: document.getElementById('comp-name').value,
-          logo: this.logoBase64Cache,
+          logo: logoValue,
           cnpj: document.getElementById('comp-cnpj').value,
           phone: document.getElementById('comp-phone').value,
           email: document.getElementById('comp-email').value
@@ -637,73 +882,112 @@ const App = {
 
     // 5. Add Prospect Form Submit
     const prospectForm = document.getElementById('prospect-form');
-    if (prospectForm) {
+    if (prospectForm && prospectForm.dataset.submitBound !== '1') {
+      prospectForm.dataset.submitBound = '1';
       prospectForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('prosp-name').value;
-        const contact = document.getElementById('prosp-contact').value;
-        const phone = document.getElementById('prosp-phone').value;
-        const city = document.getElementById('prosp-city').value;
-        const neighborhood = '';
-        const address = '';
-        const category = document.getElementById('prosp-category').value;
-        const competitor = document.getElementById('prosp-competitor').value;
-        const observation = document.getElementById('prosp-observation').value;
-        const loggedUser = Store.getLoggedUser();
-        let unitId = document.getElementById('prosp-unit').value;
-        if (loggedUser && loggedUser.profile === 'Vendedor' && loggedUser.unitId !== 'all') {
-          unitId = loggedUser.unitId;
+        if (prospectForm.dataset.saving === '1') return;
+        prospectForm.dataset.saving = '1';
+        const submitBtn = prospectForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Salvando...';
         }
 
-        const prospSellerSelect = document.getElementById('prosp-seller');
-        const userId = loggedUser.profile === 'Vendedor' ? loggedUser.id : (prospSellerSelect ? prospSellerSelect.value : '');
+        try {
+          const hasCnpj = !!document.getElementById('prosp-has-cnpj')?.checked;
+          const name = document.getElementById('prosp-name').value;
+          const contact = document.getElementById('prosp-contact').value;
+          const phone = document.getElementById('prosp-phone').value;
+          const city = document.getElementById('prosp-city').value;
+          const neighborhood = hasCnpj ? (document.getElementById('prosp-neighborhood')?.value || '') : '';
+          const address = hasCnpj ? (document.getElementById('prosp-address')?.value || '') : '';
+          const number = hasCnpj ? (document.getElementById('prosp-number')?.value || '') : '';
+          const zipcode = hasCnpj ? (document.getElementById('prosp-zipcode')?.value || '') : '';
+          const category = document.getElementById('prosp-category').value;
+          const competitor = document.getElementById('prosp-competitor').value;
+          const observation = document.getElementById('prosp-observation').value;
+          const loggedUser = Store.getLoggedUser();
+          let unitId = document.getElementById('prosp-unit').value;
+          if (loggedUser && loggedUser.profile === 'Vendedor' && loggedUser.unitId !== 'all') {
+            unitId = loggedUser.unitId;
+          }
 
-        let photoBase64 = '';
-        const fileInput = document.getElementById('prosp-photo');
-        if (fileInput && fileInput.files && fileInput.files[0]) {
-          try {
-            photoBase64 = await Store.fileToBase64(fileInput.files[0]);
-          } catch (err) {
-            console.error('Erro ao converter imagem da fachada:', err);
+          const prospSellerSelect = document.getElementById('prosp-seller');
+          const userId = loggedUser.profile === 'Vendedor' ? loggedUser.id : (prospSellerSelect ? prospSellerSelect.value : '');
+
+          let photoUrl = '';
+          const fileInput = document.getElementById('prosp-photo');
+          if (fileInput && fileInput.files && fileInput.files[0]) {
+            try {
+              const base64 = await Store.fileToBase64(fileInput.files[0]);
+              photoUrl = await this.uploadBase64ToDatabase(base64, fileInput.files[0].name, 'prospeccao');
+            } catch (err) {
+              console.error('Erro ao salvar imagem da fachada:', err);
+              this.showToast('A imagem não foi salva. Verifique o tamanho do arquivo.', 'error');
+            }
+          }
+
+          const newLead = {
+            id: 'PR-' + Date.now(),
+            name,
+            contact,
+            phone,
+            city,
+            neighborhood,
+            address,
+            number,
+            zipcode,
+            category,
+            competitor,
+            observation,
+            photo: photoUrl,
+            status: 'prospectado',
+            unitId,
+            userId,
+            lossReason: '',
+            hasCnpj,
+            cnpj: hasCnpj ? (document.getElementById('prosp-cnpj')?.value || '') : '',
+            razaoSocial: hasCnpj ? (document.getElementById('prosp-razao-social')?.value || '') : '',
+            nomeFantasia: hasCnpj ? (document.getElementById('prosp-nome-fantasia')?.value || '') : '',
+            cnaePrincipal: hasCnpj ? (document.getElementById('prosp-cnae')?.value || '') : '',
+            cnaeDescricao: hasCnpj ? (document.getElementById('prosp-cnae-desc')?.value || '') : '',
+            date: new Date().toISOString().split('T')[0],
+            time: new Date().toTimeString().slice(0, 5),
+            createdAt: new Date().toISOString()
+          };
+
+          const savedLead = await this.fetchFromApi('/api/prospeccoes', {
+            method: 'POST',
+            body: JSON.stringify(newLead)
+          });
+
+          const prospects = Store.getProspects().filter(p => p.id !== savedLead.id);
+          prospects.push(savedLead);
+          Store.saveProspects(prospects);
+          await this.loadProspects();
+          prospectForm.reset();
+          UI.populateUnitDropdowns();
+
+          const cnpjFields = document.getElementById('prosp-cnpj-fields');
+          if (cnpjFields) cnpjFields.style.display = 'none';
+          const previewContainer = document.getElementById('prosp-photo-preview-container');
+          if (previewContainer) previewContainer.style.display = 'none';
+
+          const formContainer = document.getElementById('prospect-form-container');
+          if (formContainer) formContainer.classList.add('hidden');
+
+          this.showToast('Lead comercial salvo no banco com sucesso!');
+        } catch (err) {
+          console.error('Erro ao salvar lead:', err);
+          this.showToast(err.message || 'Erro ao salvar lead no banco.', 'error');
+        } finally {
+          prospectForm.dataset.saving = '0';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Registrar Lead Comercial';
           }
         }
-
-        const prospects = Store.getProspects();
-        const newLead = {
-          id: 'PR-' + Math.floor(100 + Math.random() * 900),
-          name,
-          contact,
-          phone,
-          city,
-          neighborhood,
-          address,
-          category,
-          competitor,
-          observation,
-          photo: photoBase64,
-          status: 'prospectado',
-          unitId,
-          userId,
-          lossReason: '',
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toTimeString().slice(0, 5),
-          createdAt: new Date().toISOString()
-        };
-
-        prospects.push(newLead);
-        Store.saveProspects(prospects);
-        this.refreshAllLists();
-        prospectForm.reset();
-        UI.populateUnitDropdowns();
-
-        // Clear preview image
-        const previewContainer = document.getElementById('prosp-photo-preview-container');
-        if (previewContainer) previewContainer.style.display = 'none';
-
-        const formContainer = document.getElementById('prospect-form-container');
-        if (formContainer) formContainer.classList.add('hidden');
-
-        this.showToast('Lead comercial registrado com sucesso!');
       });
     }
 
@@ -1630,7 +1914,34 @@ const App = {
           const now = new Date();
           const time = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-          await this.fetchFromApi('/api/despesas-reembolsos', {
+          const optimisticExpense = {
+            id: `LOCAL-DP-${Date.now()}`,
+            date,
+            time,
+            finalidade,
+            operacao,
+            descreva,
+            veiculo,
+            km,
+            foto_odometro,
+            foto_comprovante,
+            value: Number(value) || 0,
+            observation,
+            unitId,
+            userId,
+            status: 'Pendente',
+            syncing: true,
+            created_at: new Date().toISOString()
+          };
+
+          const cachedExpenses = this.readFastCache('despesas_reembolsos_api', []);
+          const optimisticList = [optimisticExpense, ...cachedExpenses.filter(e => e.id !== optimisticExpense.id)];
+          this.writeFastCache('despesas_reembolsos_api', optimisticList);
+          window.AppExpensesCache = optimisticList;
+          UI.renderExpenses(optimisticList);
+          UI.renderDashboard();
+
+          this.fetchFromApi('/api/despesas-reembolsos', {
             method: 'POST',
             body: JSON.stringify({
               date,
@@ -1642,11 +1953,15 @@ const App = {
               km,
               foto_odometro,
               foto_comprovante,
-              value,
+              value: Number(value) || 0,
               observation,
               unitId,
               userId
             })
+          }).then(() => this.loadExpenses()).catch(err => {
+            optimisticExpense.syncError = err.message;
+            this.writeFastCache('despesas_reembolsos_api', optimisticList);
+            console.error('Despesa ficou salva localmente, mas ainda não sincronizou:', err);
           });
 
           this.refreshAllLists();
@@ -2628,6 +2943,22 @@ const App = {
     }
   },
 
+  async loadProspects() {
+    try {
+      const activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
+      const query = activeUnit && activeUnit !== 'all' ? `?unitId=${encodeURIComponent(activeUnit)}` : '';
+      const prospects = await this.fetchFromApi(`/api/prospeccoes${query}`);
+      const list = Array.isArray(prospects) ? prospects : [];
+      Store.saveProspects(list);
+      UI.renderProspects(list);
+      return list;
+    } catch (err) {
+      console.error('Erro ao carregar prospecções do banco:', err);
+      UI.renderProspects(Store.getProspects());
+      return Store.getProspects();
+    }
+  },
+
   async loadTickets() {
     try {
       const activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
@@ -2659,29 +2990,38 @@ const App = {
     return apiBase;
   },
 
+  async uploadBase64ToDatabase(dataUrl, filename = 'arquivo', module = 'geral') {
+    if (!dataUrl) return '';
+    const result = await this.fetchFromApi('/api/uploads/base64', {
+      method: 'POST',
+      body: JSON.stringify({ dataUrl, filename, module })
+    });
+    return result.url || '';
+  },
+
   async uploadFile(file) {
     if (!file) return '';
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const token = Store.getToken();
-    const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Em Render Free o disco pode reiniciar e sumir arquivos. Por isso o padrão
+    // agora é salvar o arquivo no PostgreSQL e devolver uma URL /api/uploads/:id.
+    try {
+      const base64 = await Store.fileToBase64(file);
+      return await this.uploadBase64ToDatabase(base64, file.name, 'geral');
+    } catch (err) {
+      console.warn('Upload persistente falhou, tentando upload físico antigo:', err.message || err);
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = Store.getToken();
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const apiBase = this.getApiBaseUrl();
+      const res = await fetch(`${apiBase}/api/upload`, { method: 'POST', headers, body: formData });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro de upload: ${res.statusText}`);
+      }
+      const data = await res.json();
+      return data.url;
     }
-    
-    const apiBase = this.getApiBaseUrl();
-    const res = await fetch(`${apiBase}/api/upload`, {
-      method: 'POST',
-      headers,
-      body: formData
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `Erro de upload: ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data.url;
   },
 
   /**
@@ -2719,6 +3059,9 @@ const App = {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        App.forceLogout('Sessão expirada ou inválida. Por favor, faça login novamente.');
+      }
       throw new Error(errData.error || `Erro de API status: ${response.status}`);
     }
 
@@ -3506,7 +3849,8 @@ const App = {
           const file = e.target.files[0];
           if (file) {
             try {
-              const url = await this.uploadFile(file);
+              const base64 = await Store.fileToBase64(file);
+              const url = await this.uploadBase64ToDatabase(base64, file.name, 'perfil');
               window.CurrentUserModalPhotoBase64 = url;
               preview.src = url;
               preview.style.display = 'block';
@@ -4750,13 +5094,63 @@ const App = {
     }
   },
 
+
+  getFastCacheKey(key) {
+    const user = Store.getLoggedUser ? (Store.getLoggedUser() || {}) : {};
+    const companyId = user.empresa_id || '001';
+    return `controle_campo_fast_${companyId}_${key}`;
+  },
+
+  readFastCache(key, fallback = []) {
+    try {
+      const raw = localStorage.getItem(this.getFastCacheKey(key));
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  },
+
+  writeFastCache(key, value) {
+    try {
+      localStorage.setItem(this.getFastCacheKey(key), JSON.stringify(value || []));
+      localStorage.setItem(`${this.getFastCacheKey(key)}_updated_at`, new Date().toISOString());
+    } catch (err) {
+      console.warn('Cache local cheio ou indisponível:', err.message);
+    }
+  },
+
+  async loadListFast({ key, endpoint, render, assign }) {
+    const cached = this.readFastCache(key, []);
+    if (cached && cached.length) {
+      if (assign) assign(cached);
+      render(cached);
+      if (UI && UI.renderDashboard) UI.renderDashboard();
+    }
+    try {
+      const fresh = await this.fetchFromApi(endpoint);
+      const list = Array.isArray(fresh) ? fresh : [];
+      this.writeFastCache(key, list);
+      if (assign) assign(list);
+      render(list);
+      if (UI && UI.renderDashboard) UI.renderDashboard();
+      return list;
+    } catch (err) {
+      console.error(`Erro ao carregar ${key}:`, err);
+      if (cached && cached.length) return cached;
+      throw err;
+    }
+  },
+
   /**
    * Load movements list from backend API
    */
   async loadMovements() {
     try {
-      const list = await this.fetchFromApi('/api/equipamentos/movimentacoes');
-      UI.renderMovements(list);
+      await this.loadListFast({
+        key: 'movements_api',
+        endpoint: '/api/equipamentos/movimentacoes',
+        render: (list) => UI.renderMovements(list)
+      });
     } catch (err) {
       console.error('Erro ao carregar movimentações:', err);
     }
@@ -4764,10 +5158,12 @@ const App = {
 
   async loadExpenses() {
     try {
-      const list = await this.fetchFromApi('/api/despesas-reembolsos');
-      window.AppExpensesCache = list;
-      UI.renderExpenses(list);
-      UI.renderDashboard();
+      await this.loadListFast({
+        key: 'despesas_reembolsos_api',
+        endpoint: '/api/despesas-reembolsos',
+        assign: (list) => { window.AppExpensesCache = list; },
+        render: (list) => UI.renderExpenses(list)
+      });
     } catch (err) {
       console.error('Erro ao carregar despesas registradas:', err);
     }
@@ -4775,10 +5171,12 @@ const App = {
 
   async loadBalances() {
     try {
-      const list = await this.fetchFromApi('/api/despesas');
-      window.AppBalancesCache = list;
-      UI.renderBalances(list);
-      UI.renderDashboard();
+      await this.loadListFast({
+        key: 'despesas_solicitacoes_api',
+        endpoint: '/api/despesas',
+        assign: (list) => { window.AppBalancesCache = list; },
+        render: (list) => UI.renderBalances(list)
+      });
     } catch (err) {
       console.error('Erro ao carregar solicitações de saldo:', err);
     }
@@ -5233,18 +5631,26 @@ const App = {
   async validateSessionStatus() {
     if (!this.isLoggedIn) return;
     const current = Store.getLoggedUser();
-    if (!current || !current.id) return;
+    const token = Store.getToken();
+    if (!current || !current.id || !token) {
+      this.forceLogout();
+      return;
+    }
     try {
       const fresh = await this.fetchFromApi('/api/me');
-      if (fresh && fresh.status === 'INATIVO') {
+      if (!fresh || !fresh.id) {
+        this.forceLogout();
+        return;
+      }
+      Store.setLoggedUser(fresh, token);
+      if (fresh.status === 'INATIVO') {
         this.forceLogout('Seu acesso foi desativado por um administrador. Entre em contato com o responsável pelo sistema.');
       }
     } catch (err) {
       console.warn('Erro ao validar sessão:', err);
-      const msg = String(err.message || '').toLowerCase();
-      if (msg.includes('inativo') || msg.includes('desativado') || msg.includes('403') || msg.includes('não encontrado') || msg.includes('excluído') || msg.includes('404')) {
-        this.forceLogout('Seu acesso foi desativado por um administrador. Entre em contato com o responsável pelo sistema.');
-      }
+      // Qualquer falha de validação da sessão deve derrubar o usuário.
+      // Não pode manter painel aberto com token inválido/ausente/expirado.
+      this.forceLogout();
     }
   },
 

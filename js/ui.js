@@ -1,4 +1,13 @@
 const UI = {
+  safeNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  },
+
+  formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(this.safeNumber(value));
+  },
+
   /**
    * Apply company configuration to the header, sidebar, login card and page titles
    * @param {Object} config - Config containing Name, Logo, CNPJ, Phone, Email
@@ -227,7 +236,7 @@ const UI = {
     // 1. Calculate values
     const pendingApprovals = clients.filter(c => c.status === 'Pendente').length;
     const openTickets = tickets.filter(t => t.status === 'Aberto' || t.status === 'Em Atendimento').length;
-    const pendingExpenses = expenses.filter(e => e.status === 'Pendente').reduce((acc, curr) => acc + curr.value, 0);
+    const pendingExpenses = expenses.filter(e => e.status === 'Pendente').reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
     const pendingBalances = balances.filter(b => b.status === 'Pendente').length;
 
     // 2. Set dashboard metrics tags
@@ -239,7 +248,7 @@ const UI = {
 
     const dashExpenses = document.getElementById('dash-pending-expenses');
     if (dashExpenses) {
-      dashExpenses.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pendingExpenses);
+      dashExpenses.textContent = UI.formatCurrency(pendingExpenses);
     }
 
     const dashBalances = document.getElementById('dash-pending-balances');
@@ -335,6 +344,7 @@ const UI = {
               <th>Comércio</th>
               <th>Responsável</th>
               <th>Telefone</th>
+              <th>CNPJ / CNAE</th>
               <th>Cidade / Local</th>
               <th>Categoria</th>
               <th>Status</th>
@@ -356,6 +366,10 @@ const UI = {
                   </td>
                   <td>${lead.contact || '-'}</td>
                   <td><a href="tel:${lead.phone || ''}" onclick="event.stopPropagation()">${lead.phone || '-'}</a></td>
+                  <td>
+                    <strong>${lead.cnpj || '-'}</strong>
+                    ${lead.cnaeDescricao ? `<small>${lead.cnaePrincipal || ''} - ${lead.cnaeDescricao}</small>` : ''}
+                  </td>
                   <td>${localStr}</td>
                   <td><span class="badge-status badge-primary">${lead.category || 'Não definida'}</span></td>
                   <td><span class="prospect-status-badge ${statusKey}">${statusLabels[statusKey]}</span></td>
@@ -986,8 +1000,8 @@ const UI = {
         expenses = expenses.filter(e => e.status === filters.status);
       }
 
-      const total = expenses.reduce((acc, curr) => acc + curr.value, 0);
-      const approved = expenses.filter(e => e.status === 'Aprovado').reduce((acc, curr) => acc + curr.value, 0);
+      const total = expenses.reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
+      const approved = expenses.filter(e => e.status === 'Aprovado').reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
 
       if (pdfMetaContainer) {
         pdfMetaContainer.innerHTML = `

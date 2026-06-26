@@ -1,6 +1,7 @@
 const IDENTITY_KEY = 'controle_campo_company_identity';
 const DATA_KEY_PREFIX = 'controle_campo_db_';
 const DATA_GLOBAL_SCOPE = 'global';
+const STORE_SYNC_KEYS = ['company_identity', 'prospects', 'clients', 'equipments', 'movements', 'tickets', 'expenses', 'balances', 'units', 'client_categories', 'equipment_types', 'rejection_reasons', 'prospect_loss_reasons', 'expense_categories', 'notification_emails'];
 
 const DEFAULT_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a' stroke='%231e293b' stroke-width='2'/><path d='M50,15 L80,30 C80,60 50,80 50,80 C50,80 20,60 20,30 Z' fill='none' stroke='%233b82f6' stroke-width='6'/><path d='M38,46 L46,54 L62,34' fill='none' stroke='%2310b981' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
 
@@ -56,7 +57,16 @@ const Store = {
   getCompanyIdentity() {
     try {
       const stored = localStorage.getItem(IDENTITY_KEY);
-      if (stored) return { ...DEFAULT_IDENTITY, ...JSON.parse(stored) };
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          name: parsed.name || DEFAULT_IDENTITY.name,
+          logo: parsed.logo || DEFAULT_IDENTITY.logo,
+          cnpj: parsed.cnpj || DEFAULT_IDENTITY.cnpj,
+          phone: parsed.phone || DEFAULT_IDENTITY.phone,
+          email: parsed.email || DEFAULT_IDENTITY.email
+        };
+      }
     } catch (e) {
       console.error(e);
     }
@@ -69,6 +79,7 @@ const Store = {
   saveCompanyIdentity(config) {
     try {
       localStorage.setItem(IDENTITY_KEY, JSON.stringify(config));
+      this.saveToBackend('company_identity', config);
       return true;
     } catch (e) {
       console.error(e);
@@ -82,6 +93,115 @@ const Store = {
   resetIdentity() {
     this.saveCompanyIdentity(DEFAULT_IDENTITY);
     return { ...DEFAULT_IDENTITY };
+  },
+
+  getApiBaseUrl() {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3001';
+    return '';
+  },
+
+  async backendRequest(endpoint, options = {}) {
+    const token = this.getToken ? this.getToken() : (localStorage.getItem('controle_campo_token') || '');
+    if (!token) throw new Error('Sem token para sincronizar com o banco.');
+    const user = this.getLoggedUser ? (this.getLoggedUser() || {}) : {};
+    const response = await fetch(`${this.getApiBaseUrl()}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-User-Id': user.id || '',
+        'X-User-Profile': user.profile || '',
+        'X-Company-Id': user.empresa_id || '001',
+        'X-Unit-Id': user.unitId || 'all',
+        ...(options.headers || {})
+      }
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Erro de banco: ${response.status}`);
+    }
+    return response.json();
+  },
+
+  saveToBackend(key, data) {
+    const token = this.getToken ? this.getToken() : '';
+    if (!token || !STORE_SYNC_KEYS.includes(key)) return;
+    // Sincronização em segundo plano para não travar a tela.
+    this.backendRequest(`/api/store/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
+    }).catch(err => console.error(`Falha ao salvar ${key} no banco:`, err.message));
+  },
+
+  normalizeArrayRecord(item) {
+    if (!item || typeof item !== 'object') return item;
+    return { ...item };
+  },
+
+  mergeArrayById(localArr, remoteArr) {
+    const local = Array.isArray(localArr) ? localArr : [];
+    const remote = Array.isArray(remoteArr) ? remoteArr : [];
+    const map = new Map();
+    const getKey = (item, idx, prefix) => String(item && (item.id || item.codigo || item.username || item.name) || `${prefix}-${idx}`);
+    remote.forEach((item, idx) => map.set(getKey(item, idx, 'remote'), this.normalizeArrayRecord(item)));
+    local.forEach((item, idx) => {
+      const key = getKey(item, idx, 'local');
+      const existing = map.get(key);
+      // Local vence quando é mais novo ou quando o remoto está incompleto.
+      map.set(key, { ...(existing || {}), ...(this.normalizeArrayRecord(item) || {}) });
+    });
+    return Array.from(map.values());
+  },
+
+  async syncAllFromBackend(options = {}) {
+    const token = this.getToken ? this.getToken() : '';
+    if (!token) return false;
+    const forceRemote = options.forceRemote === true;
+    try {
+      const payload = await this.backendRequest('/api/store');
+      if (payload && typeof payload === 'object') {
+        for (const key of STORE_SYNC_KEYS) {
+          if (!Object.prototype.hasOwnProperty.call(payload, key) || payload[key] == null) continue;
+
+          if (key === 'company_identity') {
+            const localIdentity = this.getCompanyIdentity();
+            const remoteIdentity = payload[key] || {};
+            const mergedIdentity = forceRemote ? remoteIdentity : { ...remoteIdentity, ...localIdentity };
+            localStorage.setItem(IDENTITY_KEY, JSON.stringify(mergedIdentity));
+            continue;
+          }
+
+          const storageKey = DATA_KEY_PREFIX + DATA_GLOBAL_SCOPE + '_' + key;
+          let localValue = [];
+          try { localValue = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (_) { localValue = []; }
+          const remoteValue = payload[key];
+
+          let nextValue = remoteValue;
+          if (!forceRemote && Array.isArray(localValue) && Array.isArray(remoteValue)) {
+            // Se o banco ainda está vazio, não apaga o que acabou de ser criado no celular.
+            nextValue = this.mergeArrayById(localValue, remoteValue);
+            if (localValue.length && !remoteValue.length) this.saveToBackend(key, nextValue);
+          }
+          localStorage.setItem(storageKey, JSON.stringify(nextValue));
+        }
+      }
+
+      // Primeiro acesso: envia para o banco o que ainda existe somente neste navegador.
+      for (const key of STORE_SYNC_KEYS) {
+        const localValue = key === 'company_identity'
+          ? this.getCompanyIdentity()
+          : this.getList(key, []);
+        if (!Object.prototype.hasOwnProperty.call(payload || {}, key) && localValue != null) {
+          this.saveToBackend(key, localValue);
+        }
+      }
+      localStorage.setItem('controle_campo_last_sync_at', new Date().toISOString());
+      return true;
+    } catch (err) {
+      console.error('Falha ao sincronizar dados do banco:', err.message);
+      return false;
+    }
   },
 
   /**
@@ -131,6 +251,7 @@ const Store = {
     try {
       const stableKey = DATA_KEY_PREFIX + DATA_GLOBAL_SCOPE + '_' + key;
       localStorage.setItem(stableKey, JSON.stringify(data));
+      this.saveToBackend(key, data);
       return true;
     } catch (e) {
       console.error(e);
