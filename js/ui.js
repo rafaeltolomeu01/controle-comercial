@@ -1592,7 +1592,7 @@ const UI = {
       return `
         <div class="exchange-product-item-card" onclick="App.openExchangeItemModal(${escapedProduct})">
           <div class="exchange-product-item-header-row">
-            <strong style="color: var(--primary-color);">${p.codigo}</strong> - <span style="font-weight: 600;">${p.produto}</span>
+            <strong style="color: var(--primary-color);">${p.codigo}</strong> - <span style="font-weight: 600;">${(p.produto || "")}</span>
           </div>
           <div class="exchange-product-card-details">
             <div>Caixa: ${money(p.preco_total)} | Qtd: ${p.quantidade_na_caixa}</div>
@@ -1801,7 +1801,7 @@ const UI = {
       return `
         <tr>
           <td><strong>${p.codigo}</strong></td>
-          <td>${p.produto}</td>
+          <td>${(p.produto || "")}</td>
           <td><span class="badge-status badge-secondary" style="text-transform: uppercase;">${p.categoria || 'Outros'}</span></td>
           <td style="text-align: right;">${money(p.preco_total)}</td>
           <td style="text-align: center;">${p.quantidade_na_caixa}</td>

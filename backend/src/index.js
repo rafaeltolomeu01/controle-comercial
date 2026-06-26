@@ -21,6 +21,27 @@ const insertAndGetId = async (tableName, record, idColumn = 'id') => {
   }
 };
 
+function normalizeDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function onlyAdmin(user) {
+  const perms = user && Array.isArray(user.permissions) ? user.permissions : [];
+  return !!user && (user.profile === 'Administrador' || perms.includes('Administrador'));
+}
+
+function userIsVendor(user) {
+  return !!user && String(user.profile || '').toLowerCase() === 'vendedor';
+}
+
+function getEffectiveCompanyId(req) {
+  return (req.user && req.user.empresa_id) || req.header('X-Company-Id') || '001';
+}
+
+function getEffectiveUserId(req) {
+  return (req.user && req.user.id) || req.header('X-User-Id') || 'sistema';
+}
+
 async function initDb() {
   // Check if in production and DATABASE_URL is missing
   if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
@@ -178,6 +199,7 @@ async function initDb() {
       table.string('empresa_id').notNullable();
       table.string('unitId').notNullable().defaultTo('all');
       table.string('userId').notNullable();
+      table.string('user_id').notNullable().defaultTo('demo_user');
       table.string('name').nullable();
       table.string('contact').nullable();
       table.string('phone').nullable();
@@ -209,6 +231,7 @@ async function initDb() {
       empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
       unitId: t => t.string('unitId').notNullable().defaultTo('all'),
       userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
+      user_id: t => t.string('user_id').notNullable().defaultTo('demo_user'),
       name: t => t.string('name').nullable(),
       contact: t => t.string('contact').nullable(),
       phone: t => t.string('phone').nullable(),
@@ -231,10 +254,7 @@ async function initDb() {
       cnaeDescricao: t => t.string('cnaeDescricao').nullable(),
       date: t => t.string('date').nullable(),
       time: t => t.string('time').nullable(),
-      createdAt: t => t.timestamp('createdAt').defaultTo(db.fn.now()),
-      // Compatibilidade com versões antigas que criaram colunas em snake_case.
-      user_id: t => t.string('user_id').notNullable().defaultTo('demo_user'),
-      unit_id: t => t.string('unit_id').notNullable().defaultTo('all')
+      createdAt: t => t.timestamp('createdAt').defaultTo(db.fn.now())
     };
     for (const [col, addColumn] of Object.entries(prospectColumns)) {
       const exists = await db.schema.hasColumn('prospeccoes', col);
@@ -594,10 +614,7 @@ app.get('/index.html', (req, res) => {
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
-  // Arquivos já salvos podem ser abertos por URL pública.
-  // Upload/gravação continua exigindo token para preencher empresa_id/user_id corretamente.
-  const isPublicUploadRead = req.method === 'GET' && req.path.startsWith('/api/uploads/');
-  if (isFrontendFile || isPublicUploadRead) return next();
+  if (isFrontendFile || req.path.startsWith('/api/uploads/')) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -644,38 +661,83 @@ app.use(async (req, res, next) => {
 });
 
 
-// Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
-app.get('/api/cnpj/:cnpj', async (req, res) => {
+// Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS.
+// Tenta mais de uma fonte pública para reduzir falhas temporárias/rate-limit.
+function mapBrasilApiCnpj(d, digits) {
+  return {
+    cnpj: d.cnpj || digits,
+    razaoSocial: d.razao_social || '',
+    nomeFantasia: d.nome_fantasia || d.razao_social || '',
+    email: d.email || '',
+    telefone: d.ddd_telefone_1 || d.telefone || '',
+    cep: d.cep || '',
+    logradouro: d.logradouro || '',
+    numero: d.numero || '',
+    complemento: d.complemento || '',
+    bairro: d.bairro || '',
+    municipio: d.municipio || '',
+    uf: d.uf || '',
+    cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
+    cnaeDescricao: d.cnae_fiscal_descricao || '',
+    fonte: 'BrasilAPI'
+  };
+}
+
+function mapMinhaReceitaCnpj(d, digits) {
+  const est = d.estabelecimento || d || {};
+  const atv = (est.atividade_principal && est.atividade_principal[0]) || d.atividade_principal || {};
+  return {
+    cnpj: est.cnpj || d.cnpj || digits,
+    razaoSocial: d.razao_social || d.nome || '',
+    nomeFantasia: est.nome_fantasia || d.nome_fantasia || d.fantasia || d.razao_social || d.nome || '',
+    email: est.email || d.email || '',
+    telefone: est.telefone1 || d.telefone || '',
+    cep: est.cep || d.cep || '',
+    logradouro: est.logradouro || d.logradouro || '',
+    numero: est.numero || d.numero || '',
+    complemento: est.complemento || d.complemento || '',
+    bairro: est.bairro || d.bairro || '',
+    municipio: (est.cidade && est.cidade.nome) || d.municipio || d.cidade || '',
+    uf: (est.estado && est.estado.sigla) || d.uf || '',
+    cnaePrincipal: String(est.atividade_principal_id || atv.code || d.cnae_fiscal || '').replace(/\D/g, ''),
+    cnaeDescricao: atv.text || est.atividade_principal_descricao || d.cnae_fiscal_descricao || '',
+    fonte: 'MinhaReceita'
+  };
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 9000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
-
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
-    const d = await response.json();
-    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
-
-    res.json({
-      cnpj: d.cnpj || digits,
-      razaoSocial: d.razao_social || '',
-      nomeFantasia: d.nome_fantasia || d.razao_social || '',
-      email: d.email || '',
-      telefone: d.ddd_telefone_1 || d.telefone || '',
-      cep: d.cep || '',
-      logradouro: d.logradouro || '',
-      numero: d.numero || '',
-      complemento: d.complemento || '',
-      bairro: d.bairro || '',
-      municipio: d.municipio || '',
-      uf: d.uf || '',
-      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-      cnaeDescricao: d.cnae_fiscal_descricao || '',
-      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
-    });
-  } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err);
-    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
+    const resp = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Controle-Comercial/1.0' } });
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+    return await resp.json();
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+app.get('/api/cnpj/:cnpj', async (req, res) => {
+  const digits = normalizeDigits(req.params.cnpj);
+  if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+
+  const errors = [];
+  try {
+    const d = await fetchJsonWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+    return res.json(mapBrasilApiCnpj(d, digits));
+  } catch (err) {
+    errors.push(`BrasilAPI: ${err.message}`);
+  }
+
+  try {
+    const d = await fetchJsonWithTimeout(`https://minhareceita.org/${digits}`);
+    return res.json(mapMinhaReceitaCnpj(d, digits));
+  } catch (err) {
+    errors.push(`MinhaReceita: ${err.message}`);
+  }
+
+  console.warn('CNPJ não encontrado nas fontes públicas:', digits, errors.join(' | '));
+  return res.status(404).json({ error: 'CNPJ não encontrado nas fontes públicas. Preencha manualmente.', detalhes: errors });
 });
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
@@ -698,7 +760,7 @@ app.post('/api/uploads/base64', async (req, res) => {
     await db('app_uploads').insert({
       id,
       empresa_id: safeUser.empresa_id || req.header('X-Company-Id') || '001',
-      user_id: safeUser.id || req.header('X-User-Id') || null,
+      user_id: safeUser.id || req.header('X-User-Id') || 'sistema',
       module: module || 'geral',
       filename: filename || id,
       mime_type: mimeType,
@@ -744,19 +806,12 @@ app.post('/api/prospeccoes', async (req, res) => {
     const b = req.body || {};
     const id = b.id || ('PR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase());
     const now = new Date();
-    const safeUser = req.user || {};
-    const actorId = safeUser.id || b.userId || b.user_id || req.header('X-User-Id') || 'admin_master_2026';
-    const actorProfile = safeUser.profile || req.header('X-User-Profile') || 'Administrador';
-    const empresaId = safeUser.empresa_id || b.empresa_id || req.header('X-Company-Id') || '001';
-    const unitIdValue = b.unitId || b.unit_id || safeUser.unitId || req.header('X-Unit-Id') || 'all';
-    const vendedorId = actorProfile === 'Vendedor' ? actorId : (b.userId || b.user_id || actorId);
     const row = {
       id,
-      empresa_id: empresaId,
-      unitId: unitIdValue,
-      unit_id: unitIdValue,
-      userId: vendedorId,
-      user_id: vendedorId,
+      empresa_id: req.user.empresa_id,
+      unitId: b.unitId || req.user.unitId || 'all',
+      userId: userIsVendor(req.user) ? req.user.id : (b.userId || req.user.id),
+      user_id: userIsVendor(req.user) ? req.user.id : (b.userId || req.user.id),
       name: b.name || b.nomeFantasia || b.razaoSocial || '',
       contact: b.contact || '',
       phone: b.phone || '',
@@ -1528,8 +1583,10 @@ app.delete('/api/despesas/:id', async (req, res) => {
       return res.status(errorStatus).json({ error: errorMessage });
     }
 
-    if (request.status !== 'Pendente') {
-      return res.status(400).json({ error: 'Apenas solicitações Pendentes podem ser excluídas.' });
+    const actorPerms = req.user.permissions || [];
+    const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    if (request.status !== 'Pendente' && !isAdmin) {
+      return res.status(400).json({ error: 'Apenas solicitações Pendentes podem ser excluídas pelo vendedor. Administrador pode excluir qualquer status.' });
     }
 
     await db('despesas_solicitacoes').where({ id }).delete();
@@ -2582,13 +2639,13 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
 
-    if (record.status !== 'Pendente') {
-      return res.status(400).json({ error: 'Apenas despesas com status Pendente podem ser excluídas.' });
-    }
-
     const isOwner = String(record.userId) === String(req.user.id);
     const actorPerms = req.user.permissions || [];
     const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+
+    if (record.status !== 'Pendente' && !isAdmin) {
+      return res.status(400).json({ error: 'Apenas despesas com status Pendente podem ser excluídas pelo vendedor. Administrador pode excluir qualquer status.' });
+    }
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ error: 'Acesso negado: você não é o proprietário desta despesa' });
@@ -2920,8 +2977,9 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
 // 1. Bulk import/update exchange products
 app.post('/api/exchange/products/bulk', async (req, res) => {
   const { products } = req.body;
-  const companyId = (req.user && req.user.empresa_id) || '001';
-  const unitId = req.header('X-Unit-Id') || 'all';
+  const companyId = getEffectiveCompanyId(req);
+  // Produtos importados ficam disponíveis para todas as unidades da empresa.
+  const unitId = 'all';
 
   if (!Array.isArray(products)) {
     return res.status(400).json({ error: 'Lista de produtos inválida.' });
@@ -2979,16 +3037,27 @@ app.post('/api/exchange/products/bulk', async (req, res) => {
 
 // 2. Fetch all exchange products
 app.get('/api/exchange/products', async (req, res) => {
-  const companyId = (req.user && req.user.empresa_id) || '001';
+  const companyId = getEffectiveCompanyId(req);
   const unitId = req.header('X-Unit-Id') || (req.user && req.user.unitId) || 'all';
+  const search = String(req.query.q || '').trim();
 
   try {
     let query = db('exchange_products')
-      .where({ company_id: companyId, active: true });
+      .where({ active: true })
+      .whereIn('company_id', [companyId, '001', 'all']);
 
     if (unitId && unitId !== 'all') {
       query = query.where(function() {
-        this.where('unit_id', unitId).orWhere('unit_id', 'all');
+        this.where('unit_id', unitId).orWhere('unit_id', 'all').orWhereNull('unit_id');
+      });
+    }
+
+    if (search) {
+      const like = `%${search.toLowerCase()}%`;
+      query = query.andWhere(function() {
+        this.whereRaw('LOWER(produto) LIKE ?', [like])
+          .orWhereRaw('LOWER(codigo) LIKE ?', [like])
+          .orWhereRaw('LOWER(categoria) LIKE ?', [like]);
       });
     }
 

@@ -575,22 +575,22 @@ const App = {
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
         fillFromCnpj({
-          nome_fantasia: data.nomeFantasia || data.nome_fantasia || data.fantasia,
-          razao_social: data.razaoSocial || data.razao_social || data.nome,
+          nome_fantasia: data.nomeFantasia,
+          razao_social: data.razaoSocial,
           email: data.email,
-          ddd_telefone_1: data.telefone || data.ddd_telefone_1,
-          municipio: data.municipio || data.cidade,
-          uf: data.uf || data.estado,
+          ddd_telefone_1: data.telefone,
+          municipio: data.municipio,
+          uf: data.uf,
           cep: data.cep,
           logradouro: data.logradouro,
           numero: data.numero,
           bairro: data.bairro
         });
-        setStatus(`Dados do CNPJ preenchidos automaticamente${data.origem ? ` (${data.origem})` : ''}.`, 'var(--success-color, #10b981)');
+        setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ:', error);
-        unlockPreviousApiValues();
-        setStatus(error.message || 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        lastLookup = '';
+        setStatus((error && error.message) ? error.message : 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
@@ -649,19 +649,17 @@ const App = {
     };
 
     const fill = (data) => {
-      const razao = data.razaoSocial || data.razao_social || data.nome || '';
-      const fantasia = data.nomeFantasia || data.nome_fantasia || data.fantasia || razao;
-      setValue('prosp-razao-social', razao, true);
-      setValue('prosp-nome-fantasia', fantasia, true);
-      setValue('prosp-name', fantasia || razao, false);
-      setValue('prosp-phone', data.telefone || data.ddd_telefone_1, false);
-      setValue('prosp-city', data.municipio || data.cidade, false);
+      setValue('prosp-razao-social', data.razaoSocial, true);
+      setValue('prosp-nome-fantasia', data.nomeFantasia, true);
+      setValue('prosp-name', data.nomeFantasia || data.razaoSocial, false);
+      setValue('prosp-phone', data.telefone, false);
+      setValue('prosp-city', data.municipio, false);
       setValue('prosp-zipcode', data.cep, true);
       setValue('prosp-address', data.logradouro, true);
       setValue('prosp-number', data.numero, true);
       setValue('prosp-neighborhood', data.bairro, true);
-      setValue('prosp-cnae', data.cnaePrincipal || data.cnae_fiscal, true);
-      setValue('prosp-cnae-desc', data.cnaeDescricao || data.cnae_fiscal_descricao, true);
+      setValue('prosp-cnae', data.cnaePrincipal, true);
+      setValue('prosp-cnae-desc', data.cnaeDescricao, true);
     };
 
     const lookup = async () => {
@@ -678,11 +676,11 @@ const App = {
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
         fill(data);
-        setStatus(`CNPJ encontrado${data.origem ? ` (${data.origem})` : ''}. Endereço, CNAE e dados principais preenchidos.`, 'var(--success-color, #10b981)');
+        setStatus('CNPJ encontrado. Endereço, CNAE e dados principais preenchidos.', 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ na prospecção:', error);
-        unlock();
-        setStatus(error.message || 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        lastLookup = '';
+        setStatus((error && error.message) ? error.message : 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
@@ -918,7 +916,9 @@ const App = {
           }
 
           const prospSellerSelect = document.getElementById('prosp-seller');
-          const userId = loggedUser.profile === 'Vendedor' ? loggedUser.id : (prospSellerSelect ? prospSellerSelect.value : '');
+          const userId = (loggedUser && loggedUser.profile === 'Vendedor')
+            ? loggedUser.id
+            : ((prospSellerSelect && prospSellerSelect.value) || (loggedUser && loggedUser.id) || 'sistema');
 
           let photoUrl = '';
           const fileInput = document.getElementById('prosp-photo');
@@ -2845,7 +2845,7 @@ const App = {
       const savedParts = ticket.parts || [];
       savedParts.forEach(p => {
         if (p.startsWith('Outra: ')) {
-          const value = p.replace('Outra: ', '');
+          const value = String(p).replace('Outra: ', '');
           const input = document.getElementById('ticket-outra-peca');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-part="Outra Peça"]');
@@ -2863,7 +2863,7 @@ const App = {
       const savedServices = ticket.services || [];
       savedServices.forEach(s => {
         if (s.startsWith('Outro: ')) {
-          const value = s.replace('Outro: ', '');
+          const value = String(s).replace('Outro: ', '');
           const input = document.getElementById('ticket-outro-servico');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-service="Outro Serviço"]');
@@ -5789,11 +5789,14 @@ App.initSimuladorTroca = async function() {
     App.goBackToExchangeCategories();
   });
   
-  // Product Search Input (in-category filter)
+  // Product Search Input: busca geral por produto/código/categoria.
   document.getElementById('exchange-product-search')?.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase().trim();
-    const filtered = (window.FilteredExchangeProducts || []).filter(p => 
-      p.codigo.toLowerCase().includes(term) || p.produto.toLowerCase().includes(term)
+    const base = term ? (window.AllExchangeProducts || []) : (window.FilteredExchangeProducts || window.AllExchangeProducts || []);
+    const filtered = base.filter(p => 
+      String(p.codigo || '').toLowerCase().includes(term) ||
+      String(p.produto || '').toLowerCase().includes(term) ||
+      String(p.categoria || '').toLowerCase().includes(term)
     );
     UI.renderExchangeProducts(filtered);
   });
@@ -5972,7 +5975,8 @@ App.renderCurrentExchangeState = function() {
 App.fetchExchangeProducts = async function() {
   try {
     const data = await App.fetchFromApi('/api/exchange/products');
-    window.AllExchangeProducts = data || [];
+    window.AllExchangeProducts = Array.isArray(data) ? data : [];
+    try { localStorage.setItem('cc_exchange_products_cache', JSON.stringify(window.AllExchangeProducts)); } catch (_) {}
     
     // Update categories dynamically
     const cats = [...new Set((window.AllExchangeProducts || []).map(p => p.categoria))].filter(Boolean);
@@ -5981,6 +5985,10 @@ App.fetchExchangeProducts = async function() {
     UI.renderExchangeCategories(window.ExchangeCategories);
   } catch (err) {
     console.error('Erro ao buscar produtos do simulador:', err);
+    try { window.AllExchangeProducts = JSON.parse(localStorage.getItem('cc_exchange_products_cache') || '[]'); } catch (_) { window.AllExchangeProducts = []; }
+    const cats = [...new Set((window.AllExchangeProducts || []).map(p => p.categoria))].filter(Boolean);
+    window.ExchangeCategories = cats;
+    UI.renderExchangeCategories(window.ExchangeCategories);
   }
 };
 
