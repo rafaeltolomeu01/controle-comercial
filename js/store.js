@@ -464,3 +464,60 @@ const Store = {
 };
 
 window.Store = Store;
+
+
+// =============================================================
+// PATCH FINAL STORE - chave estável, sync sem apagar dados locais e rotas coerentes
+// =============================================================
+(function(){
+  if (!window.Store || window.__ccFinalStorePatch) return;
+  window.__ccFinalStorePatch = true;
+  Store.DEFAULT_IDENTITY = DEFAULT_IDENTITY;
+
+  const oldSetLoggedUser = Store.setLoggedUser.bind(Store);
+  Store.setLoggedUser = function(user, token) {
+    const clean = Object.assign({}, user || {});
+    clean.permissions = Array.isArray(clean.permissions) ? clean.permissions : [];
+    if (!clean.unitId) clean.unitId = clean.profile === 'Administrador' ? 'all' : '1';
+    oldSetLoggedUser(clean, token);
+    if (clean.companyIdentity) localStorage.setItem('controle_campo_company_identity', JSON.stringify(clean.companyIdentity));
+  };
+
+  Store.mergeArrayById = function(localArr, remoteArr) {
+    const local = Array.isArray(localArr) ? localArr : [];
+    const remote = Array.isArray(remoteArr) ? remoteArr : [];
+    const map = new Map();
+    const keyOf = (item, idx, prefix) => String(item && (item.id || item.codigo || item.username || item.cnpj || item.name) || `${prefix}-${idx}`);
+    remote.forEach((item, idx) => map.set(keyOf(item, idx, 'remote'), item));
+    local.forEach((item, idx) => {
+      const key = keyOf(item, idx, 'local');
+      const existing = map.get(key) || {};
+      const localDate = Date.parse(item && (item.updated_at || item.updatedAt || item.createdAt || item.created_at || item.date)) || 0;
+      const remoteDate = Date.parse(existing && (existing.updated_at || existing.updatedAt || existing.createdAt || existing.created_at || existing.date)) || 0;
+      map.set(key, localDate >= remoteDate ? Object.assign({}, existing, item) : Object.assign({}, item, existing));
+    });
+    return Array.from(map.values());
+  };
+
+  Store.getUserAllowedRoutes = function(user) {
+    if (!user) return ['#dashboard'];
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    if (user.profile === 'Administrador' || perms.includes('Administrador')) {
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca'];
+    }
+    const allowed = ['#dashboard','#pdf'];
+    const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });
+    if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
+    if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
+    if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios');
+    if (perms.includes('Clientes')) add('#clientes','#prospeccao','#aprovacao');
+    if (perms.includes('Produtos') || perms.includes('Equipamentos')) add('#equipamentos','#movimentacao');
+    if (perms.includes('Chamados') || perms.includes('Chamados Mecânicos')) add('#chamados');
+    if (perms.includes('Solicitação de Saldo') || perms.includes('Despesas') || perms.includes('Despesas de Campo')) add('#despesas','#solicitacao-despesas');
+    if (perms.includes('Aprovação de Saldo') || perms.includes('Aprovação de Despesas')) add('#despesas-dashboard','#despesas');
+    if (perms.includes('Relatórios')) add('#relatorios');
+    if (perms.includes('Usuários') || perms.includes('Usuários e Permissões')) add('#usuarios');
+    if (perms.includes('Configurações') || perms.includes('Configurações Gerais')) add('#configuracoes','#empresa','#unidades');
+    return allowed;
+  };
+})();

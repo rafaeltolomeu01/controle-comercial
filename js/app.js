@@ -136,13 +136,6 @@ const App = {
       if (!window.location.hash || window.location.hash === '#login') {
         window.location.hash = '#dashboard';
       }
-      // Garante que a tela de login não fique presa quando a URL já vem com #dashboard.
-      const appContainerAfter = document.getElementById('app-container');
-      const loginWrapperAfter = document.getElementById('login-wrapper-container');
-      if (window.location.hash !== '#login') {
-        if (loginWrapperAfter) loginWrapperAfter.style.display = 'none';
-        if (appContainerAfter) appContainerAfter.style.display = 'flex';
-      }
       return true;
     } catch (err) {
       console.warn('Sessão inválida ou expirada:', err);
@@ -756,40 +749,18 @@ const App = {
           // Não use empresa_id como nome visual da empresa.
           // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
-
-          // Entra no painel imediatamente. A sincronização do banco acontece depois,
-          // em segundo plano. Antes o login ficava preso na tela quando a URL já
-          // estava em /?#dashboard ou quando a sincronização demorava/falhava.
+          if (Store.syncAllFromBackend) {
+            await Store.syncAllFromBackend({ forceRemote: true });
+            UI.applyCompanyIdentity(Store.getCompanyIdentity());
+          }
+          UI.applyPermissions();
+          this.startAutoSync();
           const loginUserEl = document.getElementById('login-username');
           const loginPassEl = document.getElementById('login-password');
           if (loginUserEl) loginUserEl.value = '';
           if (loginPassEl) loginPassEl.value = '';
-
-          const appContainer = document.getElementById('app-container');
-          const loginWrapper = document.getElementById('login-wrapper-container');
-          if (loginWrapper) loginWrapper.style.display = 'none';
-          if (appContainer) appContainer.style.display = 'flex';
-
-          UI.applyPermissions();
-          this.startAutoSync();
-
-          if (window.location.hash !== '#dashboard') {
-            window.location.hash = '#dashboard';
-          } else {
-            window.dispatchEvent(new Event('hashchange'));
-          }
-
-          // Carrega a tela e os dados sem bloquear a navegação do usuário.
-          Promise.resolve()
-            .then(async () => {
-              if (Store.syncAllFromBackend) {
-                await Store.syncAllFromBackend({ forceRemote: true });
-                UI.applyCompanyIdentity(Store.getCompanyIdentity());
-              }
-              await this.refreshAllLists();
-              window.dispatchEvent(new Event('hashchange'));
-            })
-            .catch(err => console.warn('Sincronização pós-login falhou:', err.message || err));
+          window.location.hash = '#dashboard';
+          this.refreshAllLists();
         } catch (err) {
           console.error(err);
           Store.clearLoggedUser();
@@ -2871,8 +2842,8 @@ const App = {
       // Toggle saved parts
       const savedParts = ticket.parts || [];
       savedParts.forEach(p => {
-        if (p.startsWith('Outra: ')) {
-          const value = p.replace('Outra: ', '');
+        if (String(p || '').startsWith('Outra: ')) {
+          const value = String(p || '').replace('Outra: ', '');
           const input = document.getElementById('ticket-outra-peca');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-part="Outra Peça"]');
@@ -2889,8 +2860,8 @@ const App = {
       // Toggle saved services
       const savedServices = ticket.services || [];
       savedServices.forEach(s => {
-        if (s.startsWith('Outro: ')) {
-          const value = s.replace('Outro: ', '');
+        if (String(s || '').startsWith('Outro: ')) {
+          const value = String(s || '').replace('Outro: ', '');
           const input = document.getElementById('ticket-outro-servico');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-service="Outro Serviço"]');
@@ -6686,3 +6657,142 @@ App.copyExchangeHistoryMessage = async function(simId) {
   }
 };
 
+
+
+// =============================================================
+// PATCH FINAL DE ESTABILIDADE - Controle de Campo
+// Mantém módulos carregando, corrige login preso e evita tela vazia.
+// =============================================================
+(function(){
+  if (!window.App || window.__ccFinalStabilityPatch) return;
+  window.__ccFinalStabilityPatch = true;
+
+  const oldFetchFromApi = App.fetchFromApi ? App.fetchFromApi.bind(App) : null;
+  if (oldFetchFromApi) {
+    App.fetchFromApi = async function(endpoint, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      const token = Store.getToken && Store.getToken();
+      if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
+      if (!headers['Content-Type'] && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      try {
+        return await oldFetchFromApi(endpoint, Object.assign({}, options, { headers }));
+      } catch (err) {
+        console.error('API falhou:', endpoint, err);
+        throw err;
+      }
+    };
+  }
+
+  const safeRefresh = async function() {
+    try {
+      if (!App.isLoggedIn) return;
+      UI.applyCompanyIdentity(Store.getCompanyIdentity());
+      UI.applyPermissions();
+      const route = window.location.hash || '#dashboard';
+      if (route === '#prospeccao') await App.loadProspects().catch(()=>{});
+      if (route === '#despesas') await App.loadExpenses().catch(()=>{});
+      if (route === '#despesas-dashboard') await App.loadDespesasDashboard().catch(()=>{});
+      if (route === '#chamados') await App.loadTickets().catch(()=>{});
+      if (route === '#simulador-troca') await App.initSimuladorTroca().catch(()=>{});
+      UI.renderDashboard();
+    } catch (e) { console.warn('Atualização segura falhou:', e); }
+  };
+
+  const oldBootstrap = App.bootstrapAuthentication ? App.bootstrapAuthentication.bind(App) : null;
+  if (oldBootstrap) {
+    App.bootstrapAuthentication = async function() {
+      const appContainer = document.getElementById('app-container');
+      const loginWrapper = document.getElementById('login-wrapper-container');
+      const token = Store.getToken && Store.getToken();
+      if (!token) {
+        Store.clearLoggedUser();
+        this.isLoggedIn = false;
+        if (appContainer) appContainer.style.display = 'none';
+        if (loginWrapper) loginWrapper.style.display = 'flex';
+        window.location.hash = '#login';
+        return false;
+      }
+      try {
+        const fresh = await this.fetchFromApi('/api/me');
+        if (!fresh || !fresh.id) throw new Error('Sessão inválida');
+        Store.setLoggedUser(fresh, token);
+        this.isLoggedIn = true;
+        if (fresh.companyIdentity) {
+          localStorage.setItem('controle_campo_company_identity', JSON.stringify(fresh.companyIdentity));
+        }
+        if (Store.syncAllFromBackend) await Store.syncAllFromBackend({ forceRemote: true });
+        if (appContainer) appContainer.style.display = 'flex';
+        if (loginWrapper) loginWrapper.style.display = 'none';
+        if (!window.location.hash || window.location.hash === '#login') window.location.hash = '#dashboard';
+        return true;
+      } catch (err) {
+        console.warn('Sessão inválida:', err);
+        Store.clearLoggedUser();
+        this.isLoggedIn = false;
+        if (appContainer) appContainer.style.display = 'none';
+        if (loginWrapper) loginWrapper.style.display = 'flex';
+        window.location.hash = '#login';
+        return false;
+      }
+    };
+  }
+
+  const oldSetupEventListeners = App.setupEventListeners ? App.setupEventListeners.bind(App) : null;
+  App.setupEventListeners = function() {
+    if (oldSetupEventListeners) oldSetupEventListeners();
+    const loginForm = document.getElementById('login-form');
+    if (loginForm && loginForm.dataset.finalLoginBound !== '1') {
+      loginForm.dataset.finalLoginBound = '1';
+      loginForm.addEventListener('submit', async (e) => {
+        // Executa depois do listener original, garantindo redirecionamento se o token foi gravado.
+        setTimeout(async () => {
+          const token = Store.getToken && Store.getToken();
+          const user = Store.getLoggedUser && Store.getLoggedUser();
+          if (token && user && App.isLoggedIn) {
+            try {
+              const fresh = await App.fetchFromApi('/api/me');
+              if (fresh && fresh.id) Store.setLoggedUser(fresh, token);
+            } catch(_) {}
+            const appContainer = document.getElementById('app-container');
+            const loginWrapper = document.getElementById('login-wrapper-container');
+            if (appContainer) appContainer.style.display = 'flex';
+            if (loginWrapper) loginWrapper.style.display = 'none';
+            if (!window.location.hash || window.location.hash === '#login') window.location.hash = '#dashboard';
+            window.dispatchEvent(new HashChangeEvent('hashchange'));
+            await safeRefresh();
+          }
+        }, 300);
+      }, true);
+    }
+  };
+
+  const oldOnRouteChanged = App.onRouteChanged ? App.onRouteChanged.bind(App) : null;
+  App.onRouteChanged = function(hash) {
+    try {
+      if (oldOnRouteChanged) oldOnRouteChanged(hash);
+    } catch (e) {
+      console.error('Erro no pós-carregamento da rota:', e);
+    }
+    setTimeout(() => {
+      UI.applyCompanyIdentity(Store.getCompanyIdentity());
+      UI.applyPermissions();
+    }, 50);
+  };
+
+  const oldLoadPage = App.loadPageContent ? App.loadPageContent.bind(App) : null;
+  if (oldLoadPage) {
+    App.loadPageContent = async function(pageName) {
+      try {
+        await oldLoadPage(pageName);
+      } catch (err) {
+        console.error('Falha ao carregar página:', pageName, err);
+        const panel = document.getElementById(`view-${pageName}`);
+        if (panel) {
+          panel.innerHTML = `<div class="error-wrapper-view" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;color:var(--danger);"><b>Falha ao carregar módulo</b><p>${err.message || err}</p><button class="btn btn-primary" onclick="location.reload()">Recarregar Sistema</button></div>`;
+        }
+      }
+    };
+  }
+
+  App.safeRefreshCurrent = safeRefresh;
+})();

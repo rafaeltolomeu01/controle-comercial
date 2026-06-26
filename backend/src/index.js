@@ -613,10 +613,10 @@ app.use(async (req, res, next) => {
       return res.status(404).json({ error: 'Acesso negado: Usuário não cadastrado.' });
     }
 
-    if (user.status === 'AGUARDANDO LIBERAÇÃO') {
+    if (normalizeUserStatus(user.status) === 'AGUARDANDO LIBERAÇÃO') {
       return res.status(403).json({ error: 'Acesso negado: Seu acesso aguarda aprovação gerencial.' });
     }
-    if (user.status === 'INATIVO') {
+    if (normalizeUserStatus(user.status) === 'INATIVO') {
       return res.status(403).json({ error: 'Acesso negado: Seu acesso foi desativado por um administrador.' });
     }
 
@@ -640,21 +640,35 @@ app.use(async (req, res, next) => {
 
 // Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
-  try {
-    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+  const digits = String(req.params.cnpj || '').replace(/\D/g, '');
+  if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
 
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
-    const d = await response.json();
-    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
+  const normalizeBrasilApi = (d) => ({
+    cnpj: d.cnpj || digits,
+    razaoSocial: d.razao_social || '',
+    nomeFantasia: d.nome_fantasia || d.razao_social || '',
+    email: d.email || '',
+    telefone: d.ddd_telefone_1 || d.ddd_telefone_2 || d.telefone || '',
+    cep: d.cep || '',
+    logradouro: d.logradouro || '',
+    numero: d.numero || '',
+    complemento: d.complemento || '',
+    bairro: d.bairro || '',
+    municipio: d.municipio || '',
+    uf: d.uf || '',
+    cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
+    cnaeDescricao: d.cnae_fiscal_descricao || '',
+    fonte: 'BrasilAPI'
+  });
 
-    res.json({
+  const normalizeReceitaWs = (d) => {
+    const atividade = Array.isArray(d.atividade_principal) && d.atividade_principal[0] ? d.atividade_principal[0] : {};
+    return {
       cnpj: d.cnpj || digits,
-      razaoSocial: d.razao_social || '',
-      nomeFantasia: d.nome_fantasia || d.razao_social || '',
+      razaoSocial: d.nome || '',
+      nomeFantasia: d.fantasia || d.nome || '',
       email: d.email || '',
-      telefone: d.ddd_telefone_1 || d.telefone || '',
+      telefone: d.telefone || '',
       cep: d.cep || '',
       logradouro: d.logradouro || '',
       numero: d.numero || '',
@@ -662,14 +676,41 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       bairro: d.bairro || '',
       municipio: d.municipio || '',
       uf: d.uf || '',
-      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-      cnaeDescricao: d.cnae_fiscal_descricao || '',
-      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
-    });
-  } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err);
-    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
+      cnaePrincipal: atividade.code ? String(atividade.code).replace(/\D/g, '') : '',
+      cnaeDescricao: atividade.text || '',
+      fonte: 'ReceitaWS'
+    };
+  };
+
+  const sources = [
+    { url: `https://brasilapi.com.br/api/cnpj/v1/${digits}`, normalizer: normalizeBrasilApi },
+    { url: `https://www.receitaws.com.br/v1/cnpj/${digits}`, normalizer: normalizeReceitaWs }
+  ];
+
+  const errors = [];
+  for (const source of sources) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 9000);
+      const response = await fetch(source.url, { signal: controller.signal, headers: { 'Accept': 'application/json' } });
+      clearTimeout(timeout);
+      if (!response.ok) {
+        errors.push(`${source.url}: HTTP ${response.status}`);
+        continue;
+      }
+      const data = await response.json();
+      if (data && (data.status === 'ERROR' || data.message === 'CNPJ inválido')) {
+        errors.push(data.message || 'não encontrado');
+        continue;
+      }
+      const result = source.normalizer(data);
+      if (result.razaoSocial || result.nomeFantasia || result.cnaePrincipal) return res.json(result);
+    } catch (err) {
+      errors.push(err.message || String(err));
+    }
   }
+
+  return res.status(404).json({ error: 'CNPJ não encontrado nas fontes públicas. Preencha manualmente.', details: errors.slice(0, 3) });
 });
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
@@ -723,7 +764,10 @@ app.get('/api/prospeccoes', async (req, res) => {
     const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
     let q = db('prospeccoes').where({ empresa_id: req.user.empresa_id });
     if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
-    if (req.user.profile === 'Vendedor' && !isAdmin) q = q.andWhere({ userId: req.user.id });
+    if (!isAdmin) {
+      const allowedIds = await getPermittedSellerIds(req.user, db);
+      q = q.whereIn('userId', allowedIds.length ? allowedIds : [req.user.id]);
+    }
     const rows = await q.orderBy('createdAt', 'desc');
     res.json(rows);
   } catch (err) {
@@ -855,6 +899,33 @@ function getStoreCompanyId(req) {
 function safeParseStoreJson(value, fallback = null) {
   try { return JSON.parse(value || 'null'); } catch (_) { return fallback; }
 }
+
+
+async function getCompanyIdentity(companyId) {
+  const defaults = {
+    name: companyId || 'Distribuidora JDS',
+    logo: '',
+    cnpj: companyId || '001',
+    phone: '',
+    email: ''
+  };
+  try {
+    const row = await db('app_kv_store').where({ company_id: companyId, store_key: 'company_identity' }).first();
+    const data = row ? safeParseStoreJson(row.data_json, null) : null;
+    if (data && typeof data === 'object') return { ...defaults, ...data };
+  } catch (_) {}
+  return defaults;
+}
+
+function normalizeUserStatus(status) {
+  return String(status || '').trim().toUpperCase();
+}
+
+function isStatusAllowed(status) {
+  const s = normalizeUserStatus(status);
+  return !s || ['LIBERADO', 'ATIVO', 'ATIVA', 'ACTIVE', 'APPROVED'].includes(s);
+}
+
 
 app.get('/api/store', async (req, res) => {
   try {
@@ -1960,6 +2031,7 @@ app.get('/api/me', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
     if (user.status === 'INATIVO') return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     if (user.status === 'AGUARDANDO LIBERAÇÃO') return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
+    const companyIdentity = await getCompanyIdentity(user.empresa_id);
     res.json({
       id: user.id,
       name: user.name,
@@ -1971,7 +2043,8 @@ app.get('/api/me', async (req, res) => {
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
-      empresa_id: user.empresa_id
+      empresa_id: user.empresa_id,
+      companyIdentity
     });
   } catch (err) {
     console.error(err);
@@ -2034,13 +2107,14 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
-    if (user.status === 'AGUARDANDO LIBERAÇÃO') {
+    if (normalizeUserStatus(user.status) === 'AGUARDANDO LIBERAÇÃO') {
       return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
     }
-    if (user.status === 'INATIVO') {
+    if (normalizeUserStatus(user.status) === 'INATIVO') {
       return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     }
 
+    const companyIdentity = await getCompanyIdentity(user.empresa_id);
     const token = jwt.sign({
       id: user.id,
       name: user.name,
@@ -2064,7 +2138,8 @@ app.post('/api/login', async (req, res) => {
         email: user.email || '',
         phone: user.phone || '',
         photo: user.photo || '',
-        empresa_id: user.empresa_id
+        empresa_id: user.empresa_id,
+        companyIdentity
       }
     });
   } catch (err) {
