@@ -136,6 +136,13 @@ const App = {
       if (!window.location.hash || window.location.hash === '#login') {
         window.location.hash = '#dashboard';
       }
+      // Garante que a tela de login não fique presa quando a URL já vem com #dashboard.
+      const appContainerAfter = document.getElementById('app-container');
+      const loginWrapperAfter = document.getElementById('login-wrapper-container');
+      if (window.location.hash !== '#login') {
+        if (loginWrapperAfter) loginWrapperAfter.style.display = 'none';
+        if (appContainerAfter) appContainerAfter.style.display = 'flex';
+      }
       return true;
     } catch (err) {
       console.warn('Sessão inválida ou expirada:', err);
@@ -749,18 +756,40 @@ const App = {
           // Não use empresa_id como nome visual da empresa.
           // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
-          if (Store.syncAllFromBackend) {
-            await Store.syncAllFromBackend({ forceRemote: true });
-            UI.applyCompanyIdentity(Store.getCompanyIdentity());
-          }
-          UI.applyPermissions();
-          this.startAutoSync();
+
+          // Entra no painel imediatamente. A sincronização do banco acontece depois,
+          // em segundo plano. Antes o login ficava preso na tela quando a URL já
+          // estava em /?#dashboard ou quando a sincronização demorava/falhava.
           const loginUserEl = document.getElementById('login-username');
           const loginPassEl = document.getElementById('login-password');
           if (loginUserEl) loginUserEl.value = '';
           if (loginPassEl) loginPassEl.value = '';
-          window.location.hash = '#dashboard';
-          this.refreshAllLists();
+
+          const appContainer = document.getElementById('app-container');
+          const loginWrapper = document.getElementById('login-wrapper-container');
+          if (loginWrapper) loginWrapper.style.display = 'none';
+          if (appContainer) appContainer.style.display = 'flex';
+
+          UI.applyPermissions();
+          this.startAutoSync();
+
+          if (window.location.hash !== '#dashboard') {
+            window.location.hash = '#dashboard';
+          } else {
+            window.dispatchEvent(new Event('hashchange'));
+          }
+
+          // Carrega a tela e os dados sem bloquear a navegação do usuário.
+          Promise.resolve()
+            .then(async () => {
+              if (Store.syncAllFromBackend) {
+                await Store.syncAllFromBackend({ forceRemote: true });
+                UI.applyCompanyIdentity(Store.getCompanyIdentity());
+              }
+              await this.refreshAllLists();
+              window.dispatchEvent(new Event('hashchange'));
+            })
+            .catch(err => console.warn('Sincronização pós-login falhou:', err.message || err));
         } catch (err) {
           console.error(err);
           Store.clearLoggedUser();
