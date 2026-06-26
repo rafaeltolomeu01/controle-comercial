@@ -1356,35 +1356,16 @@ const UI = {
         return;
       }
 
-      const normalizarItemConfig = (item) => {
-        if (item === null || item === undefined) return '';
-        if (typeof item === 'string' || typeof item === 'number') return String(item);
-        return String(
-          item.name ||
-          item.nome ||
-          item.title ||
-          item.titulo ||
-          item.label ||
-          item.descricao ||
-          item.description ||
-          item.valor ||
-          item.value ||
-          item.categoria ||
-          item.tipo ||
-          item.email ||
-          ''
-        );
-      };
-
       container.innerHTML = items.map(item => {
-        const itemTexto = normalizarItemConfig(item);
-        const itemSeguro = itemTexto.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const raw = (item && typeof item === 'object') ? (item.name || item.nome || item.label || item.value || item.categoria || item.descricao || item.produto || item.id || '') : item;
+        const text = String(raw || '').trim();
+        const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeArg = text.replace(/'/g, "\\'");
         return `
-          <li style="display:flex; justify-content:space-between; align-items:center; padding: 6px 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
-            <span>${itemTexto || 'Item sem nome'}</span>
-            <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${itemSeguro}')">Excluir</button>
-          </li>
-        `;
+        <li style="display:flex; justify-content:space-between; align-items:center; padding: 6px 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+          <span>${safeText || 'Sem nome'}</span>
+          <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${safeArg}')">Excluir</button>
+        </li>`;
       }).join('');
     };
 
@@ -1592,8 +1573,8 @@ const UI = {
     if (!grid) return;
     grid.innerHTML = categories.map(cat => {
       return `
-        <button class="exchange-category-btn" onclick="App.selectExchangeCategory('${cat.replace(/'/g, "\\'")}')" type="button">
-          ${cat}
+        <button class="exchange-category-btn" onclick="App.selectExchangeCategory('${String(cat || '').replace(/'/g, "\\'")}')" type="button">
+          ${String(cat || 'Sem categoria')}
         </button>
       `;
     }).join('');

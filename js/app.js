@@ -589,8 +589,7 @@ const App = {
         setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ:', error);
-        lastLookup = '';
-        setStatus((error && error.message) ? error.message : 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
@@ -679,8 +678,7 @@ const App = {
         setStatus('CNPJ encontrado. Endereço, CNAE e dados principais preenchidos.', 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ na prospecção:', error);
-        lastLookup = '';
-        setStatus((error && error.message) ? error.message : 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
@@ -916,9 +914,7 @@ const App = {
           }
 
           const prospSellerSelect = document.getElementById('prosp-seller');
-          const userId = (loggedUser && loggedUser.profile === 'Vendedor')
-            ? loggedUser.id
-            : ((prospSellerSelect && prospSellerSelect.value) || (loggedUser && loggedUser.id) || 'sistema');
+          const userId = loggedUser.profile === 'Vendedor' ? loggedUser.id : (prospSellerSelect ? prospSellerSelect.value : '');
 
           let photoUrl = '';
           const fileInput = document.getElementById('prosp-photo');
@@ -2705,20 +2701,21 @@ const App = {
   deleteConfigItem(listKey, item) {
     if (confirm(`Deseja remover "${item}" das configurações?`)) {
       let items;
+      const itemText = (v) => String((v && typeof v === 'object') ? (v.name || v.nome || v.label || v.value || v.categoria || v.descricao || v.produto || v.id || '') : v || '');
       if (listKey === 'client_categories') {
-        items = Store.getClientCategories().filter(i => i !== item);
+        items = Store.getClientCategories().filter(i => itemText(i) !== item);
         Store.saveClientCategories(items);
       } else if (listKey === 'equipment_types') {
-        items = Store.getEquipmentTypes().filter(i => i !== item);
+        items = Store.getEquipmentTypes().filter(i => itemText(i) !== item);
         Store.saveEquipmentTypes(items);
       } else if (listKey === 'expense_categories') {
-        items = Store.getExpenseCategories().filter(i => i !== item);
+        items = Store.getExpenseCategories().filter(i => itemText(i) !== item);
         Store.saveExpenseCategories(items);
       } else if (listKey === 'rejection_reasons') {
-        items = Store.getRejectionReasons().filter(i => i !== item);
+        items = Store.getRejectionReasons().filter(i => itemText(i) !== item);
         Store.saveRejectionReasons(items);
       } else if (listKey === 'prospect_loss_reasons') {
-        items = Store.getProspectLossReasons().filter(i => i !== item);
+        items = Store.getProspectLossReasons().filter(i => itemText(i) !== item);
         Store.saveProspectLossReasons(items);
       }
 
@@ -2845,7 +2842,7 @@ const App = {
       const savedParts = ticket.parts || [];
       savedParts.forEach(p => {
         if (p.startsWith('Outra: ')) {
-          const value = String(p).replace('Outra: ', '');
+          const value = p.replace('Outra: ', '');
           const input = document.getElementById('ticket-outra-peca');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-part="Outra Peça"]');
@@ -2863,7 +2860,7 @@ const App = {
       const savedServices = ticket.services || [];
       savedServices.forEach(s => {
         if (s.startsWith('Outro: ')) {
-          const value = String(s).replace('Outro: ', '');
+          const value = s.replace('Outro: ', '');
           const input = document.getElementById('ticket-outro-servico');
           if (input) input.value = value;
           const otherBtn = document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-service="Outro Serviço"]');
@@ -5789,14 +5786,12 @@ App.initSimuladorTroca = async function() {
     App.goBackToExchangeCategories();
   });
   
-  // Product Search Input: busca geral por produto/código/categoria.
+  // Product Search Input (in-category filter)
   document.getElementById('exchange-product-search')?.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase().trim();
     const base = term ? (window.AllExchangeProducts || []) : (window.FilteredExchangeProducts || window.AllExchangeProducts || []);
     const filtered = base.filter(p => 
-      String(p.codigo || '').toLowerCase().includes(term) ||
-      String(p.produto || '').toLowerCase().includes(term) ||
-      String(p.categoria || '').toLowerCase().includes(term)
+      String(p.codigo || '').toLowerCase().includes(term) || String(p.produto || '').toLowerCase().includes(term) || String(p.categoria || '').toLowerCase().includes(term)
     );
     UI.renderExchangeProducts(filtered);
   });
@@ -5975,8 +5970,7 @@ App.renderCurrentExchangeState = function() {
 App.fetchExchangeProducts = async function() {
   try {
     const data = await App.fetchFromApi('/api/exchange/products');
-    window.AllExchangeProducts = Array.isArray(data) ? data : [];
-    try { localStorage.setItem('cc_exchange_products_cache', JSON.stringify(window.AllExchangeProducts)); } catch (_) {}
+    window.AllExchangeProducts = data || [];
     
     // Update categories dynamically
     const cats = [...new Set((window.AllExchangeProducts || []).map(p => p.categoria))].filter(Boolean);
@@ -5985,10 +5979,6 @@ App.fetchExchangeProducts = async function() {
     UI.renderExchangeCategories(window.ExchangeCategories);
   } catch (err) {
     console.error('Erro ao buscar produtos do simulador:', err);
-    try { window.AllExchangeProducts = JSON.parse(localStorage.getItem('cc_exchange_products_cache') || '[]'); } catch (_) { window.AllExchangeProducts = []; }
-    const cats = [...new Set((window.AllExchangeProducts || []).map(p => p.categoria))].filter(Boolean);
-    window.ExchangeCategories = cats;
-    UI.renderExchangeCategories(window.ExchangeCategories);
   }
 };
 
