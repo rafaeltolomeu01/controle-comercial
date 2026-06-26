@@ -80,6 +80,21 @@ async function initDb(){
   await q(`CREATE TABLE IF NOT EXISTS settings(
     key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMPTZ DEFAULT now()
   )`);
+  // Campos extras do cadastro completo de cliente. Mantém compatibilidade com bancos já criados.
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS razao_social TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS ie TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS state TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_full TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS location_type TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS pavement_type TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS delivery_schedule TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS nearby_amaretto TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS nearby_competitor TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS ice_cream_experience TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS dual_brand_preference TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS equipment_qty TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS requested_eq_type TEXT`);
+  await q(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS sendable_eq_type TEXT`);
 
   const comp = await q(`INSERT INTO companies(code,name,logo_url) VALUES('001','Amaretto Sorvetes','/assets/amaretto.jpeg') ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name RETURNING *`);
   await q(`INSERT INTO companies(code,name,logo_url) VALUES('JDS','JDS Distribuidora','/assets/jds.png') ON CONFLICT(code) DO NOTHING`);
@@ -157,9 +172,18 @@ app.get('/api/prospects', auth, (req,res)=>listTable(req,res,'prospects'));
 app.post('/api/prospects', auth, async (req,res)=>{ const b=req.body; let photo=b.photo_url; if(b.photo_base64) photo=await saveUpload(b.photo_base64); const r=await q(`INSERT INTO prospects(id,company_id,user_id,seller_id,name,contact,phone,city,address,number,neighborhood,zipcode,category,competitor,status,observation,has_cnpj,cnpj,razao_social,nome_fantasia,cnae_principal,cnae_descricao,photo_url,next_date) VALUES($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,COALESCE($14,'prospectado'),$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`, [uid('pr'), selectedCompany(req), req.user.id,b.name,b.contact,b.phone,b.city,b.address,b.number,b.neighborhood,b.zipcode,b.category,b.competitor,b.status,b.observation,!!b.has_cnpj,b.cnpj,b.razao_social,b.nome_fantasia,b.cnae_principal,b.cnae_descricao,photo,b.next_date]); res.json(r.rows[0]); });
 app.put('/api/prospects/:id', auth, async (req,res)=>{ const b=req.body; const r=await q(`UPDATE prospects SET status=COALESCE($1,status), observation=COALESCE($2,observation), updated_at=now() WHERE id=$3 RETURNING *`, [b.status,b.observation,req.params.id]); res.json(r.rows[0]); });
 app.delete('/api/prospects/:id', auth, async (req,res)=>{ if(!isAdmin(req.user)) return res.status(403).json({error:'Sem permissão'}); await q(`DELETE FROM prospects WHERE id=$1`,[req.params.id]); res.json({ok:true}); });
+app.post('/api/prospects/:id/convert-client', auth, async(req,res)=>{
+  const pr = await q(`SELECT * FROM prospects WHERE id=$1`, [req.params.id]);
+  const p = pr.rows[0];
+  if(!p) return res.status(404).json({error:'Prospecção não encontrada'});
+  if(!isAdmin(req.user) && p.user_id !== req.user.id && Number(p.company_id)!==Number(req.user.company_id)) return res.status(403).json({error:'Sem permissão'});
+  const r = await q(`INSERT INTO clients(id,company_id,user_id,seller_id,name,fantasy_name,cnpj,phone,email,city,address,number,neighborhood,zipcode,category,status,photo_url,razao_social,address_full,nearby_competitor) VALUES($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pendente',$15,$16,$17,$18) RETURNING *`, [uid('cli'),p.company_id,p.user_id,p.name||p.nome_fantasia,p.nome_fantasia||p.name,p.cnpj,p.phone,null,p.city,p.address,p.number,p.neighborhood,p.zipcode,p.category,p.photo_url,p.razao_social,[p.address,p.number,p.neighborhood,p.city].filter(Boolean).join(', '),p.competitor]);
+  await q(`UPDATE prospects SET status='convertido', updated_at=now() WHERE id=$1`, [p.id]);
+  res.json(r.rows[0]);
+});
 
 app.get('/api/clients', auth, (req,res)=>listTable(req,res,'clients'));
-app.post('/api/clients', auth, async(req,res)=>{ const b=req.body; let photo=b.photo_url; if(b.photo_base64) photo=await saveUpload(b.photo_base64); const r=await q(`INSERT INTO clients(id,company_id,user_id,seller_id,name,fantasy_name,cnpj,phone,email,city,address,number,neighborhood,zipcode,category,status,photo_url) VALUES($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15,'pendente'),$16) RETURNING *`, [uid('cli'),selectedCompany(req),req.user.id,b.name,b.fantasy_name,b.cnpj,b.phone,b.email,b.city,b.address,b.number,b.neighborhood,b.zipcode,b.category,b.status,photo]); res.json(r.rows[0]); });
+app.post('/api/clients', auth, async(req,res)=>{ const b=req.body; let photo=b.photo_url; if(b.photo_base64) photo=await saveUpload(b.photo_base64); const r=await q(`INSERT INTO clients(id,company_id,user_id,seller_id,name,fantasy_name,cnpj,phone,email,city,address,number,neighborhood,zipcode,category,status,photo_url,razao_social,ie,state,address_full,location_type,pavement_type,delivery_schedule,nearby_amaretto,nearby_competitor,ice_cream_experience,dual_brand_preference,equipment_qty,requested_eq_type,sendable_eq_type) VALUES($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,COALESCE($15,'pendente'),$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING *`, [uid('cli'),selectedCompany(req),req.user.id,b.name,b.fantasy_name,b.cnpj,b.phone,b.email,b.city,b.address,b.number,b.neighborhood,b.zipcode,b.category,b.status,photo,b.razao_social,b.ie,b.state,b.address_full,b.location_type,b.pavement_type,b.delivery_schedule,b.nearby_amaretto,b.nearby_competitor,b.ice_cream_experience,b.dual_brand_preference,b.equipment_qty,b.requested_eq_type,b.sendable_eq_type]); res.json(r.rows[0]); });
 app.put('/api/clients/:id/approve', auth, (req,res)=>approve(req,res,'clients'));
 app.delete('/api/clients/:id', auth, async(req,res)=>{ if(!isAdmin(req.user)) return res.status(403).json({error:'Sem permissão'}); await q(`DELETE FROM clients WHERE id=$1`,[req.params.id]); res.json({ok:true}); });
 
