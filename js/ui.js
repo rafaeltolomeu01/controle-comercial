@@ -1356,12 +1356,36 @@ const UI = {
         return;
       }
 
-      container.innerHTML = items.map(item => `
-        <li style="display:flex; justify-content:space-between; align-items:center; padding: 6px 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
-          <span>${item}</span>
-          <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${item.replace(/'/g, "\\'")}')">Excluir</button>
-        </li>
-      `).join('');
+      const normalizarItemConfig = (item) => {
+        if (item === null || item === undefined) return '';
+        if (typeof item === 'string' || typeof item === 'number') return String(item);
+        return String(
+          item.name ||
+          item.nome ||
+          item.title ||
+          item.titulo ||
+          item.label ||
+          item.descricao ||
+          item.description ||
+          item.valor ||
+          item.value ||
+          item.categoria ||
+          item.tipo ||
+          item.email ||
+          ''
+        );
+      };
+
+      container.innerHTML = items.map(item => {
+        const itemTexto = normalizarItemConfig(item);
+        const itemSeguro = itemTexto.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `
+          <li style="display:flex; justify-content:space-between; align-items:center; padding: 6px 10px; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+            <span>${itemTexto || 'Item sem nome'}</span>
+            <button type="button" class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 0.7rem; border-radius: 3px;" onclick="App.deleteConfigItem('${listKey}', '${itemSeguro}')">Excluir</button>
+          </li>
+        `;
+      }).join('');
     };
 
     renderList('config-client-categories-list', clientCategories, 'client_categories');
@@ -1592,7 +1616,7 @@ const UI = {
       return `
         <div class="exchange-product-item-card" onclick="App.openExchangeItemModal(${escapedProduct})">
           <div class="exchange-product-item-header-row">
-            <strong style="color: var(--primary-color);">${p.codigo}</strong> - <span style="font-weight: 600;">${(p.produto || "")}</span>
+            <strong style="color: var(--primary-color);">${p.codigo}</strong> - <span style="font-weight: 600;">${p.produto}</span>
           </div>
           <div class="exchange-product-card-details">
             <div>Caixa: ${money(p.preco_total)} | Qtd: ${p.quantidade_na_caixa}</div>
@@ -1801,7 +1825,7 @@ const UI = {
       return `
         <tr>
           <td><strong>${p.codigo}</strong></td>
-          <td>${(p.produto || "")}</td>
+          <td>${p.produto}</td>
           <td><span class="badge-status badge-secondary" style="text-transform: uppercase;">${p.categoria || 'Outros'}</span></td>
           <td style="text-align: right;">${money(p.preco_total)}</td>
           <td style="text-align: center;">${p.quantidade_na_caixa}</td>
