@@ -3586,10 +3586,16 @@ const App = {
       }
 
       const user = Store.getLoggedUser() || {};
-      const isManager = ['Administrador', 'Supervisor', 'Financeiro'].includes(user.profile);
+      const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
+      const canApproveExpense = ['Administrador', 'Financeiro', 'Responsável Financeiro', 'Responsavel Financeiro'].includes(user.profile)
+        || userPerms.includes('Administrador')
+        || userPerms.includes('Financeiro')
+        || userPerms.includes('Aprovação de Saldo')
+        || userPerms.includes('Aprovação de Despesas')
+        || userPerms.includes('Despesas');
       const approvalPanel = document.getElementById('manager-approval-panel');
 
-      if (isManager) {
+      if (canApproveExpense) {
         approvalPanel.dataset.reqId = data.id;
         document.getElementById('review-obs').value = '';
 

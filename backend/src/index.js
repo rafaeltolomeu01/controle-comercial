@@ -915,22 +915,40 @@ app.post('/api/store/:key', async (req, res) => {
 });
 
 // Helper to check company and role access to a request
+function isAdminUser(user) {
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  return user.profile === 'Administrador' || perms.includes('Administrador');
+}
+
+function canApproveFinancial(user) {
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  return isAdminUser(user)
+    || ['Financeiro', 'Responsável Financeiro', 'Responsavel Financeiro'].includes(user.profile)
+    || perms.includes('Financeiro')
+    || perms.includes('Aprovação de Saldo')
+    || perms.includes('Aprovação de Despesas')
+    || perms.includes('Despesas');
+}
+
 async function getRequestAndVerifyAccess(id, user) {
   const request = await db('despesas_solicitacoes').where({ id }).first();
   if (!request) return { errorStatus: 404, errorMessage: 'Solicitação não encontrada' };
-  
-  if (request.empresa_id !== user.empresa_id) {
+
+  const isAdmin = isAdminUser(user);
+
+  // Administrador enxerga e abre detalhes/PDF/exclui de qualquer empresa.
+  // Para os demais perfis, compara como texto para evitar divergência 1 x "1"/"001".
+  if (!isAdmin && String(request.empresa_id || '') !== String(user.empresa_id || '')) {
     return { errorStatus: 403, errorMessage: 'Acesso negado: empresa divergente' };
   }
-  
-  const isAdmin = user.profile === 'Administrador' || (user.permissions || []).includes('Administrador');
+
   if (!isAdmin) {
     const allowedIds = await getPermittedSellerIds(user, db);
     if (!allowedIds.map(String).includes(String(request.usuario_id))) {
       return { errorStatus: 403, errorMessage: 'Acesso negado: esta solicitação não pertence à sua cadeia de atendimento' };
     }
   }
-  
+
   return { request };
 }
 
@@ -1380,9 +1398,8 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
   const { id } = req.params;
   const { items, observacao } = req.body; // items is array of evaluations, observacao is general note
 
-  const allowedProfiles = ['Administrador', 'Supervisor', 'Financeiro'];
-  if (!allowedProfiles.includes(req.user.profile) && !req.user.permissions.includes('Aprovação de Saldo')) {
-    return res.status(403).json({ error: 'Acesso negado: perfil sem privilégio de aprovação.' });
+  if (!canApproveFinancial(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado: perfil sem privilégio de aprovação financeira.' });
   }
 
   try {
