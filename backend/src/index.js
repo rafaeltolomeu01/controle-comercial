@@ -6,10 +6,100 @@ const config = require('../knexfile');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const https = require('https');
 const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-controle-comercial';
 const configFilePath = path.join(__dirname, 'emails_config.json');
 
 const db = knex(process.env.NODE_ENV === 'production' ? config.production : config.development);
+
+const fetchJsonWithTimeout = (url, timeoutMs = 12000) => new Promise((resolve, reject) => {
+  const req = https.get(url, {
+    timeout: timeoutMs,
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'Controle-Comercial/1.0'
+    }
+  }, (resp) => {
+    let body = '';
+    resp.setEncoding('utf8');
+    resp.on('data', chunk => { body += chunk; });
+    resp.on('end', () => {
+      let parsed = null;
+      try { parsed = body ? JSON.parse(body) : null; } catch (err) {
+        return reject(new Error(`Resposta inválida da API externa (${resp.statusCode})`));
+      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        const msg = parsed && (parsed.message || parsed.error || parsed.detail || parsed.status || parsed.descricao);
+        return reject(new Error(msg || `API externa retornou status ${resp.statusCode}`));
+      }
+      resolve(parsed);
+    });
+  });
+  req.on('timeout', () => req.destroy(new Error('Tempo esgotado na consulta de CNPJ')));
+  req.on('error', reject);
+});
+
+const onlyDigits = value => String(value || '').replace(/\D/g, '');
+
+const normalizeCnpjFromBrasilApi = (d, digits) => ({
+  cnpj: d.cnpj || digits,
+  razaoSocial: d.razao_social || d.razaoSocial || d.nome || '',
+  nomeFantasia: d.nome_fantasia || d.nomeFantasia || d.fantasia || d.razao_social || '',
+  email: d.email || '',
+  telefone: d.ddd_telefone_1 || d.telefone || '',
+  cep: d.cep || '',
+  logradouro: d.logradouro || d.descricao_tipo_de_logradouro || d.tipo_logradouro || '',
+  numero: d.numero || '',
+  complemento: d.complemento || '',
+  bairro: d.bairro || '',
+  municipio: d.municipio || d.cidade || '',
+  uf: d.uf || d.estado || '',
+  cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : (d.cnaePrincipal || ''),
+  cnaeDescricao: d.cnae_fiscal_descricao || d.cnaeDescricao || '',
+  origem: 'BrasilAPI'
+});
+
+const normalizeCnpjFromCnpjWs = (d, digits) => {
+  const est = d.estabelecimento || {};
+  const atv = est.atividade_principal || {};
+  const cidade = est.cidade || {};
+  const estado = est.estado || {};
+  return {
+    cnpj: est.cnpj || d.cnpj || digits,
+    razaoSocial: d.razao_social || d.razaoSocial || '',
+    nomeFantasia: est.nome_fantasia || d.nome_fantasia || d.razao_social || '',
+    email: est.email || d.email || '',
+    telefone: [est.ddd1, est.telefone1].filter(Boolean).join(' ') || est.telefone || '',
+    cep: est.cep || '',
+    logradouro: [est.tipo_logradouro, est.logradouro].filter(Boolean).join(' '),
+    numero: est.numero || '',
+    complemento: est.complemento || '',
+    bairro: est.bairro || '',
+    municipio: cidade.nome || est.cidade_nome || '',
+    uf: estado.sigla || est.estado_sigla || '',
+    cnaePrincipal: atv.id ? String(atv.id) : '',
+    cnaeDescricao: atv.descricao || '',
+    origem: 'CNPJ.ws'
+  };
+};
+
+const normalizeCnpjFromReceitaWs = (d, digits) => ({
+  cnpj: d.cnpj || digits,
+  razaoSocial: d.nome || d.razao_social || '',
+  nomeFantasia: d.fantasia || d.nome_fantasia || d.nome || '',
+  email: d.email || '',
+  telefone: d.telefone || '',
+  cep: d.cep || '',
+  logradouro: d.logradouro || '',
+  numero: d.numero || '',
+  complemento: d.complemento || '',
+  bairro: d.bairro || '',
+  municipio: d.municipio || '',
+  uf: d.uf || '',
+  cnaePrincipal: Array.isArray(d.atividade_principal) && d.atividade_principal[0] ? String(d.atividade_principal[0].code || '') : '',
+  cnaeDescricao: Array.isArray(d.atividade_principal) && d.atividade_principal[0] ? String(d.atividade_principal[0].text || '') : '',
+  origem: 'ReceitaWS'
+});
 
 const insertAndGetId = async (tableName, record, idColumn = 'id') => {
   if (db.client.config.client === 'sqlite3') {
@@ -638,38 +728,40 @@ app.use(async (req, res, next) => {
 });
 
 
-// Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
+// Proxy de CNPJ. O navegador chama o próprio backend, evitando CORS.
+// Tenta mais de uma fonte pública, porque BrasilAPI pode falhar para alguns CNPJs.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
-  try {
-    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+  const digits = onlyDigits(req.params.cnpj);
+  if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
 
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
-    const d = await response.json();
-    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
+  const attempts = [
+    { name: 'BrasilAPI', url: `https://brasilapi.com.br/api/cnpj/v1/${digits}`, normalize: normalizeCnpjFromBrasilApi },
+    { name: 'CNPJ.ws', url: `https://publica.cnpj.ws/cnpj/${digits}`, normalize: normalizeCnpjFromCnpjWs },
+    { name: 'ReceitaWS', url: `https://www.receitaws.com.br/v1/cnpj/${digits}`, normalize: normalizeCnpjFromReceitaWs }
+  ];
 
-    res.json({
-      cnpj: d.cnpj || digits,
-      razaoSocial: d.razao_social || '',
-      nomeFantasia: d.nome_fantasia || d.razao_social || '',
-      email: d.email || '',
-      telefone: d.ddd_telefone_1 || d.telefone || '',
-      cep: d.cep || '',
-      logradouro: d.logradouro || '',
-      numero: d.numero || '',
-      complemento: d.complemento || '',
-      bairro: d.bairro || '',
-      municipio: d.municipio || '',
-      uf: d.uf || '',
-      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-      cnaeDescricao: d.cnae_fiscal_descricao || '',
-      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
-    });
-  } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err);
-    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
+  const errors = [];
+  for (const source of attempts) {
+    try {
+      const raw = await fetchJsonWithTimeout(source.url);
+      if (raw && (raw.status === 'ERROR' || raw.message === 'CNPJ inválido' || raw.error)) {
+        throw new Error(raw.message || raw.error || 'CNPJ não encontrado');
+      }
+      const data = source.normalize(raw, digits);
+      if (!data.razaoSocial && !data.nomeFantasia && !data.logradouro) {
+        throw new Error('Fonte retornou dados vazios');
+      }
+      return res.json(data);
+    } catch (err) {
+      errors.push(`${source.name}: ${err.message}`);
+      console.warn(`Consulta CNPJ falhou em ${source.name}:`, err.message);
+    }
   }
+
+  return res.status(404).json({
+    error: 'Não foi possível buscar este CNPJ nas fontes públicas. Preencha manualmente.',
+    details: errors
+  });
 });
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.

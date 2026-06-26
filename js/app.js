@@ -575,21 +575,22 @@ const App = {
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
         fillFromCnpj({
-          nome_fantasia: data.nomeFantasia,
-          razao_social: data.razaoSocial,
+          nome_fantasia: data.nomeFantasia || data.nome_fantasia || data.fantasia,
+          razao_social: data.razaoSocial || data.razao_social || data.nome,
           email: data.email,
-          ddd_telefone_1: data.telefone,
-          municipio: data.municipio,
-          uf: data.uf,
+          ddd_telefone_1: data.telefone || data.ddd_telefone_1,
+          municipio: data.municipio || data.cidade,
+          uf: data.uf || data.estado,
           cep: data.cep,
           logradouro: data.logradouro,
           numero: data.numero,
           bairro: data.bairro
         });
-        setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
+        setStatus(`Dados do CNPJ preenchidos automaticamente${data.origem ? ` (${data.origem})` : ''}.`, 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ:', error);
-        setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        unlockPreviousApiValues();
+        setStatus(error.message || 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
@@ -648,17 +649,19 @@ const App = {
     };
 
     const fill = (data) => {
-      setValue('prosp-razao-social', data.razaoSocial, true);
-      setValue('prosp-nome-fantasia', data.nomeFantasia, true);
-      setValue('prosp-name', data.nomeFantasia || data.razaoSocial, false);
-      setValue('prosp-phone', data.telefone, false);
-      setValue('prosp-city', data.municipio, false);
+      const razao = data.razaoSocial || data.razao_social || data.nome || '';
+      const fantasia = data.nomeFantasia || data.nome_fantasia || data.fantasia || razao;
+      setValue('prosp-razao-social', razao, true);
+      setValue('prosp-nome-fantasia', fantasia, true);
+      setValue('prosp-name', fantasia || razao, false);
+      setValue('prosp-phone', data.telefone || data.ddd_telefone_1, false);
+      setValue('prosp-city', data.municipio || data.cidade, false);
       setValue('prosp-zipcode', data.cep, true);
       setValue('prosp-address', data.logradouro, true);
       setValue('prosp-number', data.numero, true);
       setValue('prosp-neighborhood', data.bairro, true);
-      setValue('prosp-cnae', data.cnaePrincipal, true);
-      setValue('prosp-cnae-desc', data.cnaeDescricao, true);
+      setValue('prosp-cnae', data.cnaePrincipal || data.cnae_fiscal, true);
+      setValue('prosp-cnae-desc', data.cnaeDescricao || data.cnae_fiscal_descricao, true);
     };
 
     const lookup = async () => {
@@ -675,10 +678,11 @@ const App = {
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
         fill(data);
-        setStatus('CNPJ encontrado. Endereço, CNAE e dados principais preenchidos.', 'var(--success-color, #10b981)');
+        setStatus(`CNPJ encontrado${data.origem ? ` (${data.origem})` : ''}. Endereço, CNAE e dados principais preenchidos.`, 'var(--success-color, #10b981)');
       } catch (error) {
         console.error('Erro ao consultar CNPJ na prospecção:', error);
-        setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
+        unlock();
+        setStatus(error.message || 'Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
 
