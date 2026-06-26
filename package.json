@@ -1,9 +1,6 @@
 {
-  "name": "controle-comercial-root",
-  "version": "1.0.0",
-  "description": "Root package.json for Controle Comercial",
-  "scripts": {
-    "build": "npm install --prefix backend && npm run migrate --prefix backend",
-    "start": "npm start --prefix backend"
-  }
+  "name":"controle-campo-novo",
+  "version":"1.0.0",
+  "scripts":{"start":"cd backend && npm start","install-all":"cd backend && npm install"},
+  "engines":{"node":">=18"}
 }
