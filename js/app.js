@@ -1859,9 +1859,14 @@ const App = {
 
     // 9. Add Expense Form Submit
     const expenseForm = document.getElementById('expense-form');
-    if (expenseForm) {
+    if (expenseForm && !expenseForm.dataset.boundSubmit) {
+      expenseForm.dataset.boundSubmit = 'true';
       expenseForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (expenseForm.dataset.saving === 'true') return;
+        expenseForm.dataset.saving = 'true';
+        const submitBtn = expenseForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
         try {
           const finalidade = document.getElementById('exp-finalidade').value;
           const operacao = document.getElementById('exp-operacao').value;
@@ -1975,6 +1980,10 @@ const App = {
         } catch (err) {
           console.error(err);
           this.showToast('Erro ao salvar despesa: ' + err.message, 'danger');
+        } finally {
+          expenseForm.dataset.saving = 'false';
+          const submitBtn = expenseForm.querySelector('button[type="submit"]');
+          if (submitBtn) submitBtn.disabled = false;
         }
       });
     }
@@ -2701,21 +2710,20 @@ const App = {
   deleteConfigItem(listKey, item) {
     if (confirm(`Deseja remover "${item}" das configurações?`)) {
       let items;
-      const itemText = (v) => String((v && typeof v === 'object') ? (v.name || v.nome || v.label || v.value || v.categoria || v.descricao || v.produto || v.id || '') : v || '');
       if (listKey === 'client_categories') {
-        items = Store.getClientCategories().filter(i => itemText(i) !== item);
+        items = Store.getClientCategories().filter(i => i !== item);
         Store.saveClientCategories(items);
       } else if (listKey === 'equipment_types') {
-        items = Store.getEquipmentTypes().filter(i => itemText(i) !== item);
+        items = Store.getEquipmentTypes().filter(i => i !== item);
         Store.saveEquipmentTypes(items);
       } else if (listKey === 'expense_categories') {
-        items = Store.getExpenseCategories().filter(i => itemText(i) !== item);
+        items = Store.getExpenseCategories().filter(i => i !== item);
         Store.saveExpenseCategories(items);
       } else if (listKey === 'rejection_reasons') {
-        items = Store.getRejectionReasons().filter(i => itemText(i) !== item);
+        items = Store.getRejectionReasons().filter(i => i !== item);
         Store.saveRejectionReasons(items);
       } else if (listKey === 'prospect_loss_reasons') {
-        items = Store.getProspectLossReasons().filter(i => itemText(i) !== item);
+        items = Store.getProspectLossReasons().filter(i => i !== item);
         Store.saveProspectLossReasons(items);
       }
 
@@ -3378,6 +3386,22 @@ const App = {
     const tbody = document.getElementById('despesas-solicitacoes-table-body');
     if (!tbody) return;
 
+    const safeDateBR = (value) => {
+      if (!value) return '—';
+      const raw = String(value);
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const [y, m, d] = raw.slice(0, 10).split('-');
+        return `${d}/${m}/${y}`;
+      }
+      const dt = new Date(raw);
+      return Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('pt-BR');
+    };
+
+    const isAdminLike = (user) => {
+      const perms = Array.isArray(user?.permissions) ? user.permissions : [];
+      return user?.profile === 'Administrador' || perms.includes('Administrador');
+    };
+
     if (!list || list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted);">Nenhuma solicitação encontrada.</td></tr>`;
       return;
@@ -3392,14 +3416,16 @@ const App = {
       if (req.status === 'Rejeitada') statusClass = 'badge-danger';
       if (req.status === 'Aprovada (não valor total)') statusClass = 'badge-primary';
 
-      const canEdit = req.status === 'Pendente' && req.usuario_id === loggedUser.id;
+      const isOwner = String(req.usuario_id || req.userId || '') === String(loggedUser.id || '');
+      const canEdit = req.status === 'Pendente' && isOwner;
+      const canDelete = req.status === 'Pendente' && (isOwner || isAdminLike(loggedUser));
       const editButton = canEdit ? `<button class="btn btn-secondary btn-sm" onclick="App.editExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Editar</button>` : '';
-      const deleteButton = canEdit ? `<button class="btn btn-danger btn-sm" onclick="App.deleteExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Excluir</button>` : '';
+      const deleteButton = canDelete ? `<button class="btn btn-danger btn-sm" onclick="App.deleteExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Excluir</button>` : '';
 
       return `
         <tr>
           <td style="font-family: monospace; font-size: 0.75rem;">#${req.id}</td>
-          <td>${new Date(req.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+          <td>${safeDateBR(req.data_solicitacao || req.created_at || req.createdAt)}</td>
           <td style="font-weight: 600;">${req.solicitante}</td>
           <td style="font-family: monospace;">${req.placa_veiculo || '-'}</td>
           <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${req.rota_destino}</td>
@@ -4493,6 +4519,26 @@ const App = {
   /**
    * PDF Document generator for travel expense voucher (client side)
    */
+  async deleteRegisteredExpense(id) {
+    if (!confirm(`Deseja realmente excluir a despesa #${id}?`)) return;
+    try {
+      const result = await this.fetchFromApi(`/api/despesas-reembolsos/${id}`, { method: 'DELETE' });
+      if (result?.success) {
+        const cached = this.readFastCache('despesas_reembolsos_api', []);
+        const next = cached.filter(item => String(item.id) !== String(id));
+        this.writeFastCache('despesas_reembolsos_api', next);
+        window.AppExpensesCache = next;
+        if (UI?.renderExpenses) UI.renderExpenses(next);
+        if (UI?.renderDashboard) UI.renderDashboard();
+        this.showToast('Despesa excluída com sucesso!');
+        this.loadExpenses();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir despesa: ' + err.message);
+    }
+  },
+
   async generateExpenseComprovantePdf(id) {
     try {
       const exp = await this.fetchFromApi(`/api/despesas-reembolsos/${id}`);
@@ -5789,9 +5835,8 @@ App.initSimuladorTroca = async function() {
   // Product Search Input (in-category filter)
   document.getElementById('exchange-product-search')?.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase().trim();
-    const base = term ? (window.AllExchangeProducts || []) : (window.FilteredExchangeProducts || window.AllExchangeProducts || []);
-    const filtered = base.filter(p => 
-      String(p.codigo || '').toLowerCase().includes(term) || String(p.produto || '').toLowerCase().includes(term) || String(p.categoria || '').toLowerCase().includes(term)
+    const filtered = (window.FilteredExchangeProducts || []).filter(p => 
+      p.codigo.toLowerCase().includes(term) || p.produto.toLowerCase().includes(term)
     );
     UI.renderExchangeProducts(filtered);
   });

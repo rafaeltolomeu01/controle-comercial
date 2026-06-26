@@ -231,9 +231,7 @@ async function initDb() {
       cnaeDescricao: t => t.string('cnaeDescricao').nullable(),
       date: t => t.string('date').nullable(),
       time: t => t.string('time').nullable(),
-      createdAt: t => t.timestamp('createdAt').defaultTo(db.fn.now()),
-      user_id: t => t.string('user_id').nullable(),
-      unit_id: t => t.string('unit_id').nullable()
+      createdAt: t => t.timestamp('createdAt').defaultTo(db.fn.now())
     };
     for (const [col, addColumn] of Object.entries(prospectColumns)) {
       const exists = await db.schema.hasColumn('prospeccoes', col);
@@ -593,7 +591,7 @@ app.get('/index.html', (req, res) => {
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
-  if (isFrontendFile || (req.method === 'GET' && req.path.startsWith('/api/uploads/'))) return next();
+  if (isFrontendFile || req.path.startsWith('/api/uploads/')) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -642,74 +640,36 @@ app.use(async (req, res, next) => {
 
 // Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
-  const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-  if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ inválido.' });
+  try {
+    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
+    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
 
-  const normalizeBrasilApi = (d) => ({
-    cnpj: d.cnpj || digits,
-    razaoSocial: d.razao_social || '',
-    nomeFantasia: d.nome_fantasia || d.razao_social || '',
-    email: d.email || '',
-    telefone: d.ddd_telefone_1 || d.telefone || '',
-    cep: d.cep || '',
-    logradouro: d.logradouro || '',
-    numero: d.numero || '',
-    complemento: d.complemento || '',
-    bairro: d.bairro || '',
-    municipio: d.municipio || '',
-    uf: d.uf || '',
-    cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-    cnaeDescricao: d.cnae_fiscal_descricao || '',
-    cnaesSecundarios: Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' })) : []
-  });
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
+    const d = await response.json();
+    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
 
-  const normalizeCnpjWs = (d) => {
-    const est = d.estabelecimento || {};
-    const atv = est.atividade_principal || {};
-    return {
-      cnpj: digits,
+    res.json({
+      cnpj: d.cnpj || digits,
       razaoSocial: d.razao_social || '',
-      nomeFantasia: est.nome_fantasia || d.razao_social || '',
-      email: est.email || '',
-      telefone: [est.ddd1, est.telefone1].filter(Boolean).join(''),
-      cep: est.cep || '',
-      logradouro: [est.tipo_logradouro, est.logradouro].filter(Boolean).join(' '),
-      numero: est.numero || '',
-      complemento: est.complemento || '',
-      bairro: est.bairro || '',
-      municipio: est.cidade?.nome || '',
-      uf: est.estado?.sigla || '',
-      cnaePrincipal: atv.id ? String(atv.id) : '',
-      cnaeDescricao: atv.descricao || '',
-      cnaesSecundarios: Array.isArray(est.atividades_secundarias) ? est.atividades_secundarias.map(c => ({ codigo: c.id || '', descricao: c.descricao || '' })) : []
-    };
-  };
-
-  const sources = [
-    { name: 'BrasilAPI', url: `https://brasilapi.com.br/api/cnpj/v1/${digits}`, normalize: normalizeBrasilApi },
-    { name: 'CNPJ.ws', url: `https://publica.cnpj.ws/cnpj/${digits}`, normalize: normalizeCnpjWs }
-  ];
-
-  const errors = [];
-  for (const source of sources) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 9000);
-      const response = await fetch(source.url, { signal: controller.signal, headers: { 'User-Agent': 'Controle-Campo/1.0' } });
-      clearTimeout(timer);
-      if (!response.ok) { errors.push(`${source.name}: ${response.status}`); continue; }
-      const data = await response.json();
-      const normalized = source.normalize(data);
-      if (normalized && (normalized.razaoSocial || normalized.nomeFantasia || normalized.cnaePrincipal)) {
-        return res.json({ ...normalized, source: source.name });
-      }
-      errors.push(`${source.name}: resposta sem dados úteis`);
-    } catch (err) {
-      errors.push(`${source.name}: ${err.message}`);
-    }
+      nomeFantasia: d.nome_fantasia || d.razao_social || '',
+      email: d.email || '',
+      telefone: d.ddd_telefone_1 || d.telefone || '',
+      cep: d.cep || '',
+      logradouro: d.logradouro || '',
+      numero: d.numero || '',
+      complemento: d.complemento || '',
+      bairro: d.bairro || '',
+      municipio: d.municipio || '',
+      uf: d.uf || '',
+      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
+      cnaeDescricao: d.cnae_fiscal_descricao || '',
+      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
+    });
+  } catch (err) {
+    console.error('Erro ao consultar CNPJ:', err);
+    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
   }
-
-  return res.status(404).json({ error: 'CNPJ não encontrado nas fontes públicas.', details: errors });
 });
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
@@ -760,27 +720,10 @@ app.get('/api/uploads/:id', async (req, res) => {
 // Prospecções reais no banco. Admin/Gerente/Supervisor veem conforme perfil; vendedor vê apenas as próprias.
 app.get('/api/prospeccoes', async (req, res) => {
   try {
-    const perms = req.user.permissions || [];
-    const profile = req.user.profile || '';
-    const isAdmin = profile === 'Administrador' || perms.includes('Administrador');
-    let q = db('prospeccoes');
-
-    // Administrador vê tudo. Os demais ficam presos à própria empresa.
-    if (!isAdmin) q = q.where({ empresa_id: req.user.empresa_id });
-
-    if (req.query.unitId && req.query.unitId !== 'all') {
-      q = q.andWhere(function() {
-        this.where('unitId', req.query.unitId).orWhere('unit_id', req.query.unitId);
-      });
-    }
-
-    // Vendedor vê somente o que ele mesmo cadastrou.
-    if (profile === 'Vendedor' && !isAdmin) {
-      q = q.andWhere(function() {
-        this.where('userId', req.user.id).orWhere('user_id', req.user.id);
-      });
-    }
-
+    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
+    let q = db('prospeccoes').where({ empresa_id: req.user.empresa_id });
+    if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
+    if (req.user.profile === 'Vendedor' && !isAdmin) q = q.andWhere({ userId: req.user.id });
     const rows = await q.orderBy('createdAt', 'desc');
     res.json(rows);
   } catch (err) {
@@ -799,8 +742,6 @@ app.post('/api/prospeccoes', async (req, res) => {
       empresa_id: req.user.empresa_id,
       unitId: b.unitId || req.user.unitId || 'all',
       userId: req.user.profile === 'Vendedor' ? req.user.id : (b.userId || req.user.id),
-      user_id: req.user.profile === 'Vendedor' ? req.user.id : (b.user_id || b.userId || req.user.id),
-      unit_id: b.unit_id || b.unitId || req.user.unitId || 'all',
       name: b.name || b.nomeFantasia || b.razaoSocial || '',
       contact: b.contact || '',
       phone: b.phone || '',
@@ -2524,10 +2465,10 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
     const newRecord = {
       id,
       empresa_id,
-      userId: userId || req.user.id,
-      unitId: unitId || 'all',
+      userId: req.user.id,
+      unitId: (req.user.unitId && req.user.unitId !== 'all') ? req.user.unitId : (unitId || 'all'),
       date: date || new Date().toISOString().split('T')[0],
-      time: time || new Date().toTimeString().split(' ')[0],
+      time: time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       finalidade,
       operacao,
       descreva: descreva || '',
@@ -2535,12 +2476,32 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
       km: km ? parseInt(km, 10) : null,
       foto_odometro: foto_odometro || '',
       foto_comprovante: foto_comprovante || '',
-      value: value ? parseFloat(value) : null,
+      value: Number.isFinite(Number(value)) ? Number(value) : 0,
       observation: observation || '',
       status: 'Pendente',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    const recentSimilar = await db('despesas_reembolsos')
+      .where({
+        empresa_id,
+        userId: req.user.id,
+        unitId: newRecord.unitId,
+        date: newRecord.date,
+        finalidade: newRecord.finalidade,
+        operacao: newRecord.operacao
+      })
+      .orderBy('created_at', 'desc')
+      .first();
+
+    if (recentSimilar) {
+      const recentTime = new Date(recentSimilar.created_at || recentSimilar.updated_at || 0).getTime();
+      const sameValue = Number(recentSimilar.value || 0) === Number(newRecord.value || 0);
+      if (sameValue && Number.isFinite(recentTime) && (Date.now() - recentTime) < 90000) {
+        return res.json({ success: true, id: recentSimilar.id, duplicateIgnored: true });
+      }
+    }
 
     await db('despesas_reembolsos').insert(newRecord);
 
@@ -2570,16 +2531,17 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
     if (!isActorAdmin) {
       query = query.where('empresa_id', req.user.empresa_id);
 
-      // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('unitId', req.user.unitId);
       }
 
       const permittedIds = await getPermittedSellerIds(req.user, db);
       query = query.whereIn('userId', permittedIds);
+    } else if (req.query.unitId && req.query.unitId !== 'all') {
+      query = query.where('unitId', req.query.unitId);
     }
 
-    const list = await query.orderBy('created_at', 'desc');
+    const list = await query.orderBy('created_at', 'desc').orderBy('id', 'desc');
     res.json(list);
   } catch (err) {
     console.error(err);
@@ -2591,17 +2553,17 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
 app.get('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const record = await db('despesas_reembolsos')
-      .where({ id, empresa_id: req.user.empresa_id })
-      .first();
+    const actorPerms = req.user.permissions || [];
+    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    let recordQuery = db('despesas_reembolsos').where({ id });
+    if (!isActorAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
+    const record = await recordQuery.first();
 
     if (!record) {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
 
     const permittedSellerIds = await getPermittedSellerIds(req.user, db);
-    const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
     
     if (!isActorAdmin && !permittedSellerIds.map(String).includes(String(record.userId))) {
       return res.status(403).json({ error: 'Acesso negado: esta despesa está fora da sua cadeia de atendimento' });
@@ -2618,9 +2580,11 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
 app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const record = await db('despesas_reembolsos')
-      .where({ id, empresa_id: req.user.empresa_id })
-      .first();
+    const actorPerms = req.user.permissions || [];
+    const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    let recordQuery = db('despesas_reembolsos').where({ id });
+    if (!isAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
+    const record = await recordQuery.first();
 
     if (!record) {
       return res.status(404).json({ error: 'Despesa não encontrada' });
@@ -2631,8 +2595,6 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
     }
 
     const isOwner = String(record.userId) === String(req.user.id);
-    const actorPerms = req.user.permissions || [];
-    const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
     
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ error: 'Acesso negado: você não é o proprietário desta despesa' });
@@ -3024,19 +2986,15 @@ app.post('/api/exchange/products/bulk', async (req, res) => {
 // 2. Fetch all exchange products
 app.get('/api/exchange/products', async (req, res) => {
   const companyId = (req.user && req.user.empresa_id) || '001';
-  const search = String(req.query.q || '').trim();
+  const unitId = req.header('X-Unit-Id') || (req.user && req.user.unitId) || 'all';
 
   try {
-    // Produtos importados pelo admin devem aparecer para todos os vendedores da empresa.
-    // O filtro correto é por empresa; unidade fica apenas como informação, não bloqueio.
     let query = db('exchange_products')
       .where({ company_id: companyId, active: true });
 
-    if (search) {
-      query = query.andWhere(function() {
-        this.where('produto', 'ilike', `%${search}%`)
-          .orWhere('codigo', 'ilike', `%${search}%`)
-          .orWhere('categoria', 'ilike', `%${search}%`);
+    if (unitId && unitId !== 'all') {
+      query = query.where(function() {
+        this.where('unit_id', unitId).orWhere('unit_id', 'all');
       });
     }
 
