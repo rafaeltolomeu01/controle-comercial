@@ -209,6 +209,7 @@ async function initDb() {
       empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
       unitId: t => t.string('unitId').notNullable().defaultTo('all'),
       userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
+      user_id: t => t.string('user_id').notNullable().defaultTo('demo_user'),
       name: t => t.string('name').nullable(),
       contact: t => t.string('contact').nullable(),
       phone: t => t.string('phone').nullable(),
@@ -286,6 +287,7 @@ async function initDb() {
       empresa_id: t => t.string('empresa_id').notNullable().defaultTo('001'),
       unitId: t => t.string('unitId').notNullable().defaultTo('all'),
       userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
+      user_id: t => t.string('user_id').notNullable().defaultTo('demo_user'),
       equipmentSerial: t => t.string('equipmentSerial').notNullable().defaultTo(''),
       equipmentType: t => t.string('equipmentType').nullable(),
       client: t => t.string('client').nullable(),
@@ -591,7 +593,7 @@ app.get('/index.html', (req, res) => {
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
-  if (isFrontendFile || req.path.startsWith('/api/uploads/')) return next();
+  if (isFrontendFile || (req.method === 'GET' && req.path.startsWith('/api/uploads/'))) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -675,6 +677,9 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
 app.post('/api/uploads/base64', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado para upload.' });
+    }
     const { dataUrl, filename, module } = req.body || {};
     if (!dataUrl || typeof dataUrl !== 'string') {
       return res.status(400).json({ error: 'Arquivo base64 não enviado.' });
@@ -720,11 +725,14 @@ app.get('/api/uploads/:id', async (req, res) => {
 // Prospecções reais no banco. Admin/Gerente/Supervisor veem conforme perfil; vendedor vê apenas as próprias.
 app.get('/api/prospeccoes', async (req, res) => {
   try {
-    const isAdmin = isAdminUser(req.user);
-    let q = db('prospeccoes');
-    if (!isAdmin) q = q.where({ empresa_id: req.user.empresa_id });
+    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
+    let q = db('prospeccoes').where({ empresa_id: req.user.empresa_id });
     if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
-    if (req.user.profile === 'Vendedor' && !isAdmin) q = q.andWhere({ userId: req.user.id });
+    if (req.user.profile === 'Vendedor' && !isAdmin) {
+      q = q.andWhere(function() {
+        this.where('userId', req.user.id).orWhere('user_id', req.user.id);
+      });
+    }
     const rows = await q.orderBy('createdAt', 'desc');
     res.json(rows);
   } catch (err) {
@@ -738,11 +746,17 @@ app.post('/api/prospeccoes', async (req, res) => {
     const b = req.body || {};
     const id = b.id || ('PR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase());
     const now = new Date();
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado.' });
+    }
+    const loggedUserId = String(req.user.id);
+    const targetUserId = req.user.profile === 'Vendedor' ? loggedUserId : String(b.userId || b.user_id || loggedUserId);
     const row = {
       id,
       empresa_id: req.user.empresa_id,
       unitId: b.unitId || req.user.unitId || 'all',
-      userId: req.user.profile === 'Vendedor' ? req.user.id : (b.userId || req.user.id),
+      userId: targetUserId,
+      user_id: targetUserId,
       name: b.name || b.nomeFantasia || b.razaoSocial || '',
       contact: b.contact || '',
       phone: b.phone || '',
@@ -778,19 +792,16 @@ app.post('/api/prospeccoes', async (req, res) => {
 
 app.put('/api/prospeccoes/:id', async (req, res) => {
   try {
-    const isAdmin = isAdminUser(req.user);
-    let existingQuery = db('prospeccoes').where({ id: req.params.id });
-    if (!isAdmin) existingQuery = existingQuery.andWhere({ empresa_id: req.user.empresa_id });
-    const existing = await existingQuery.first();
+    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
     if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
-    if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id) return res.status(403).json({ error: 'Acesso negado.' });
-    await db('prospeccoes').where({ id: req.params.id }).update({
+    if (req.user.profile === 'Vendedor' && String(existing.userId || existing.user_id) !== String(req.user.id)) return res.status(403).json({ error: 'Acesso negado.' });
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).update({
       ...req.body,
       empresa_id: existing.empresa_id,
       id: existing.id,
       updated_at: new Date().toISOString()
     });
-    const updated = await db('prospeccoes').where({ id: req.params.id }).first();
+    const updated = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
     res.json(updated);
   } catch (err) {
     console.error('Erro ao atualizar prospecção:', err);
@@ -800,13 +811,11 @@ app.put('/api/prospeccoes/:id', async (req, res) => {
 
 app.delete('/api/prospeccoes/:id', async (req, res) => {
   try {
-    const isAdmin = isAdminUser(req.user);
-    let existingQuery = db('prospeccoes').where({ id: req.params.id });
-    if (!isAdmin) existingQuery = existingQuery.andWhere({ empresa_id: req.user.empresa_id });
-    const existing = await existingQuery.first();
+    const existing = await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).first();
     if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
-    if (req.user.profile === 'Vendedor' && existing.userId !== req.user.id && !isAdmin) return res.status(403).json({ error: 'Acesso negado.' });
-    await db('prospeccoes').where({ id: req.params.id }).delete();
+    const isAdmin = req.user.profile === 'Administrador' || (req.user.permissions || []).includes('Administrador');
+    if (req.user.profile === 'Vendedor' && String(existing.userId || existing.user_id) !== String(req.user.id) && !isAdmin) return res.status(403).json({ error: 'Acesso negado.' });
+    await db('prospeccoes').where({ id: req.params.id, empresa_id: req.user.empresa_id }).delete();
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir prospecção:', err);
@@ -2754,13 +2763,7 @@ async function getPermittedSellerIds(user, dbInstance) {
     return [...new Set([String(userId), ...supervisorIds.map(String), ...directSellerIds.map(String), ...subSellerIds.map(String)])];
   }
 
-  // 4. Administrador sees all users in the database. Other administrative/support profiles
-  // remain limited to their company by applyHierarchyScope when needed.
-  if (profile === 'Administrador' || (Array.isArray(user.permissions) && user.permissions.includes('Administrador'))) {
-    const allUsers = await dbInstance('usuarios').select('id');
-    return allUsers.map(u => String(u.id));
-  }
-
+  // 4. Administrador (or other profiles) sees all users of the company
   const companyUsers = await dbInstance('usuarios')
     .where({ empresa_id: companyId })
     .select('id');
@@ -2789,8 +2792,8 @@ function normalizeChamado(row) {
 async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'empresa_id') {
   const actorPerms = user.permissions || [];
   const isAdmin = user.profile === 'Administrador' || actorPerms.includes('Administrador');
+  query.where(companyColumn, user.empresa_id || '001');
   if (!isAdmin) {
-    query.where(companyColumn, user.empresa_id || '001');
     const allowedIds = await getPermittedSellerIds(user, db);
     query.whereIn(ownerColumn, allowedIds);
   }
@@ -2877,10 +2880,7 @@ app.get('/api/chamados', async (req, res) => {
 
 app.get('/api/chamados/:id', async (req, res) => {
   try {
-    const isAdmin = isAdminUser(req.user);
-    let chamadoQuery = db('chamados_tecnicos').where({ id: req.params.id });
-    if (!isAdmin) chamadoQuery = chamadoQuery.andWhere({ empresa_id: req.user.empresa_id || '001' });
-    const chamado = await chamadoQuery.first();
+    const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
     const allowedIds = await getPermittedSellerIds(req.user, db);
     const staff = ['Administrador', 'Responsável Equipamentos', 'Mecânico'].includes(req.user.profile);
@@ -3021,9 +3021,8 @@ app.get('/api/exchange/products', async (req, res) => {
   const unitId = req.header('X-Unit-Id') || (req.user && req.user.unitId) || 'all';
 
   try {
-    const isAdmin = isAdminUser(req.user);
-    let query = db('exchange_products').where({ active: true });
-    if (!isAdmin) query = query.andWhere({ company_id: companyId });
+    let query = db('exchange_products')
+      .where({ company_id: companyId, active: true });
 
     if (unitId && unitId !== 'all') {
       query = query.where(function() {
