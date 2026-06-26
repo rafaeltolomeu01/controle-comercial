@@ -1,4 +1,16 @@
 const UI = {
+  normalizeRole(value) {
+    return String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+  },
+
+  isAdminUser(user) {
+    const profile = this.normalizeRole(user && user.profile);
+    const perms = Array.isArray(user && user.permissions) ? user.permissions.map(p => this.normalizeRole(p)) : [];
+    return ['administrador', 'admin', 'administrador geral'].includes(profile) || perms.includes('administrador') || perms.includes('admin');
+  },
+
   safeNumber(value) {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
@@ -225,12 +237,12 @@ const UI = {
     }
 
     // Vendedor filter constraint
-    if (user && user.profile === 'Vendedor') {
-      prospects = prospects.filter(p => p.userId === user.id);
-      clients = clients.filter(c => c.userId === user.id);
-      tickets = tickets.filter(t => t.userId === user.id);
-      expenses = expenses.filter(e => e.userId === user.id);
-      balances = balances.filter(b => (b.usuario_id || b.userId) === user.id);
+    if (user && this.normalizeRole(user.profile) === 'vendedor' && !this.isAdminUser(user)) {
+      prospects = prospects.filter(p => (p.userId || p.user_id) === user.id);
+      clients = clients.filter(c => (c.userId || c.user_id) === user.id);
+      tickets = tickets.filter(t => (t.userId || t.user_id) === user.id);
+      expenses = expenses.filter(e => (e.userId || e.user_id || e.usuario_id) === user.id);
+      balances = balances.filter(b => (b.usuario_id || b.userId || b.user_id) === user.id);
     }
 
     // 1. Calculate values
@@ -289,8 +301,8 @@ const UI = {
       prospects = prospects.filter(p => p.unitId === activeUnitId);
     }
 
-    if (user && user.profile === 'Vendedor') {
-      prospects = prospects.filter(p => p.userId === user.id);
+    if (user && this.normalizeRole(user.profile) === 'vendedor' && !this.isAdminUser(user)) {
+      prospects = prospects.filter(p => String(p.userId || p.user_id || '') === String(user.id));
     }
 
     const container = document.getElementById('prospect-list-container');
@@ -1818,100 +1830,3 @@ const UI = {
 };
 
 window.UI = UI;
-
-
-// =============================================================
-// PATCH FINAL UI - evita quebra de Configurações e padroniza empresa/unidade
-// =============================================================
-(function(){
-  if (!window.UI || window.__ccFinalUiPatch) return;
-  window.__ccFinalUiPatch = true;
-
-  const toLabel = (item) => {
-    if (item == null) return '';
-    if (typeof item === 'object') return String(item.name || item.nome || item.label || item.value || item.categoria || item.descricao || item.produto || item.id || '').trim();
-    return String(item).trim();
-  };
-  const escapeHtml = (s) => String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const normalizeList = (arr) => (Array.isArray(arr) ? arr : []).map(toLabel).filter(Boolean);
-
-  UI.getUnitName = function(unitId) {
-    if (!unitId || unitId === 'all') return 'Todas as Unidades';
-    const units = normalizeList(Store.getUnits()).length ? Store.getUnits() : [];
-    const unit = (Array.isArray(units) ? units : []).find(u => String((u && (u.id || u.value)) || u) === String(unitId));
-    return unit ? toLabel(unit) : 'Unidade Geral';
-  };
-
-  const oldApplyCompanyIdentity = UI.applyCompanyIdentity ? UI.applyCompanyIdentity.bind(UI) : null;
-  UI.applyCompanyIdentity = function(config) {
-    config = Object.assign({}, Store.DEFAULT_IDENTITY || {}, config || Store.getCompanyIdentity());
-    try { if (oldApplyCompanyIdentity) oldApplyCompanyIdentity(config); } catch(_) {}
-    document.title = `${config.name || 'Controle de Campo'} | Controle de Campo`;
-    document.querySelectorAll('.brand-logo-img, .badge-logo, .login-logo, .pdf-logo-img').forEach(img => { if (img && config.logo) img.src = config.logo; });
-    document.querySelectorAll('.brand-name, .badge-name, .login-company-name, .pdf-company-name').forEach(el => { if (el) el.textContent = config.name || 'Controle de Campo'; });
-  };
-
-  UI.renderConfigSettings = function() {
-    const lists = [
-      ['config-client-categories-list', Store.getClientCategories(), 'client_categories'],
-      ['config-eq-types-list', Store.getEquipmentTypes(), 'equipment_types'],
-      ['config-exp-categories-list', Store.getExpenseCategories(), 'expense_categories'],
-      ['config-rejection-reasons-list', Store.getRejectionReasons(), 'rejection_reasons'],
-      ['config-loss-reasons-list', Store.getProspectLossReasons(), 'prospect_loss_reasons']
-    ];
-    const render = (elementId, items, listKey) => {
-      const container = document.getElementById(elementId);
-      if (!container) return;
-      const labels = normalizeList(items);
-      if (!labels.length) {
-        container.innerHTML = `<li style="padding:6px 10px;color:var(--text-muted);font-size:.8rem;text-align:center;background-color:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;">Nenhum item cadastrado.</li>`;
-        return;
-      }
-      container.innerHTML = labels.map(label => {
-        const arg = label.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        return `<li style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background-color:var(--bg-input);border:1px solid var(--border-color);border-radius:4px;font-size:.85rem;"><span>${escapeHtml(label)}</span><button type="button" class="btn btn-danger btn-sm" style="padding:2px 6px;font-size:.7rem;border-radius:3px;" onclick="App.deleteConfigItem('${listKey}', '${arg}')">Excluir</button></li>`;
-      }).join('');
-    };
-    lists.forEach(args => render(...args));
-    const emailsInput = document.getElementById('config-emails-input');
-    if (emailsInput) emailsInput.value = normalizeList(Store.getNotificationEmails()).join(', ');
-  };
-
-  const oldPopulateConfigDropdowns = UI.populateConfigDropdowns ? UI.populateConfigDropdowns.bind(UI) : null;
-  UI.populateConfigDropdowns = function() {
-    try { if (oldPopulateConfigDropdowns) oldPopulateConfigDropdowns(); } catch (e) { console.warn('Dropdown config ignorou item inválido:', e); }
-    const fill = (id, items, placeholder='Selecione...') => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const current = el.value;
-      el.innerHTML = `<option value="" selected disabled>${placeholder}</option>` + normalizeList(items).map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-      if (current) el.value = current;
-    };
-    fill('prosp-category', Store.getClientCategories());
-    fill('client-category', Store.getClientCategories());
-    fill('client-requested-eq-type', Store.getEquipmentTypes());
-    fill('client-sendable-eq-type', Store.getEquipmentTypes());
-    fill('exp-finalidade', Store.getExpenseCategories());
-  };
-
-  const oldPopulateUnitDropdowns = UI.populateUnitDropdowns ? UI.populateUnitDropdowns.bind(UI) : null;
-  UI.populateUnitDropdowns = async function() {
-    try { if (oldPopulateUnitDropdowns) await oldPopulateUnitDropdowns(); } catch (e) { console.warn('Falha parcial em unidades:', e); }
-    const loggedUser = Store.getLoggedUser && Store.getLoggedUser();
-    const normalizeStatus = s => ['LIBERADO','ATIVO','ATIVA','ACTIVE'].includes(String(s || '').toUpperCase());
-    try {
-      const users = await App.fetchFromApi('/api/usuarios').catch(() => Store.getUsers ? Store.getUsers() : []);
-      const activeUnitId = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
-      const sellers = (Array.isArray(users) ? users : []).filter(u => {
-        if (!normalizeStatus(u.status)) return false;
-        if (loggedUser && u.empresa_id && loggedUser.empresa_id && String(u.empresa_id) !== String(loggedUser.empresa_id)) return false;
-        if (activeUnitId !== 'all' && u.unitId !== 'all' && String(u.unitId) !== String(activeUnitId)) return false;
-        return ['Vendedor','Supervisor','Gerente','Financeiro','Administrador'].includes(u.profile) || ((u.permissions || []).length > 0);
-      });
-      ['prosp-seller','client-seller','ticket-seller','exp-seller','bal-seller','ticket-open-seller'].forEach(id => {
-        const select = document.getElementById(id);
-        if (select) select.innerHTML = '<option value="" selected disabled>Selecione...</option>' + sellers.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name || s.username)}</option>`).join('');
-      });
-    } catch(e) { console.warn(e); }
-  };
-})();
