@@ -1,10 +1,9 @@
 services:
   - type: web
-    name: controle-campo-novo
+    name: controle-campo-v2
     env: node
-    plan: free
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
