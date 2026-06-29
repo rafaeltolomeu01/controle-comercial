@@ -2192,23 +2192,31 @@ app.get('/api/me', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/api/login', async (req, res) => {
-  const { username, password, empresa_id } = req.body;
-  if (!username || !password || !empresa_id) {
-    return res.status(400).json({ error: 'Campos obrigatórios faltando' });
+app.post(['/api/login', '/api/auth/login'], async (req, res) => {
+  const username = req.body.username || req.body.login || req.body.email;
+  const { password } = req.body;
+  const empresa_id = req.body.empresa_id || req.body.company_id || req.body.companyId || null;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Informe e-mail/usuário e senha' });
   }
 
   try {
     const loginKey = String(username).trim().toLowerCase();
     
-    // 1. Tenta achar o usuário com username/email, empresa_id e senha corretos
-    let user = await db('usuarios')
+    // 1. Tenta achar o usuário com username/email, empresa_id e senha corretos.
+    // Se o frontend antigo não enviar empresa_id, busca em qualquer empresa.
+    let loginQuery = db('usuarios')
       .where(function() {
         this.where('username', loginKey)
             .orWhere('email', loginKey);
       })
-      .andWhere({ empresa_id, password })
-      .first();
+      .andWhere({ password });
+
+    if (empresa_id) {
+      loginQuery = loginQuery.andWhere({ empresa_id });
+    }
+
+    let user = await loginQuery.first();
 
     // 2. Se a empresa teve nome/CNPJ alterado, localiza pelo login/senha em qualquer empresa (usa a empresa real do cadastro)
     if (!user) {
@@ -2224,13 +2232,17 @@ app.post('/api/login', async (req, res) => {
     // 3. Se ainda assim não encontrou (senha incorreta ou usuário inexistente), 
     // busca apenas pelo login para poder retornar o status correto ou o erro de senha
     if (!user) {
-      user = await db('usuarios')
+      let userLookupQuery = db('usuarios')
         .where(function() {
           this.where('username', loginKey)
               .orWhere('email', loginKey);
-        })
-        .andWhere({ empresa_id })
-        .first();
+        });
+
+      if (empresa_id) {
+        userLookupQuery = userLookupQuery.andWhere({ empresa_id });
+      }
+
+      user = await userLookupQuery.first();
 
       if (!user) {
         user = await db('usuarios')
