@@ -3590,9 +3590,9 @@ const App = {
       const data = await this.fetchFromApi(`/api/despesas/${id}`);
 
       document.getElementById('det-despesa-id').textContent = data.id;
-      document.getElementById('det-despesa-empresa').textContent = data.empresa || 'Não informada';
+      document.getElementById('det-despesa-empresa').textContent = (window.CC_pdfCompanyName ? window.CC_pdfCompanyName(data) : (data.empresa || 'Não informada'));
       document.getElementById('det-despesa-solicitante').textContent = data.solicitante;
-      document.getElementById('det-despesa-data-hora').textContent = `${new Date(data.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR')} às ${data.hora_solicitacao}`;
+      document.getElementById('det-despesa-data-hora').textContent = `${(window.CC_pdfEmissionText ? window.CC_pdfEmissionText(data.data_solicitacao).split(' às ')[0] : new Date().toLocaleDateString('pt-BR'))} às ${data.hora_solicitacao}`;
       document.getElementById('det-despesa-placa').textContent = data.placa_veiculo || '-';
       document.getElementById('det-despesa-rota').textContent = data.rota_destino;
       document.getElementById('det-despesa-justificativa').textContent = data.justificativa;
@@ -3764,7 +3764,7 @@ const App = {
               <div class="approval-item-row" data-item-id="${item.id}" style="padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                   <strong style="color: var(--primary-color); font-size: 0.9rem;">${item.categoria}</strong>
-                  <span style="color: var(--text-muted); font-size: 0.8rem;">Solicitado: R$ ${item.valor_solicitado.toFixed(2)}${item.quantidade_solicitada ? ' (' + item.quantidade_solicitada + ' diárias)' : ''}</span>
+                  <span style="color: var(--text-muted); font-size: 0.8rem;">Solicitado: R$ ${(window.CC_num ? window.CC_num(item.valor_solicitado).toFixed(2) : (parseFloat(item.valor_solicitado)||0).toFixed(2))}${item.quantidade_solicitada ? ' (' + item.quantidade_solicitada + ' diárias)' : ''}</span>
                 </div>
                 
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
@@ -3779,7 +3779,7 @@ const App = {
                   
                   <div class="form-group" style="margin: 0; min-width: 120px;">
                     <label style="font-size: 0.75rem; margin-bottom: 2px;">Valor Aprovado (R$)</label>
-                    <input type="number" class="item-val-approved" data-item-id="${item.id}" data-item-val-sol="${item.valor_solicitado}" value="${approvedVal}" step="0.01" min="0" max="${item.valor_solicitado}" style="padding: 6px 10px; font-size: 0.8rem; height: auto; min-height: 32px; width: 100%;">
+                    <input type="number" class="item-val-approved" data-item-id="${item.id}" data-item-val-sol="${item.valor_solicitado}" value="${approvedVal}" step="0.01" min="0" max="${window.CC_num ? window.CC_num(item.valor_solicitado) : (parseFloat(item.valor_solicitado)||0)}" style="padding: 6px 10px; font-size: 0.8rem; height: auto; min-height: 32px; width: 100%;">
                   </div>
 
                   ${qtyHtml}
@@ -4541,9 +4541,9 @@ const App = {
       doc.setFontSize(9);
       doc.setFont('Helvetica', 'normal');
       doc.text(`Solicitação ID: #${data.id}`, 15, 33);
-      doc.text(`Emissão: ${new Date(data.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR')} às ${data.hora_solicitacao}`, 110, 33);
+      doc.text(`Emissão: ${window.CC_pdfEmissionText ? window.CC_pdfEmissionText(new Date()) : new Date().toLocaleString('pt-BR')}`, 110, 33);
       doc.text(`Status: ${data.status.toUpperCase()}`, 15, 39);
-      doc.text(`Empresa: ${data.empresa || 'Não informada'}`, 110, 39);
+      doc.text(`Empresa: ${(window.CC_pdfCompanyName ? window.CC_pdfCompanyName(data) : (data.empresa || 'Não informada'))}`, 110, 39);
 
       doc.setDrawColor(220, 220, 220);
       doc.line(10, 44, 200, 44);

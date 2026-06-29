@@ -1,4 +1,6 @@
 const express = require('express');
+function ccNum(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/\./g,'').replace(',', '.').replace(/[^0-9.-]/g,'')); return Number.isFinite(n) ? n : 0; }
+
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const knex = require('knex');
@@ -978,9 +980,7 @@ app.delete('/api/prospeccoes/:id', async (req, res) => {
     const existing = await db('prospeccoes').where({ id: req.params.id }).first();
     if (!existing) return res.status(404).json({ error: 'Prospecção não encontrada.' });
     const isAdmin = isAdminUser(req.user);
-    const isSeller = normalizeRole(req.user.profile) === 'vendedor';
-    if (!isAdmin && String(existing.empresa_id) !== String(req.user.empresa_id)) return res.status(403).json({ error: 'Acesso negado: empresa divergente.' });
-    if (isSeller && String(existing.userId || existing.user_id) !== String(req.user.id)) return res.status(403).json({ error: 'Acesso negado.' });
+    if (!isAdmin) return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     await db('prospeccoes').where({ id: req.params.id }).delete();
     res.json({ success: true });
   } catch (err) {
@@ -1524,6 +1524,7 @@ app.put('/api/despesas/:id', async (req, res) => {
   } = req.body;
 
   try {
+    if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     const { request, errorStatus, errorMessage } = await getRequestAndVerifyAccess(id, req.user);
     if (errorMessage) {
       return res.status(errorStatus).json({ error: errorMessage });
@@ -1688,7 +1689,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
       await db('auditoria_logs').insert({
         usuario_id: req.user.id,
         acao: actionType,
-        detalhes: `Item ${dbItem.categoria} da solicitação #${id} avaliado como ${itemStatus.toUpperCase()} (Solicitado: R$ ${dbItem.valor_solicitado.toFixed(2)}, Aprovado: R$ ${valAprovado.toFixed(2)}${dbItem.quantidade_solicitada ? ', Solicitado Qtd: ' + dbItem.quantidade_solicitada + ', Aprovado Qtd: ' + qtyAprovada : ''}). Justificativa: "${evalItem.justificativa || '-'}"`,
+        detalhes: `Item ${dbItem.categoria} da solicitação #${id} avaliado como ${itemStatus.toUpperCase()} (Solicitado: R$ ${ccNum(dbItem.valor_solicitado).toFixed(2)}, Aprovado: R$ ${valAprovado.toFixed(2)}${dbItem.quantidade_solicitada ? ', Solicitado Qtd: ' + dbItem.quantidade_solicitada + ', Aprovado Qtd: ' + qtyAprovada : ''}). Justificativa: "${evalItem.justificativa || '-'}"`,
         empresa_id: req.user.empresa_id
       });
     }
@@ -1747,6 +1748,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
 app.delete('/api/despesas/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     const { request, errorStatus, errorMessage } = await getRequestAndVerifyAccess(id, req.user);
     if (errorMessage) {
       return res.status(errorStatus).json({ error: errorMessage });
@@ -2935,7 +2937,7 @@ app.delete('/api/usuarios/:id', async (req, res) => {
     const actor = req.user || {};
     const actorPerms = actor.permissions || [];
     const isActorAdmin = actor.profile === 'Administrador' || actorPerms.includes('Administrador');
-    const canManageUsers = isActorAdmin || actorPerms.includes('Usuários');
+    const canManageUsers = isActorAdmin;
 
     if (!canManageUsers) {
       return res.status(403).json({ error: 'Apenas administrador pode excluir usuários' });
