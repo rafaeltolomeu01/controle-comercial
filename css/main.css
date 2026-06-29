@@ -1106,3 +1106,11 @@ select { text-overflow: ellipsis; }
   #movements-table-body tr.movement-mobile-compact td[data-label="Operação"] { grid-column: 2; }
   #movements-table-body tr.movement-mobile-compact td[data-label="Data"] { grid-column: 3; text-align: right; color: var(--text-muted); font-size: 0.8rem; }
 }
+
+/* PATCH PDF: padrão geral A4 para todos os documentos impressos */
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  html, body { width: 210mm; min-height: 297mm; }
+  .pdf-sheet, .print-sheet, #pdf-root, .document-pdf { page-break-after: avoid; page-break-inside: avoid; }
+  img, video { max-width: 100%; page-break-inside: avoid; }
+}

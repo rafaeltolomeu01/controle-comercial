@@ -14,7 +14,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label for="mov-vendedor-solicitante">Vendedor Responsável</label>
-                  <input type="text" id="mov-vendedor-solicitante" readonly style="background-color: rgba(255,255,255,0.03);">
+                  <input type="text" id="mov-vendedor-solicitante" placeholder="Digite o vendedor responsável...">
                 </div>
                 <div class="form-group">
                   <label for="mov-empresa">Empresa/Base *</label>
@@ -258,7 +258,7 @@
                         <img id="preview-img-mov-foto-antes" src="" style="max-height:80px; border-radius:4px; border:1px solid var(--border-color);">
                       </div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0;">
+                    <div class="form-group" id="mov-foto-depois-group" style="margin-bottom:0; display:none;">
                       <label for="mov-foto-depois">Foto Depois *</label>
                       <input type="file" id="mov-foto-depois" accept="image/*">
                       <div id="preview-container-mov-foto-depois" style="display:none; margin-top:8px;">

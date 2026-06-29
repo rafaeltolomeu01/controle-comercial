@@ -521,3 +521,47 @@ window.Store = Store;
     return allowed;
   };
 })();
+
+// =============================================================
+// PATCH PERMISSÕES GERAIS - módulos ativos de verdade, sem Relatórios
+// =============================================================
+(function(){
+  if (!window.Store || window.__ccStrictModulePermissionPatch) return;
+  window.__ccStrictModulePermissionPatch = true;
+  const ADMIN_ROUTES = ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
+  const add = (arr, ...items) => items.forEach(x => { if (x && !arr.includes(x)) arr.push(x); });
+  Store.getUserAllowedRoutes = function(user) {
+    if (!user) return ['#dashboard'];
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    if (user.profile === 'Administrador' || perms.includes('Administrador')) return ADMIN_ROUTES.slice();
+    const allowed = ['#dashboard','#pdf'];
+    const strict = perms.length > 0;
+    if (!strict) {
+      const profileRoutes = {
+        'Vendedor': ['#prospeccao','#clientes','#movimentacao','#despesas','#solicitacao-despesas','#simulador-troca'],
+        'Supervisor': ['#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#usuarios','#simulador-troca'],
+        'Gerente': ['#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#usuarios','#simulador-troca'],
+        'Financeiro': ['#despesas','#solicitacao-despesas','#despesas-dashboard'],
+        'Conferente': ['#equipamentos','#movimentacao'],
+        'Responsável Equipamentos': ['#equipamentos','#movimentacao','#chamados'],
+        'Mecânico': ['#chamados']
+      };
+      add(allowed, ...(profileRoutes[user.profile] || []));
+    }
+    if (perms.includes('Clientes')) add(allowed, '#clientes');
+    if (perms.includes('Prospecção') || perms.includes('Prospecção (Leads)')) add(allowed, '#prospeccao');
+    if (perms.includes('Aprovação de Clientes')) add(allowed, '#aprovacao');
+    if (perms.includes('Produtos') || perms.includes('Equipamentos')) add(allowed, '#equipamentos');
+    if (perms.includes('Estoque') || perms.includes('Movimentação') || perms.includes('Movimentação de Equipamentos')) add(allowed, '#movimentacao');
+    if (perms.includes('Chamados') || perms.includes('Chamados Mecânicos')) add(allowed, '#chamados');
+    if (perms.includes('Financeiro')) add(allowed, '#despesas','#solicitacao-despesas','#despesas-dashboard');
+    if (perms.includes('Solicitação de Saldo')) add(allowed, '#solicitacao-despesas');
+    if (perms.includes('Aprovação de Saldo')) add(allowed, '#despesas-dashboard');
+    if (perms.includes('Despesas') || perms.includes('Despesas de Campo')) add(allowed, '#despesas');
+    if (perms.includes('Aprovação de Despesas')) add(allowed, '#despesas-dashboard');
+    if (perms.includes('Simulador de Troca')) add(allowed, '#simulador-troca');
+    if (perms.includes('Usuários') || perms.includes('Usuários e Permissões')) add(allowed, '#usuarios');
+    if (perms.includes('Configurações') || perms.includes('Configurações Gerais')) add(allowed, '#configuracoes','#empresa','#unidades');
+    return allowed.filter(r => r !== '#relatorios');
+  };
+})();

@@ -1906,3 +1906,56 @@ const UI = {
 };
 
 window.UI = UI;
+
+// =============================================================
+// PATCH UI PERMISSÕES/DASHBOARD/UNIDADES
+// =============================================================
+(function(){
+  if (!window.UI || window.__ccUiPermissionPatch) return;
+  window.__ccUiPermissionPatch = true;
+  const oldApply = UI.applyPermissions ? UI.applyPermissions.bind(UI) : function(){};
+  UI.hasRoute = function(hash) {
+    const user = Store.getLoggedUser();
+    return (Store.getUserAllowedRoutes(user) || []).includes(hash);
+  };
+  UI.applyPermissions = function() {
+    oldApply();
+    const allowed = Store.getUserAllowedRoutes(Store.getLoggedUser());
+    const show = (id, hash, display='flex') => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = allowed.includes(hash) ? display : 'none';
+    };
+    // Relatórios removido do sistema
+    ['menu-relatorios','mobile-menu-relatorios'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    // Cards do painel
+    show('dash-card-approvals', '#aprovacao');
+    show('dash-card-tickets', '#chamados');
+    show('dash-card-expenses', '#despesas');
+    const balanceAllowed = allowed.includes('#solicitacao-despesas') || allowed.includes('#despesas-dashboard') || allowed.includes('#despesas');
+    const bal = document.getElementById('dash-card-balance'); if (bal) bal.style.display = balanceAllowed ? 'flex' : 'none';
+    // Ações rápidas
+    show('quick-btn-prospeccao', '#prospeccao', 'inline-flex');
+    show('quick-btn-clientes', '#clientes', 'inline-flex');
+    show('quick-btn-chamados', '#chamados', 'inline-flex');
+    show('quick-btn-expenses', '#despesas', 'inline-flex');
+    // Gráficos ligados a financeiro/despesas
+    document.querySelectorAll('.dashboard-insight-card').forEach(el => { el.style.display = (allowed.includes('#despesas') || allowed.includes('#solicitacao-despesas') || allowed.includes('#despesas-dashboard')) ? '' : 'none'; });
+  };
+  const oldUnits = UI.renderUnits ? UI.renderUnits.bind(UI) : null;
+  UI.renderUnits = function() {
+    const units = Store.getUnits ? Store.getUnits() : [];
+    const prospects = Store.getProspects ? Store.getProspects() : [];
+    const clients = Store.getClients ? Store.getClients() : [];
+    const tickets = Store.getTickets ? Store.getTickets() : [];
+    const movements = Store.getMovements ? Store.getMovements() : [];
+    const listBody = document.getElementById('units-table-body');
+    if (!listBody) return oldUnits ? oldUnits() : undefined;
+    listBody.innerHTML = units.map(unit => {
+      const unitProspects = prospects.filter(p => String(p.unitId) === String(unit.id)).length;
+      const unitClients = clients.filter(c => String(c.unitId) === String(unit.id) && c.status === 'Aprovado').length;
+      const unitTickets = tickets.filter(t => String(t.unitId) === String(unit.id) && (t.status === 'Aberto' || t.status === 'Em Atendimento')).length;
+      const unitMovements = movements.filter(m => String(m.unitId || m.unit_id || '') === String(unit.id) || String(m.empresa || '').toLowerCase() === String(unit.name || '').toLowerCase()).length;
+      return `<tr><td style="font-family:monospace;">${unit.id}</td><td style="font-weight:600;">${unit.name}</td><td style="text-align:center;">${unitProspects}</td><td style="text-align:center;">${unitClients}</td><td style="text-align:center;"><span class="badge-status ${unitTickets > 0 ? 'badge-danger' : 'badge-success'}">${unitTickets} ativos</span></td><td style="text-align:center;">${unitMovements}</td><td style="text-align:center;"><button class="btn btn-secondary btn-sm" onclick="App.editUnit('${unit.id}')">Editar</button></td></tr>`;
+    }).join('');
+  };
+})();
