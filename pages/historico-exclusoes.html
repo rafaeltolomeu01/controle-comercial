@@ -1,0 +1,25 @@
+<div class="card">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+    <span class="card-title">Histórico de Exclusões</span>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadDeletionHistory()">Atualizar</button>
+  </div>
+  <p style="color:var(--text-muted); margin-top:0;">Área oculta somente para administrador. Registra movimentações excluídas e quem realizou a exclusão.</p>
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Módulo</th>
+          <th>Registro</th>
+          <th>Criado por</th>
+          <th>Excluído por</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody id="deletion-history-table-body">
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>setTimeout(()=>App.loadDeletionHistory && App.loadDeletionHistory(), 100);</script>

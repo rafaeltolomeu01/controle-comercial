@@ -86,7 +86,8 @@ const UI = {
       '#despesas': 'menu-despesas',
       '#relatorios': 'menu-relatorios',
       '#configuracoes': 'menu-configuracoes',
-      '#simulador-troca': 'menu-simulador-troca'
+      '#simulador-troca': 'menu-simulador-troca',
+      '#historico-exclusoes': 'menu-historico-exclusoes'
     };
 
     // Mobile tab links mapping
@@ -610,6 +611,11 @@ const UI = {
   renderMovements(movements) {
     const listBody = document.getElementById('movements-table-body');
     if (!listBody) return;
+    const user = Store.getLoggedUser();
+    const isAdmin = user && user.profile === 'Administrador';
+    document.querySelectorAll('.admin-only-movement-delete').forEach(el => el.style.display = isAdmin ? '' : 'none');
+    const delBtn = document.getElementById('btn-delete-selected-movements');
+    if (delBtn) delBtn.style.display = isAdmin ? 'inline-flex' : 'none';
 
     if (movements.length === 0) {
       listBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted);">Nenhuma movimentação registrada.</td></tr>`;
@@ -633,6 +639,7 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.showMovementDetails('${mov.id}')">
+          <td class="admin-only-movement-delete" style="display:${isAdmin ? '' : 'none'};" onclick="event.stopPropagation()"><input type="checkbox" class="movement-select-checkbox" value="${mov.id}"></td>
           <td style="font-family:monospace; font-size:0.75rem;">#${mov.id}</td>
           <td>${dataStr}</td>
           <td><strong style="text-transform: uppercase; font-size: 0.72rem; color: var(--primary-color);">${mov.tipo_solicitacao}</strong></td>
@@ -643,7 +650,7 @@ const UI = {
           <td>${modeloStr}</td>
           <td><span class="badge-status ${statusClass}">${mov.status}</span></td>
           <td style="text-align: center;">
-            <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.showMovementDetails('${mov.id}')">Dossiê</button>
+            <button class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="event.stopPropagation(); App.showMovementDetails('${mov.id}')">Dossiê</button>
           </td>
         </tr>
       `;
@@ -1413,6 +1420,12 @@ const UI = {
     const clientSendableEqType = document.getElementById('client-sendable-eq-type');
     if (clientSendableEqType) {
       clientSendableEqType.innerHTML = '<option value="" selected disabled>Selecione...</option>' + 
+        equipmentTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+    }
+
+    const movModeloAdicao = document.getElementById('mov-modelo-adicao');
+    if (movModeloAdicao && movModeloAdicao.tagName === 'SELECT') {
+      movModeloAdicao.innerHTML = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' + 
         equipmentTypes.map(type => `<option value="${type}">${type}</option>`).join('');
     }
   },

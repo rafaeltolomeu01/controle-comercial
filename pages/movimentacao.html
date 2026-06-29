@@ -1,5 +1,4 @@
 <div class="view-tabs no-print">
-            <a href="#equipamentos" class="view-tab-btn">Controle de Equipamentos</a>
             <a href="#movimentacao" class="view-tab-btn active">Movimentação</a>
           </div>
           <!-- Formulario de Movimentacao -->
@@ -41,28 +40,26 @@
               <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">2. Identificação do Cliente</h4>
               <div class="form-row">
                 <div class="form-group">
-                  <label for="mov-client-id">Cliente *</label>
-                  <select id="mov-client-id" required>
-                    <option value="" selected disabled>Selecione...</option>
-                  </select>
+                  <label for="mov-client-id">Código do Cliente</label>
+                  <input type="text" id="mov-client-id" placeholder="Digite o código, se houver...">
                 </div>
                 <div class="form-group">
                   <label for="mov-client-name">Nome Fantasia *</label>
-                  <input type="text" id="mov-client-name" required placeholder="Digite ou busque o cliente..." readonly style="background-color: rgba(255,255,255,0.03);">
+                  <input type="text" id="mov-client-name" required placeholder="Digite o nome fantasia...">
                 </div>
                 <div class="form-group">
                   <label for="mov-client-city">Cidade *</label>
-                  <input type="text" id="mov-client-city" required placeholder="Digite ou busque a cidade..." readonly style="background-color: rgba(255,255,255,0.03);">
+                  <input type="text" id="mov-client-city" required placeholder="Digite a cidade...">
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group" style="grid-column: span 2;">
                   <label for="mov-client-address">Endereço Comercial *</label>
-                  <input type="text" id="mov-client-address" required placeholder="Digite ou busque o endereço..." readonly style="background-color: rgba(255,255,255,0.03);">
+                  <input type="text" id="mov-client-address" required placeholder="Digite o endereço...">
                 </div>
                 <div class="form-group">
                   <label for="mov-client-seller">Vendedor Responsável *</label>
-                  <input type="text" id="mov-client-seller" required placeholder="Vendedor associado..." readonly style="background-color: rgba(255,255,255,0.03);">
+                  <input type="text" id="mov-client-seller" required placeholder="Digite o vendedor responsável...">
                 </div>
               </div>
 
@@ -166,15 +163,10 @@
                   <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">3. Detalhes da Adição</h4>
                   <div class="form-row">
                     <div class="form-group">
-                      <label for="mov-patrimonio-adicao">Patrimônio *</label>
-                      <input type="text" id="mov-patrimonio-adicao" placeholder="Código de patrimônio...">
-                      <div id="hist-patrimonio-adicao-link" style="margin-top:4px; display:none;">
-                        <a href="javascript:void(0)" onclick="App.openPatrimonioTimeline(document.getElementById('mov-patrimonio-adicao').value)" style="font-size:0.75rem; color:var(--primary-color); text-decoration:underline;">Ver Histórico Deste Patrimônio</a>
-                      </div>
-                    </div>
-                    <div class="form-group">
-                      <label for="mov-modelo-adicao">Modelo *</label>
-                      <input type="text" id="mov-modelo-adicao" placeholder="Modelo do equipamento...">
+                      <label for="mov-modelo-adicao">Modelo solicitado *</label>
+                      <select id="mov-modelo-adicao">
+                        <option value="" selected disabled>Selecione o modelo cadastrado...</option>
+                      </select>
                     </div>
                     <div class="form-group">
                       <label for="mov-voltagem-adicao">Voltagem *</label>
@@ -190,15 +182,8 @@
                     </div>
                   </div>
                   <div class="form-group">
-                    <label for="mov-detalhe-adicao">Detalhe da Adição *</label>
-                    <textarea id="mov-detalhe-adicao" rows="2" placeholder="Descreva os detalhes da adição de equipamento..."></textarea>
-                  </div>
-                  <div class="form-group">
-                    <label for="mov-foto-instalado">Foto do Equipamento Instalado *</label>
-                    <input type="file" id="mov-foto-instalado" accept="image/*">
-                    <div id="preview-container-mov-foto-instalado" style="display:none; margin-top:8px;">
-                      <img id="preview-img-mov-foto-instalado" src="" style="max-height:80px; border-radius:4px; border:1px solid var(--border-color);">
-                    </div>
+                    <label for="mov-detalhe-adicao">Motivo da Solicitação *</label>
+                    <textarea id="mov-detalhe-adicao" rows="2" placeholder="Descreva o motivo da solicitação de adição do equipamento..."></textarea>
                   </div>
                 </div>
 
@@ -297,13 +282,15 @@
 
           <!-- Lista de Movimentacoes -->
           <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
               <span class="card-title">Histórico de Movimentações Registradas</span>
+              <button type="button" id="btn-delete-selected-movements" class="btn btn-danger btn-sm" onclick="App.deleteSelectedMovements()" style="display:none;">Excluir Selecionados</button>
             </div>
             <div class="table-responsive">
               <table>
                 <thead>
                   <tr>
+                    <th class="admin-only-movement-delete" style="width:34px; display:none;"><input type="checkbox" id="select-all-movements" onclick="App.toggleAllMovementSelection(this)"></th>
                     <th>ID</th>
                     <th>Data</th>
                     <th>Operação</th>

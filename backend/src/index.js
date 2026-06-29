@@ -37,6 +37,38 @@ async function initDb() {
   await db.migrate.latest();
   console.log('Database: Migrations completed.');
 
+  // Auditoria e exclusão lógica para movimentações de equipamento
+  if (await db.schema.hasTable('equipamentos_movimentacoes')) {
+    const movAuditCols = [
+      ['excluido', t => t.boolean('excluido').notNullable().defaultTo(false)],
+      ['excluido_em', t => t.timestamp('excluido_em').nullable()],
+      ['excluido_por', t => t.string('excluido_por').nullable()],
+      ['motivo_exclusao', t => t.text('motivo_exclusao').nullable()],
+      ['aprovado_por', t => t.string('aprovado_por').nullable()],
+      ['aprovado_em', t => t.timestamp('aprovado_em').nullable()]
+    ];
+    for (const [col, add] of movAuditCols) {
+      const exists = await db.schema.hasColumn('equipamentos_movimentacoes', col);
+      if (!exists) {
+        await db.schema.table('equipamentos_movimentacoes', table => add(table));
+      }
+    }
+  }
+
+  const hasDeletionAudit = await db.schema.hasTable('historico_exclusoes');
+  if (!hasDeletionAudit) {
+    await db.schema.createTable('historico_exclusoes', table => {
+      table.increments('id').primary();
+      table.string('modulo').notNullable();
+      table.string('registro_id').notNullable();
+      table.text('dados_json').nullable();
+      table.string('criado_por').nullable();
+      table.string('excluido_por').nullable();
+      table.text('motivo').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+  }
+
   // 1. Alter usuarios table to support email, phone, photo
   const hasEmail = await db.schema.hasColumn('usuarios', 'email');
   if (!hasEmail) {
@@ -1861,7 +1893,26 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       }
     }
 
-    // 3. Insere a movimentação
+    // 3. Evita duplicidade por clique duplo/múltiplos listeners: se uma movimentação idêntica foi criada agora, retorna a mesma.
+    const recentLimit = new Date(Date.now() - 15000).toISOString();
+    const duplicate = await db('equipamentos_movimentacoes')
+      .where({
+        empresa: req.user.empresa_name || req.user.empresa_id,
+        tipo_solicitacao,
+        vendedor_id: req.user.id,
+        cliente_nome,
+        cliente_cidade,
+        patrimonio: patrimonio || '',
+        modelo: modelo || '',
+        status: 'Pendente'
+      })
+      .where('created_at', '>=', recentLimit)
+      .first();
+    if (duplicate) {
+      return res.json({ success: true, id: duplicate.id, duplicate_prevented: true });
+    }
+
+    // 4. Insere a movimentação
     const newId = await insertAndGetId('equipamentos_movimentacoes', {
       empresa: req.user.empresa_name || req.user.empresa_id,
       tipo_solicitacao,
@@ -1914,7 +1965,9 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
 
-    let query = db('equipamentos_movimentacoes');
+    let query = db('equipamentos_movimentacoes').where(function() {
+      this.where('equipamentos_movimentacoes.excluido', false).orWhereNull('equipamentos_movimentacoes.excluido');
+    });
 
     if (!isActorAdmin) {
       query = query.where('equipamentos_movimentacoes.empresa', req.user.empresa_name);
@@ -1968,11 +2021,63 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
   }
 });
 
+// Exclusão lógica de movimentações com histórico de auditoria
+app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
+  const { ids, motivo_exclusao } = req.body || {};
+  if (req.user.profile !== 'Administrador') {
+    return res.status(403).json({ error: 'Somente administrador pode excluir movimentações.' });
+  }
+  const cleanIds = Array.isArray(ids) ? ids.map(id => String(id).trim()).filter(Boolean) : [];
+  if (!cleanIds.length) return res.status(400).json({ error: 'Nenhuma movimentação selecionada.' });
+  const now = new Date().toISOString();
+  try {
+    const rows = await db('equipamentos_movimentacoes').whereIn('id', cleanIds);
+    for (const row of rows) {
+      await db('historico_exclusoes').insert({
+        modulo: 'Movimentação de Equipamento',
+        registro_id: String(row.id),
+        dados_json: JSON.stringify(row),
+        criado_por: row.vendedor_solicitante || row.vendedor_id || '',
+        excluido_por: req.user.name || req.user.nome || req.user.id,
+        motivo: motivo_exclusao || 'Sem motivo informado',
+        created_at: now
+      });
+    }
+    await db('equipamentos_movimentacoes').whereIn('id', cleanIds).update({
+      excluido: true,
+      excluido_em: now,
+      excluido_por: req.user.id,
+      motivo_exclusao: motivo_exclusao || 'Sem motivo informado',
+      updated_at: now
+    });
+    res.json({ success: true, count: rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao excluir movimentações.' });
+  }
+});
+
+// Histórico de exclusões visível somente ao administrador
+app.get('/api/historico-exclusoes', async (req, res) => {
+  if (req.user.profile !== 'Administrador') {
+    return res.status(403).json({ error: 'Acesso negado.' });
+  }
+  try {
+    const rows = await db('historico_exclusoes').orderBy('id', 'desc').limit(500);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar histórico de exclusões.' });
+  }
+});
+
 // Detalhes / Dossiê completo da Movimentação
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const mov = await db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name }).first();
+    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
+    movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
+    const mov = await movQuery.first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
     }
@@ -1993,7 +2098,7 @@ app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
 // Parecer Gerencial (Aprovar / Reprovar Movimentação)
 app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   const { id } = req.params;
-  const { status, motivo_reprovacao } = req.body;
+  const { status, motivo_reprovacao, patrimonio_novo, modelo_novo, voltagem_nova } = req.body;
 
   const allowed = ['Administrador', 'Supervisor', 'Responsável Equipamentos'];
   if (!allowed.includes(req.user.profile)) {
@@ -2005,7 +2110,9 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    const mov = await db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name }).first();
+    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
+    movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
+    const mov = await movQuery.first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
     }
@@ -2018,12 +2125,33 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
 
     const now = new Date().toISOString();
 
-    // 1. Atualizar status da movimentação
-    await db('equipamentos_movimentacoes').where({ id }).update({
+    if (status === 'Aprovado' && ['Troca', 'Adição'].includes(mov.tipo_solicitacao)) {
+      if (!patrimonio_novo || !modelo_novo || !voltagem_nova) {
+        return res.status(400).json({ error: 'Patrimônio, modelo e voltagem do equipamento confirmado são obrigatórios para aprovar.' });
+      }
+    }
+
+    const updateMovement = {
       status,
       motivo_reprovacao: status === 'Reprovado' ? motivo_reprovacao : null,
+      aprovado_por: req.user.id,
+      aprovado_em: now,
       updated_at: now
-    });
+    };
+    if (status === 'Aprovado' && ['Troca', 'Adição'].includes(mov.tipo_solicitacao)) {
+      updateMovement.patrimonio_novo = String(patrimonio_novo || '').trim().toUpperCase();
+      updateMovement.modelo_novo = String(modelo_novo || '').trim();
+      updateMovement.voltagem_nova = String(voltagem_nova || '').trim().replace(/\s*V$/i, '');
+      if (mov.tipo_solicitacao === 'Adição') {
+        updateMovement.patrimonio = updateMovement.patrimonio_novo;
+        updateMovement.modelo = updateMovement.modelo_novo;
+        updateMovement.voltagem = updateMovement.voltagem_nova;
+      }
+      Object.assign(mov, updateMovement);
+    }
+
+    // 1. Atualizar status da movimentação
+    await db('equipamentos_movimentacoes').where({ id }).update(updateMovement);
 
     // 2. Se for Aprovado, sincronizar base de Patrimônio
     if (status === 'Aprovado') {
@@ -2035,16 +2163,35 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
       };
 
       if (mov.tipo_solicitacao === 'Adição') {
-        await db('equipamentos_patrimonio')
-          .where({ patrimonio: mov.patrimonio })
-          .update({
+        const existsAdd = await db('equipamentos_patrimonio').where({ patrimonio: mov.patrimonio }).first();
+        if (!existsAdd) {
+          await db('equipamentos_patrimonio').insert({
+            patrimonio: mov.patrimonio,
+            empresa: req.user.empresa_name || req.user.empresa_id,
+            modelo: mov.modelo || 'Modelo não especificado',
+            voltagem: mov.voltagem || '',
+            status: 'Instalado',
             cliente_atual_id: clientFields.cliente_atual_id,
             cliente_atual_nome: clientFields.cliente_atual_name,
             cliente_atual_cidade: clientFields.cliente_atual_cidade,
             cliente_atual_endereco: clientFields.cliente_atual_endereco,
-            status: 'Instalado',
+            created_at: now,
             updated_at: now
           });
+        } else {
+          await db('equipamentos_patrimonio')
+            .where({ patrimonio: mov.patrimonio })
+            .update({
+              modelo: mov.modelo || existsAdd.modelo,
+              voltagem: mov.voltagem || existsAdd.voltagem,
+              cliente_atual_id: clientFields.cliente_atual_id,
+              cliente_atual_nome: clientFields.cliente_atual_name,
+              cliente_atual_cidade: clientFields.cliente_atual_cidade,
+              cliente_atual_endereco: clientFields.cliente_atual_endereco,
+              status: 'Instalado',
+              updated_at: now
+            });
+        }
       } else if (mov.tipo_solicitacao === 'Recolha') {
         await db('equipamentos_patrimonio')
           .where({ patrimonio: mov.patrimonio })
@@ -2077,16 +2224,35 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
           });
 
         // Novo -> Instalado no cliente
-        await db('equipamentos_patrimonio')
-          .where({ patrimonio: mov.patrimonio_novo })
-          .update({
+        const existsNewInstall = await db('equipamentos_patrimonio').where({ patrimonio: mov.patrimonio_novo }).first();
+        if (!existsNewInstall) {
+          await db('equipamentos_patrimonio').insert({
+            patrimonio: mov.patrimonio_novo,
+            empresa: req.user.empresa_name || req.user.empresa_id,
+            modelo: mov.modelo_novo || 'Modelo não especificado',
+            voltagem: mov.voltagem_nova || '',
             cliente_atual_id: clientFields.cliente_atual_id,
             cliente_atual_nome: clientFields.cliente_atual_name,
             cliente_atual_cidade: clientFields.cliente_atual_cidade,
             cliente_atual_endereco: clientFields.cliente_atual_endereco,
             status: 'Instalado',
+            created_at: now,
             updated_at: now
           });
+        } else {
+          await db('equipamentos_patrimonio')
+            .where({ patrimonio: mov.patrimonio_novo })
+            .update({
+              modelo: mov.modelo_novo || existsNewInstall.modelo,
+              voltagem: mov.voltagem_nova || existsNewInstall.voltagem,
+              cliente_atual_id: clientFields.cliente_atual_id,
+              cliente_atual_nome: clientFields.cliente_atual_name,
+              cliente_atual_cidade: clientFields.cliente_atual_cidade,
+              cliente_atual_endereco: clientFields.cliente_atual_endereco,
+              status: 'Instalado',
+              updated_at: now
+            });
+        }
       }
     } else if (status === 'Reprovado') {
       // Se for reprovado, marca status do patrimônio como Disponível / Pendente

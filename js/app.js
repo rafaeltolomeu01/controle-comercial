@@ -2407,44 +2407,15 @@ const App = {
       });
     }
 
-    // 8. Seleção de Cliente na movimentação
-    const movClientSelect = document.getElementById('mov-client-id');
-    if (movClientSelect) {
-      movClientSelect.addEventListener('change', (e) => {
-        const clientId = e.target.value;
-        const clients = Store.getClients();
-        const found = clients.find(c => c.id === clientId);
-        
-        const fields = [
-          document.getElementById('mov-client-name'),
-          document.getElementById('mov-client-city'),
-          document.getElementById('mov-client-address'),
-          document.getElementById('mov-client-seller')
-        ];
-
-        if (found) {
-          fields[0].value = found.name;
-          fields[1].value = (found.city || '') + (found.neighborhood ? ' / ' + found.neighborhood : '');
-          fields[2].value = found.address || '';
-          fields[3].value = UI.getUserName(found.userId);
-          
-          fields.forEach(el => {
-            if (el) {
-              el.setAttribute('readonly', '');
-              el.style.backgroundColor = 'rgba(255,255,255,0.03)';
-            }
-          });
-        } else {
-          fields.forEach(el => {
-            if (el) {
-              el.value = '';
-              el.removeAttribute('readonly');
-              el.style.backgroundColor = '';
-            }
-          });
-        }
-      });
-    }
+    // 8. Identificação de cliente na movimentação: preenchimento manual.
+    // Não buscar cliente no cadastro oficial, pois a movimentação pode ser aberta para cliente ainda não cadastrado.
+    ['mov-client-name','mov-client-city','mov-client-address','mov-client-seller'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.removeAttribute('readonly');
+        el.style.backgroundColor = '';
+      }
+    });
 
     // 9. Tipo de Solicitação change listener para alternar campos
     const tipoSolicitacao = document.getElementById('mov-tipo-solicitacao');
@@ -2477,12 +2448,10 @@ const App = {
           if (newEqBlock) newEqBlock.style.display = 'none';
         } else if (val === 'Adição') {
           document.getElementById('div-mov-adicao').style.display = 'block';
-          document.getElementById('mov-patrimonio-adicao').setAttribute('required', '');
           document.getElementById('mov-modelo-adicao').setAttribute('required', '');
           document.getElementById('mov-voltagem-adicao').setAttribute('required', '');
           document.getElementById('mov-quantidade-adicao').setAttribute('required', '');
           document.getElementById('mov-detalhe-adicao').setAttribute('required', '');
-          document.getElementById('mov-foto-instalado').setAttribute('required', '');
         } else if (val === 'Recolha') {
           document.getElementById('div-mov-recolha').style.display = 'block';
           document.getElementById('mov-patrimonio-recolha').setAttribute('required', '');
@@ -2518,7 +2487,6 @@ const App = {
     };
     bindPatrimonioBlur('mov-patrimonio-antigo', 'mov-modelo-antigo', 'mov-voltagem-antiga', 'hist-patrimonio-antigo-link');
     bindPatrimonioBlur('mov-patrimonio-novo', 'mov-modelo-novo', 'mov-voltagem-nova', 'hist-patrimonio-novo-link');
-    bindPatrimonioBlur('mov-patrimonio-adicao', 'mov-modelo-adicao', 'mov-voltagem-adicao', 'hist-patrimonio-adicao-link');
     bindPatrimonioBlur('mov-patrimonio-recolha', 'mov-modelo-recolha', 'mov-voltagem-recolha', 'hist-patrimonio-recolha-link');
     bindPatrimonioBlur('mov-patrimonio-adesivar', 'mov-modelo-adesivar', 'mov-voltagem-adesivar', 'hist-patrimonio-adesivar-link');
 
@@ -2548,7 +2516,8 @@ const App = {
 
     // 12. Submit do formulário de movimentação
     const movementForm = document.getElementById('movement-form');
-    if (movementForm) {
+    if (movementForm && movementForm.dataset.submitBound !== '1') {
+      movementForm.dataset.submitBound = '1';
       movementForm.addEventListener('submit', (e) => this.submitMovementForm(e));
     }
   },
@@ -5114,6 +5083,9 @@ const App = {
       return;
     }
 
+    if (this._movementSubmitting) return;
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
     const tipo_solicitacao = document.getElementById('mov-tipo-solicitacao').value;
     if (!tipo_solicitacao) {
       alert('Por favor, selecione o tipo de solicitação.');
@@ -5172,16 +5144,11 @@ const App = {
         video_url = await this.uploadFile(vTroca);
       }
     } else if (tipo_solicitacao === 'Adição') {
-      patrimonio = document.getElementById('mov-patrimonio-adicao').value.trim().toUpperCase();
+      patrimonio = ''; // patrimônio será informado apenas pelo gestor na aprovação
       modelo = document.getElementById('mov-modelo-adicao').value.trim();
       voltagem = document.getElementById('mov-voltagem-adicao').value;
       quantidade = parseInt(document.getElementById('mov-quantidade-adicao').value) || 1;
       detalhe_troca_adicao = document.getElementById('mov-detalhe-adicao').value.trim();
-
-      const fInstalado = document.getElementById('mov-foto-instalado').files[0];
-      if (fInstalado) {
-        foto_equipamento_url = await this.uploadFile(fInstalado);
-      }
     } else if (tipo_solicitacao === 'Recolha') {
       patrimonio = document.getElementById('mov-patrimonio-recolha').value.trim().toUpperCase();
       modelo = document.getElementById('mov-modelo-recolha').value.trim();
@@ -5234,6 +5201,8 @@ const App = {
     };
 
     try {
+      this._movementSubmitting = true;
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.dataset.originalText = submitBtn.textContent; submitBtn.textContent = 'Salvando...'; }
       const res = await this.fetchFromApi('/api/equipamentos/movimentacoes', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -5244,17 +5213,9 @@ const App = {
         
         document.getElementById('movement-form').reset();
         
-        const fields = [
-          document.getElementById('mov-client-name'),
-          document.getElementById('mov-client-city'),
-          document.getElementById('mov-client-address'),
-          document.getElementById('mov-client-seller')
-        ];
-        fields.forEach(el => {
-          if (el) {
-            el.setAttribute('readonly', '');
-            el.style.backgroundColor = 'rgba(255,255,255,0.03)';
-          }
+        ['mov-client-name','mov-client-city','mov-client-address','mov-client-seller'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.removeAttribute('readonly'); el.style.backgroundColor = ''; }
         });
 
         document.getElementById('div-mov-troca').style.display = 'none';
@@ -5275,6 +5236,34 @@ const App = {
     } catch (err) {
       console.error(err);
       alert('Erro ao registrar movimentação: ' + err.message);
+    } finally {
+      this._movementSubmitting = false;
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Movimentação de Equipamento'; }
+    }
+  },
+
+
+  async loadDeletionHistory() {
+    const body = document.getElementById('deletion-history-table-body');
+    if (!body) return;
+    try {
+      const rows = await this.fetchFromApi('/api/historico-exclusoes');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhuma exclusão registrada.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(row => `
+        <tr>
+          <td>${row.created_at ? new Date(row.created_at).toLocaleString('pt-BR') : '-'}</td>
+          <td>${row.modulo || '-'}</td>
+          <td>#${row.registro_id || '-'}</td>
+          <td>${row.criado_por || '-'}</td>
+          <td>${row.excluido_por || '-'}</td>
+          <td>${row.motivo || '-'}</td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Erro ao carregar histórico: ${err.message}</td></tr>`;
     }
   },
 
@@ -5372,6 +5361,7 @@ const App = {
   async showMovementDetails(id) {
     try {
       const mov = await this.fetchFromApi(`/api/equipamentos/movimentacoes/${id}`);
+      this.currentMovementDossier = mov;
       
       document.getElementById('dossie-mov-id').textContent = mov.id;
       document.getElementById('dossie-mov-tipo').textContent = mov.tipo_solicitacao;
@@ -5499,7 +5489,12 @@ const App = {
         // Show EQUIPAMENTO DE SUBSTITUIÇÃO only for TROCA type
         const subBlock = document.getElementById('dossie-substituicao-block');
         if (subBlock) {
-          subBlock.style.display = mov.tipo_solicitacao === 'Troca' ? 'block' : 'none';
+          const needsManagerEquipment = ['Troca', 'Adição'].includes(mov.tipo_solicitacao);
+          subBlock.style.display = needsManagerEquipment ? 'block' : 'none';
+          const subTitle = document.getElementById('dossie-sub-titulo');
+          const subHelp = document.getElementById('dossie-sub-ajuda');
+          if (subTitle) subTitle.textContent = mov.tipo_solicitacao === 'Adição' ? '✅ EQUIPAMENTO CONFIRMADO NA ADIÇÃO' : '🔄 EQUIPAMENTO DE SUBSTITUIÇÃO';
+          if (subHelp) subHelp.textContent = mov.tipo_solicitacao === 'Adição' ? 'Preencha o patrimônio, modelo e voltagem confirmados para instalar no cliente.' : 'Preencha os dados do equipamento que será enviado para substituição. Não use listas pré-definidas — preencha manualmente.';
           // Clear previous values
           const subPat = document.getElementById('dossie-sub-patrimonio');
           const subMod = document.getElementById('dossie-sub-modelo');
@@ -5567,6 +5562,79 @@ const App = {
     } catch (err) {
       console.error(err);
       alert('Erro ao enviar parecer gerencial: ' + err.message);
+    }
+  },
+
+
+  async generateMovementDossierPdf() {
+    const mov = this.currentMovementDossier;
+    if (!mov) {
+      alert('Abra um dossiê antes de gerar o PDF.');
+      return;
+    }
+    const mediaHtml = [];
+    const addImg = (url, label) => {
+      if (!url) return;
+      const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
+      mediaHtml.push(`<div class="pdf-photo"><div class="pdf-photo-label">${label}</div><img src="${finalUrl}"></div>`);
+    };
+    addImg(mov.foto_equipamento_url, 'Equipamento');
+    addImg(mov.foto_antes_url, mov.tipo_solicitacao === 'Adesivar' ? 'Antes' : 'Troca');
+    addImg(mov.foto_depois_url, 'Depois');
+
+    const isTroca = mov.tipo_solicitacao === 'Troca';
+    const equipmentHtml = isTroca ? `
+      <div class="pdf-two">
+        <div class="pdf-box danger"><h4>RETIRADO (Antigo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio || '-'}</p><p><b>Modelo:</b> ${mov.modelo || '-'}</p><p><b>Voltagem:</b> ${mov.voltagem || '-'} V</p></div>
+        <div class="pdf-box success"><h4>INSTALADO (Novo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem_nova || ''}</p></div>
+      </div>` : `
+      <div class="pdf-box"><p><b>Patrimônio:</b> ${mov.patrimonio || mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo || mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem || mov.voltagem_nova || ''} V</p><p><b>Quantidade:</b> ${mov.quantidade || 1}</p></div>`;
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`<!doctype html><html><head><title>Dossiê de Movimentação #${mov.id}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:24px;font-size:12px} h1{font-size:20px;color:#2563eb;margin:0 0 12px} h3{font-size:14px;color:#2563eb;border-bottom:1px solid #bbb;padding-bottom:5px} .header{display:flex;justify-content:space-between;border:1px solid #bbb;padding:10px;border-radius:8px;margin-bottom:14px}.pdf-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pdf-box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.danger h4{color:#dc2626}.success h4{color:#059669}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.pdf-photo{border:1px solid #bbb;padding:8px;text-align:center;border-radius:8px}.pdf-photo img{max-width:100%;max-height:180px}.pdf-photo-label{font-weight:bold;margin-bottom:6px}.blank{height:26px;border-bottom:1px solid #111;margin:6px 0 12px}.parecer{height:80px;border:1px solid #111;margin-top:6px}
+      </style></head><body>
+      <h1>Dossiê de Movimentação #${mov.id}</h1>
+      <div class="header"><div><b>Tipo de Operação:</b> ${mov.tipo_solicitacao}</div><div><b>Status:</b> ${mov.status}</div></div>
+      <div class="grid"><div class="pdf-box"><h3>Dados do Cliente</h3><p><b>Código:</b> ${mov.cliente_codigo || '-'}</p><p><b>Nome Fantasia:</b> ${mov.cliente_nome || '-'}</p><p><b>Cidade:</b> ${mov.cliente_cidade || '-'}</p><p><b>Endereço:</b> ${mov.cliente_endereco || '-'}</p><p><b>Vendedor do Cliente:</b> ${mov.cliente_vendedor || '-'}</p></div>
+      <div class="pdf-box"><h3>Dados da Solicitação</h3><p><b>Empresa Base:</b> ${mov.empresa || '-'}</p><p><b>Solicitante:</b> ${mov.vendedor_solicitante || '-'}</p><p><b>Data de Criação:</b> ${mov.created_at ? new Date(mov.created_at).toLocaleString('pt-BR') : '-'}</p><p><b>Observações:</b> ${mov.observacao || '-'}</p></div></div>
+      <h3>Especificações de Equipamento</h3>${equipmentHtml}
+      ${mov.detalhe_troca_adicao ? `<div class="pdf-box"><b>Detalhes:</b><br>${mov.detalhe_troca_adicao}</div>` : ''}
+      ${mov.motivo_recolhimento ? `<div class="pdf-box"><b>Motivo do Recolhimento:</b><br>${mov.motivo_recolhimento}</div>` : ''}
+      <h3>Comprovações de Mídia</h3><div class="photos">${mediaHtml.join('') || '<p>Nenhuma mídia registrada.</p>'}</div>
+      <h3>Decisão do Gestor de Equipamentos</h3>
+      <div class="pdf-box"><b>Número do Patrimônio Novo</b><div class="blank"></div><b>Modelo do Equipamento Novo</b><div class="blank"></div><b>Voltagem do Equipamento Novo</b><div class="blank"></div><b>Parecer / Justificativa</b><div class="parecer"></div></div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
+    printWin.document.close();
+  },
+
+  toggleAllMovementSelection(source) {
+    document.querySelectorAll('.movement-select-checkbox').forEach(cb => cb.checked = source.checked);
+  },
+
+  async deleteSelectedMovements() {
+    const user = Store.getLoggedUser();
+    if (!user || user.profile !== 'Administrador') {
+      alert('Somente administrador pode excluir movimentações.');
+      return;
+    }
+    const ids = Array.from(document.querySelectorAll('.movement-select-checkbox:checked')).map(cb => cb.value);
+    if (!ids.length) {
+      alert('Selecione pelo menos uma movimentação para excluir.');
+      return;
+    }
+    const motivo = prompt(`Confirma excluir ${ids.length} movimentação(ões)? Informe o motivo da exclusão:`);
+    if (motivo === null) return;
+    try {
+      await this.fetchFromApi('/api/equipamentos/movimentacoes/delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids, motivo_exclusao: motivo || 'Sem motivo informado' })
+      });
+      this.showToast('Movimentação(ões) excluída(s) e registradas no histórico de exclusões.');
+      await this.loadMovements();
+    } catch (err) {
+      alert('Erro ao excluir movimentações: ' + err.message);
     }
   },
 

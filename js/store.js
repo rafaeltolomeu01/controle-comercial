@@ -384,7 +384,7 @@ const Store = {
     
     // If user has the 'Administrador' profile, OR has the 'Administrador' permission (Acesso Total)
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca'];
+      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#historico-exclusoes'];
     }
     
     // Fallback if no permissions are set
@@ -503,7 +503,7 @@ window.Store = Store;
     if (!user) return ['#dashboard'];
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca'];
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
     }
     const allowed = ['#dashboard','#pdf'];
     const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });

@@ -95,7 +95,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           Fila de Aprovações
         </a>
-        <a id="menu-equipamentos" class="nav-link" href="#equipamentos">
+        <a id="menu-equipamentos" class="nav-link" href="#movimentacao">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           Equipamentos
         </a>
@@ -138,6 +138,11 @@
         <a id="menu-configuracoes" class="nav-link" href="#configuracoes">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           Configurações
+        </a>
+
+        <a id="menu-historico-exclusoes" class="nav-link config-nav-hidden" href="#historico-exclusoes" style="display: none !important;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+          Histórico de Exclusões
         </a>
         <a id="menu-empresa" class="nav-link config-nav-hidden" href="#empresa" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -831,8 +836,8 @@
 
           <!-- EQUIPAMENTO DE SUBSTITUIÇÃO — Só visível para Gestor ao analisar uma Troca -->
           <div id="dossie-substituicao-block" style="display:none; margin-bottom:18px; padding:14px; border:1px solid var(--success); border-radius:8px; background:rgba(16,185,129,0.03);">
-            <h5 style="margin-top:0; color:var(--success); margin-bottom:12px; font-family:var(--font-title); border-bottom:1px dashed var(--border-color); padding-bottom:6px;">🔄 EQUIPAMENTO DE SUBSTITUIÇÃO</h5>
-            <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Preencha os dados do equipamento que será enviado para substituição. Não use listas pré-definidas — preencha manualmente.</p>
+            <h5 id="dossie-sub-titulo" style="margin-top:0; color:var(--success); margin-bottom:12px; font-family:var(--font-title); border-bottom:1px dashed var(--border-color); padding-bottom:6px;">🔄 EQUIPAMENTO CONFIRMADO PELO GESTOR</h5>
+            <p id="dossie-sub-ajuda" style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Preencha os dados do equipamento confirmado pelo gestor. Não use listas pré-definidas — preencha manualmente.</p>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:12px;">
               <div class="form-group" style="margin-bottom:0;">
                 <label for="dossie-sub-patrimonio">Número do Patrimônio Novo *</label>
@@ -862,6 +867,7 @@
       </div>
 
       <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px; gap:10px;">
+        <button type="button" class="btn btn-primary" onclick="App.generateMovementDossierPdf()" style="width: 150px; font-size:0.85rem;">Gerar PDF</button>
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-movimentacao-details').style.display='none'" style="width: 150px; font-size:0.85rem;">Fechar Dossiê</button>
       </div>
     </div>
