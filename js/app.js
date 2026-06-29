@@ -1427,6 +1427,37 @@ const App = {
           formContainer.classList.remove('hidden');
           formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        // Vincula listener no select de perfil para exibir seção de vendedores
+        const profileSel = document.getElementById('user-profile');
+        const supSection = document.getElementById('new-user-supervisor-section');
+        if (profileSel && supSection && !profileSel.dataset.supervisorListenerBound) {
+          profileSel.addEventListener('change', async () => {
+            if (profileSel.value === 'Supervisor') {
+              supSection.style.display = 'block';
+              const checklist = document.getElementById('new-user-vendedores-checklist');
+              if (checklist) {
+                checklist.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem;">Carregando vendedores...</span>';
+                try {
+                  const sellers = await App.fetchFromApi('/api/usuarios/vendedores');
+                  if (!sellers || sellers.length === 0) {
+                    checklist.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem;">Nenhum vendedor cadastrado na empresa.</span>';
+                  } else {
+                    checklist.innerHTML = sellers.map(s => `
+                      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0;">
+                        <input type="checkbox" class="new-user-vendedor-check" value="${s.id}" style="width:16px;height:16px;cursor:pointer;">
+                        <span>${s.name} (${s.username})</span>
+                      </label>`).join('');
+                  }
+                } catch (err) {
+                  checklist.innerHTML = '<span style="color:#e55;">Erro ao carregar vendedores.</span>';
+                }
+              }
+            } else {
+              supSection.style.display = 'none';
+            }
+          });
+          profileSel.dataset.supervisorListenerBound = 'true';
+        }
       });
     }
     const btnCancelUserForm = document.getElementById('btn-cancel-user-form');
@@ -1436,6 +1467,8 @@ const App = {
         const formEl = document.getElementById('user-form');
         if (formContainer) formContainer.classList.add('hidden');
         if (formEl) formEl.reset();
+        const supSection = document.getElementById('new-user-supervisor-section');
+        if (supSection) supSection.style.display = 'none';
       });
     }
 
@@ -2117,6 +2150,12 @@ const App = {
         const profile = document.getElementById('user-profile').value;
         const unitId = document.getElementById('user-unit').value;
 
+        // Coletar vendedores vinculados se for Supervisor
+        const linked_users = [];
+        if (profile === 'Supervisor') {
+          document.querySelectorAll('.new-user-vendedor-check:checked').forEach(cb => linked_users.push(cb.value));
+        }
+
         try {
           const result = await this.fetchFromApi('/api/usuarios', {
             method: 'POST',
@@ -2125,7 +2164,8 @@ const App = {
               username,
               password: pass,
               profile,
-              unitId
+              unitId,
+              linked_users
             })
           });
 
@@ -2134,7 +2174,10 @@ const App = {
             userForm.reset();
             const formContainer = document.getElementById('user-form-container');
             if (formContainer) formContainer.classList.add('hidden');
-            this.showToast('Usuário cadastrado! Acesso aguarda liberação gerencial.');
+            const supSection = document.getElementById('new-user-supervisor-section');
+            if (supSection) supSection.style.display = 'none';
+            const statusMsg = result.user && result.user.status === 'LIBERADO' ? 'Usuário cadastrado e liberado com sucesso!' : 'Usuário cadastrado! Acesso aguarda liberação gerencial.';
+            this.showToast(statusMsg);
           }
         } catch (err) {
           console.error(err);

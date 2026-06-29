@@ -2297,9 +2297,23 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
   }
 });
 
+// Permissões padrão por perfil
+function getDefaultPermissionsForProfile(profile) {
+  const defaults = {
+    'Administrador': ['Dashboard','Clientes','Produtos','Estoque','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Aprovação de Despesas','Relatórios','Usuários','Configurações','Administrador','Chamados','Chamados Mecânicos','Equipamentos'],
+    'Supervisor': ['Dashboard','Clientes','Prospecção','Despesas','Chamados','Chamados Mecânicos','Movimentação','Solicitação de Saldo','Aprovação de Saldo','Aprovação de Despesas','Relatórios','Usuários'],
+    'Vendedor': ['Dashboard','Clientes','Prospecção','Despesas','Chamados','Movimentação','Solicitação de Saldo','Relatórios'],
+    'Financeiro': ['Dashboard','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Aprovação de Despesas','Relatórios'],
+    'Conferente': ['Dashboard','Chamados','Equipamentos','Movimentação'],
+    'Responsável Equipamentos': ['Dashboard','Equipamentos','Movimentação','Chamados','Chamados Mecânicos'],
+    'Mecânico': ['Dashboard','Chamados','Chamados Mecânicos']
+  };
+  return defaults[profile] || ['Dashboard'];
+}
+
 // Register / Create User
 app.post('/api/usuarios', async (req, res) => {
-  const { id, name, username, password, profile, unitId, email, phone, photo } = req.body;
+  const { id, name, username, password, profile, unitId, email, phone, photo, linked_users } = req.body;
   
   const actor = req.user || {};
   const actorPerms = actor.permissions || [];
@@ -2335,29 +2349,44 @@ app.post('/api/usuarios', async (req, res) => {
       email: email || '',
       phone: phone || '',
       photo: photo || '',
-      status: 'AGUARDANDO LIBERAÇÃO', // Always aguardando liberação initially
+      status: canManageUsers ? 'LIBERADO' : 'AGUARDANDO LIBERAÇÃO',
       empresa_id: companyId,
-      permissions: '[]',
+      permissions: JSON.stringify(getDefaultPermissionsForProfile(profile)),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
     await db('usuarios').insert(newUser);
 
+    // Se for Supervisor com vendedores vinculados, criar links hierárquicos
+    if (profile === 'Supervisor' && Array.isArray(linked_users) && linked_users.length > 0) {
+      const now = new Date().toISOString();
+      const linksToInsert = linked_users.map(childId => ({
+        company_id: companyId,
+        parent_user_id: userId,
+        child_user_id: childId,
+        relation_type: 'supervisor_seller',
+        created_at: now,
+        updated_at: now
+      }));
+      await db('user_hierarchy_links').insert(linksToInsert).catch(() => {});
+    }
+
     // Auditoria
     await db('auditoria_logs').insert({
       usuario_id: req.user.id || 'sistema',
-      acao: 'SOLICITOU_ACESSO',
-      detalhes: `Novo usuário ${name} (${username}) solicitou acesso e aguarda liberação.`,
+      acao: 'CRIOU_USUARIO',
+      detalhes: `Usuário ${name} (${username}) criado com perfil ${profile} e status ${newUser.status}.`,
       empresa_id: companyId
     });
 
-    res.json({ success: true, user: { id: userId, name, username, status: 'AGUARDANDO LIBERAÇÃO' } });
+    res.json({ success: true, user: { id: userId, name, username, status: newUser.status } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao cadastrar usuário' });
   }
 });
+
 
 // List Users
 app.get('/api/usuarios', async (req, res) => {
@@ -2408,8 +2437,23 @@ app.get('/api/usuarios', async (req, res) => {
     res.status(500).json({ error: 'Erro ao listar usuários' });
   }
 });
+// Lista apenas Vendedores ativos/aguardando para vínculo com Supervisor
+app.get('/api/usuarios/vendedores', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const list = await db('usuarios')
+      .where({ empresa_id: companyId, profile: 'Vendedor' })
+      .whereIn('status', ['LIBERADO', 'AGUARDANDO LIBERAÇÃO'])
+      .orderBy('name', 'asc');
+    res.json(list.map(u => ({ id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar vendedores' });
+  }
+});
 
 app.get('/api/usuarios/:id', async (req, res) => {
+
   const { id } = req.params;
 
   try {
