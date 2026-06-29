@@ -3117,7 +3117,7 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
   }
 });
 
-// Delete travel expense refund (only if pending and owner/admin)
+// Delete travel expense refund (somente administrador)
 app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -3137,8 +3137,8 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
 
     const isOwner = String(record.userId) === String(req.user.id);
     
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ error: 'Acesso negado: você não é o proprietário desta despesa' });
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     }
 
     await db('despesas_reembolsos').where({ id }).delete();
@@ -3161,14 +3161,18 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
 // Approve/Reject travel expense refund
 app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
   const { id } = req.params;
-  const { status, observacao } = req.body; // status: Aprovado, Reprovado
+  const { status, observacao } = req.body; // status: Aprovado, Reprovado, Correção Solicitada
 
-  if (status === 'Reprovado' && (!observacao || !observacao.trim())) {
+  if (!['Aprovado','Reprovado','Correção Solicitada'].includes(status)) {
+    return res.status(400).json({ error: 'Status inválido para avaliação de despesa.' });
+  }
+
+  if ((status === 'Reprovado' || status === 'Correção Solicitada') && (!observacao || !observacao.trim())) {
     return res.status(400).json({ error: 'A justificativa é obrigatória para reprovar a despesa.' });
   }
 
-  const allowed = ['Administrador', 'Supervisor', 'Financeiro'];
-  if (!allowed.includes(req.user.profile) && !req.user.permissions.includes('Aprovação de Despesas')) {
+  const allowed = ['Administrador', 'Financeiro'];
+  if (!allowed.includes(req.user.profile) && !req.user.permissions.includes('Aprovação de Despesas') && !req.user.permissions.includes('Administrador')) {
     return res.status(403).json({ error: 'Sem permissão para aprovar despesas.' });
   }
 
