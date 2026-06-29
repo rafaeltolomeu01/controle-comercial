@@ -1,0 +1,176 @@
+<div class="view-tabs no-print">
+            <a href="#despesas" class="view-tab-btn active">Despesas de Campo</a>
+            <a href="#solicitacao-despesas" class="view-tab-btn" id="tab-balance-solicitation">Solicitação de Saldo</a>
+            <a href="#despesas-dashboard" class="view-tab-btn" id="tab-balance-approvals">Aprovação de Saldo</a>
+          </div>
+
+          <!-- Balance Cards Grid -->
+          <div class="dashboard-grid" style="margin-bottom: 20px;">
+            <div class="card stat-card">
+              <div class="stat-icon" style="background-color: rgba(16, 185, 129, 0.1); color: var(--success);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px; height:24px;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Disponível (Aprovado)</span>
+                <span id="metric-balance-available" class="stat-value">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-icon" style="background-color: rgba(239, 68, 68, 0.1); color: var(--danger);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px; height:24px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Utilizado (Despesas)</span>
+                <span id="metric-balance-used" class="stat-value">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-icon" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px; height:24px;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Restante</span>
+                <span id="metric-balance-remaining" class="stat-value">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="expense-form-card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="card-title">Registrar Despesas de Viagem</span>
+              <button class="btn btn-primary" id="btn-open-expense-form" type="button">+ Registrar Despesa</button>
+            </div>
+            
+            <div id="expense-form-container" class="hidden" style="padding: 24px;">
+              <form id="expense-form">
+              <!-- Seção 1: Dados de Identificação (Ocultados se Vendedor) -->
+              <div class="form-row">
+                <div class="form-group" id="group-exp-seller" style="display:none;">
+                  <label for="exp-seller">Vendedor Solicitante</label>
+                  <select id="exp-seller" disabled>
+                    <!-- O solicitante é sempre o usuário logado -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="exp-unit">Unidade Vinculada *</label>
+                  <select id="exp-unit" required>
+                    <!-- Injected dynamically -->
+                  </select>
+                </div>
+              </div>
+
+              <!-- Seção 2: Finalidade e Operação -->
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="exp-finalidade">Finalidade *</label>
+                  <select id="exp-finalidade" required>
+                    <option value="" selected disabled>Selecione...</option>
+                    <option value="Abastecimento">Abastecimento</option>
+                    <option value="Hospedagem">Hospedagem</option>
+                    <option value="Refeição">Refeição</option>
+                    <option value="Reembolso">Reembolso</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="exp-operacao">Tipo de Operação *</label>
+                  <select id="exp-operacao" required>
+                    <option value="" selected disabled>Selecione...</option>
+                    <option value="Corporativo">Corporativo</option>
+                    <option value="Benefício">Benefício</option>
+                    <option value="Requisição">Requisição</option>
+                    <option value="Reembolso">Reembolso</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Seção 3: Campos Condicionais -->
+              <!-- Campo DESCREVA (Outro) -->
+              <div id="group-exp-descreva" class="form-group" style="display: none;">
+                <label for="exp-descreva">Descreva *</label>
+                <input type="text" id="exp-descreva" placeholder="Descreva a finalidade...">
+              </div>
+
+              <!-- Campos ABASTECIMENTO -->
+              <div id="group-exp-abastecimento" style="display: none;">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="exp-veiculo">Veículo *</label>
+                    <input type="text" id="exp-veiculo" placeholder="Identificação do veículo...">
+                  </div>
+                  <div class="form-group">
+                    <label for="exp-km">Quilometragem (KM) *</label>
+                    <input type="number" id="exp-km" placeholder="KM do veículo...">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="exp-odometro-img">Imagem do Odômetro *</label>
+                    <input type="file" id="exp-odometro-img" accept="image/*">
+                    <div id="preview-odometro" style="display: none; margin-top: 8px;">
+                      <img id="img-preview-odometro" style="max-height: 80px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Seção 4: Campos Comuns -->
+              <div id="group-exp-comuns">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="exp-val">Valor (R$) *</label>
+                    <input type="number" id="exp-val" step="0.01" min="0.01" required placeholder="0.00">
+                  </div>
+                  <div class="form-group">
+                    <label for="exp-comprovante-img">Imagem do Comprovante *</label>
+                    <input type="file" id="exp-comprovante-img" accept="image/*" required>
+                    <div id="preview-comprovante" style="display: none; margin-top: 8px;">
+                      <img id="img-preview-comprovante" style="max-height: 80px; border-radius: 4px; border: 1px solid var(--border-color);">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="exp-date">Data *</label>
+                    <input type="date" id="exp-date" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="exp-obs">Observação</label>
+                    <input type="text" id="exp-obs" placeholder="Observações adicionais...">
+                  </div>
+                </div>
+              </div>
+
+                <div style="display:flex; gap:12px; margin-top:24px;">
+                  <button type="submit" class="btn btn-primary" style="flex:1; height:44px; font-size:1rem; font-weight:600;">Registrar Despesa</button>
+                  <button type="button" class="btn btn-secondary" id="btn-cancel-expense-form" style="height:44px; font-size:1rem; font-weight:600; padding:0 24px;">Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Lista de Despesas Registradas</span>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data / Hora</th>
+                    <th>Finalidade</th>
+                    <th>Tipo de Operação</th>
+                    <th>Unidade</th>
+                    <th>Vendedor</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="expenses-table-body">
+                  <!-- Injected dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>

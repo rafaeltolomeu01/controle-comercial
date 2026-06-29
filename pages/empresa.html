@@ -1,0 +1,49 @@
+<div class="card">
+            <div class="card-header">
+              <span class="card-title">Identidade Visual da Distribuidora</span>
+            </div>
+            
+            <form id="company-identity-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="comp-name">Nome da Empresa</label>
+                  <input type="text" id="comp-name" required placeholder="Ex: Distribuidora JDS">
+                </div>
+                <div class="form-group">
+                  <label for="comp-cnpj">CNPJ</label>
+                  <input type="text" id="comp-cnpj" required placeholder="Ex: 12.345.678/0001-90">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="comp-phone">Telefone</label>
+                  <input type="tel" id="comp-phone" required placeholder="Ex: (11) 3200-9876">
+                </div>
+                <div class="form-group">
+                  <label for="comp-email">E-mail</label>
+                  <input type="email" id="comp-email" required placeholder="Ex: contato@distribuidorajds.com.br">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 24px;">
+                <label>Logotipo Comercial</label>
+                <div style="display: flex; gap: 16px; align-items: center;">
+                  <div class="logo-upload-box">
+                    <img id="form-logo-preview" class="logo-upload-img" src="icon.svg" alt="Preview Logo">
+                  </div>
+                  <label for="logo-upload-input" class="btn btn-secondary" style="margin: 0; cursor: pointer;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; margin-right: 4px;">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg> Escolhar Imagem
+                  </label>
+                  <input type="file" id="logo-upload-input" accept="image/*" style="display: none;">
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" id="btn-reset-identity" class="btn btn-danger">Redefinir Padrão</button>
+                <button type="submit" class="btn btn-primary">Salvar Configurações</button>
+              </div>
+            </form>
+          </div>

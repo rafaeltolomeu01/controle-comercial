@@ -1,0 +1,7 @@
+node_modules/
+backend/node_modules/
+dev.sqlite3
+backend/dev.sqlite3
+.env
+backend/.env
+backend/uploads/
