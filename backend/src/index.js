@@ -696,6 +696,16 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       cnaeDescricao = dados.cnae_fiscal_descricao || '';
     }
 
+    // BrasilAPI separa o tipo de logradouro (ex: "Rua") do nome — precisamos concatenar
+    const tipoLogradouro = !usedReceita ? (dados.descricao_tipo_de_logradouro || '') : '';
+    const nomeLogradouro = dados.logradouro || '';
+    const logradouroFull = tipoLogradouro && nomeLogradouro
+      ? `${tipoLogradouro} ${nomeLogradouro}`
+      : nomeLogradouro || tipoLogradouro;
+
+    // "SN" = sem número; não preenche campo
+    const numeroFull = dados.numero && String(dados.numero).toUpperCase() !== 'SN' ? String(dados.numero) : '';
+
     const resultado = {
       cnpj,
       razao_social: dados.razao_social || dados.nome || '',
@@ -703,8 +713,8 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       email: dados.email || '',
       telefone: dados.ddd_telefone_1 || dados.telefone || '',
       cep: dados.cep ? String(dados.cep).replace(/\D/g, '') : '',
-      logradouro: dados.logradouro || '',
-      numero: dados.numero || '',
+      logradouro: logradouroFull,
+      numero: numeroFull,
       bairro: dados.bairro || '',
       cidade: dados.municipio || dados.cidade || '',
       estado: dados.uf || dados.estado || '',
@@ -721,6 +731,7 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       cnaePrincipal: cnaePrincipal,
       cnaeDescricao: cnaeDescricao
     };
+
 
     return res.json(resultado);
   } catch (error) {

@@ -614,17 +614,20 @@ const App = {
 
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
+        // data já vem com logradouro, numero, bairro, cep, municipio, uf, etc.
+        // fillFromCnpj espera: nome_fantasia, razao_social, ddd_telefone_1, municipio, uf,
+        //                      cep, logradouro, numero, bairro, inscricao_estadual
         fillFromCnpj({
-          nome_fantasia: data.nome_fantasia || data.nomeFantasia || data.fantasia || '',
-          razao_social: data.razao_social || data.razaoSocial || data.nome || '',
-          email: data.email || '',
-          ddd_telefone_1: data.telefone || data.ddd_telefone_1 || '',
-          municipio: data.cidade || data.municipio || '',
-          uf: data.estado || data.uf || '',
-          cep: data.cep || '',
-          logradouro: data.logradouro || '',
-          numero: data.numero || '',
-          bairro: data.bairro || '',
+          nome_fantasia: data.nome_fantasia || data.nomeFantasia || '',
+          razao_social:  data.razao_social  || data.razaoSocial  || '',
+          email:         data.email         || '',
+          ddd_telefone_1:data.telefone      || '',
+          municipio:     data.cidade        || data.municipio    || '',
+          uf:            data.estado        || data.uf           || '',
+          cep:           data.cep           || '',
+          logradouro:    data.logradouro    || '',
+          numero:        data.numero        || '',
+          bairro:        data.bairro        || '',
           inscricao_estadual: data.inscricao_estadual || ''
         });
         setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
@@ -633,6 +636,7 @@ const App = {
         setStatus('Não foi possível buscar este CNPJ. Preencha manualmente.', 'var(--danger-color, #ef4444)');
       }
     };
+
 
     cnpjInput.addEventListener('input', () => {
       cnpjInput.value = formatCnpj(cnpjInput.value);
