@@ -23,7 +23,7 @@ const upload = multer({ dest: uploadsDir, limits: { fileSize: 8 * 1024 * 1024 } 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
-app.use(express.static(path.join(__dirname, '../../frontend/public')));
+app.use(express.static(path.join(__dirname, '../../')));
 
 const q = (text, params=[]) => pool.query(text, params);
 const clean = (v) => (v ?? '').toString().trim();
@@ -104,6 +104,6 @@ app.post('/api/calls', auth, (req,res)=>insertGeneric(req,res,'service_calls',['
 app.get('/api/products', auth, async (req,res)=>{ const r=await q('select * from products where active=true and ($1::text is null or company_id=$1 or $2=true) order by name',[req.user.company_id,isAdmin(req.user)]); res.json(r.rows); });
 app.post('/api/products', auth, async (req,res)=>{ if(!isAdmin(req.user)) return res.status(403).json({error:'Apenas admin'}); const arr=Array.isArray(req.body)?req.body:[req.body]; for(const p of arr){ await q('insert into products(id,company_id,code,name,category,box_qty,box_price,unit_price) values($1,$2,$3,$4,$5,$6,$7,$8)', ['prd_'+Date.now()+Math.random(),p.company_id||req.user.company_id,p.code,p.name,p.category,p.box_qty||1,p.box_price||0,p.unit_price||0]); } res.json({ok:true,count:arr.length}); });
 app.get('/api/cnpj/:cnpj', auth, async (req,res)=>{ const c=req.params.cnpj.replace(/\D/g,''); if(c.length!==14) return res.status(400).json({error:'CNPJ inválido'}); const urls=[`https://brasilapi.com.br/api/cnpj/v1/${c}`,`https://publica.cnpj.ws/cnpj/${c}`]; for(const url of urls){ try{ const r=await fetch(url,{headers:{'user-agent':'controle-campo'}}); if(!r.ok) continue; const d=await r.json(); return res.json({cnpj:c,razao_social:d.razao_social||d.razao_social_nome||d.estabelecimento?.nome_fantasia||'',nome_fantasia:d.nome_fantasia||d.estabelecimento?.nome_fantasia||'',cep:d.cep||d.estabelecimento?.cep||'',logradouro:d.logradouro||d.estabelecimento?.logradouro||'',numero:d.numero||d.estabelecimento?.numero||'',bairro:d.bairro||d.estabelecimento?.bairro||'',cidade:d.municipio||d.estabelecimento?.cidade?.nome||'',estado:d.uf||d.estabelecimento?.estado?.sigla||'',cnae:String(d.cnae_fiscal||d.estabelecimento?.atividade_principal?.id||''),atividade_principal:d.cnae_fiscal_descricao||d.estabelecimento?.atividade_principal?.descricao||''}); }catch{} } res.status(404).json({error:'CNPJ não encontrado'}); });
-app.get('*', (_,res)=>res.sendFile(path.join(__dirname,'../../frontend/public/index.html')));
+app.get('*', (_,res)=>res.sendFile(path.join(__dirname,'../../index.html')));
 
 migrate().then(()=>app.listen(PORT,()=>console.log('Controle de Campo novo rodando',PORT))).catch(e=>{console.error('Falha ao iniciar',e); process.exit(1);});
