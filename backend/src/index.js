@@ -640,39 +640,95 @@ app.use(async (req, res, next) => {
 });
 
 
-// Proxy de CNPJ. O navegador chama o próprio backend, evitando bloqueio de CORS e mantendo padrão único.
+// Proxy de CNPJ. Consulta BrasilAPI com fallback para ReceitaWS para evitar bloqueio de CORS e instabilidade.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
   try {
-    const digits = String(req.params.cnpj || '').replace(/\D/g, '');
-    if (digits.length !== 14) return res.status(400).json({ error: 'CNPJ deve conter 14 números.' });
+    const cnpj = String(req.params.cnpj || '').replace(/\D/g, '');
 
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-    if (!response.ok) return res.status(404).json({ error: 'CNPJ não encontrado na BrasilAPI.' });
-    const d = await response.json();
-    const cnae = Array.isArray(d.cnaes_secundarios) ? d.cnaes_secundarios : [];
+    if (cnpj.length !== 14) {
+      return res.status(400).json({ error: 'CNPJ inválido' });
+    }
 
-    res.json({
-      cnpj: d.cnpj || digits,
-      razaoSocial: d.razao_social || '',
-      nomeFantasia: d.nome_fantasia || d.razao_social || '',
-      email: d.email || '',
-      telefone: d.ddd_telefone_1 || d.telefone || '',
-      cep: d.cep || '',
-      logradouro: d.logradouro || '',
-      numero: d.numero || '',
-      complemento: d.complemento || '',
-      bairro: d.bairro || '',
-      municipio: d.municipio || '',
-      uf: d.uf || '',
-      cnaePrincipal: d.cnae_fiscal ? String(d.cnae_fiscal) : '',
-      cnaeDescricao: d.cnae_fiscal_descricao || '',
-      cnaesSecundarios: cnae.map(c => ({ codigo: c.codigo || c.cnae || '', descricao: c.descricao || '' }))
-    });
-  } catch (err) {
-    console.error('Erro ao consultar CNPJ:', err);
-    res.status(500).json({ error: 'Erro ao consultar CNPJ.' });
+    const urls = [
+      `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
+      `https://receitaws.com.br/v1/cnpj/${cnpj}`
+    ];
+
+    let dados = null;
+    let usedReceita = false;
+
+    for (const url of urls) {
+      try {
+        const resposta = await fetch(url, {
+          headers: { 'User-Agent': 'ControleCampo/1.0' }
+        });
+
+        if (!resposta.ok) continue;
+
+        const json = await resposta.json();
+
+        if (json && !json.message && json.status !== 'ERROR') {
+          dados = json;
+          if (url.includes('receitaws.com.br')) {
+            usedReceita = true;
+          }
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (!dados) {
+      return res.status(404).json({ error: 'CNPJ não encontrado' });
+    }
+
+    // Normalizar atividade principal / CNAE
+    let cnaePrincipal = '';
+    let cnaeDescricao = '';
+    if (usedReceita) {
+      if (Array.isArray(dados.atividade_principal) && dados.atividade_principal[0]) {
+        cnaePrincipal = String(dados.atividade_principal[0].code || '').replace(/\D/g, '');
+        cnaeDescricao = dados.atividade_principal[0].text || '';
+      }
+    } else {
+      cnaePrincipal = dados.cnae_fiscal ? String(dados.cnae_fiscal) : '';
+      cnaeDescricao = dados.cnae_fiscal_descricao || '';
+    }
+
+    const resultado = {
+      cnpj,
+      razao_social: dados.razao_social || dados.nome || '',
+      nome_fantasia: dados.nome_fantasia || dados.fantasia || dados.nome || '',
+      email: dados.email || '',
+      telefone: dados.ddd_telefone_1 || dados.telefone || '',
+      cep: dados.cep ? String(dados.cep).replace(/\D/g, '') : '',
+      logradouro: dados.logradouro || '',
+      numero: dados.numero || '',
+      bairro: dados.bairro || '',
+      cidade: dados.municipio || dados.cidade || '',
+      estado: dados.uf || dados.estado || '',
+      inscricao_estadual: dados.inscricao_estadual || '',
+      atividade_principal: cnaeDescricao || '',
+      cnae_principal: cnaePrincipal,
+      cnae_descricao: cnaeDescricao,
+
+      // Compatibilidade reversa para o front-end legado
+      razaoSocial: dados.razao_social || dados.nome || '',
+      nomeFantasia: dados.nome_fantasia || dados.fantasia || dados.nome || '',
+      municipio: dados.municipio || dados.cidade || '',
+      uf: dados.uf || dados.estado || '',
+      cnaePrincipal: cnaePrincipal,
+      cnaeDescricao: cnaeDescricao
+    };
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error('Erro ao consultar CNPJ:', error);
+    return res.status(500).json({ error: 'Erro ao consultar CNPJ' });
   }
 });
+
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
 app.post('/api/uploads/base64', async (req, res) => {

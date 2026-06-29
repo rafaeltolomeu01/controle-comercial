@@ -597,10 +597,13 @@ const App = {
       if (!digits) {
         unlockPreviousApiValues();
         setStatus('');
+        lastLookup = '';
         return;
       }
       if (digits.length !== 14) {
+        unlockPreviousApiValues();
         setStatus('Digite os 14 números do CNPJ.');
+        lastLookup = '';
         return;
       }
       if (digits === lastLookup) return;
@@ -612,16 +615,17 @@ const App = {
       try {
         const data = await this.fetchFromApi(`/api/cnpj/${digits}`);
         fillFromCnpj({
-          nome_fantasia: data.nomeFantasia,
-          razao_social: data.razaoSocial,
-          email: data.email,
-          ddd_telefone_1: data.telefone,
-          municipio: data.municipio,
-          uf: data.uf,
-          cep: data.cep,
-          logradouro: data.logradouro,
-          numero: data.numero,
-          bairro: data.bairro
+          nome_fantasia: data.nome_fantasia || data.nomeFantasia || data.fantasia || '',
+          razao_social: data.razao_social || data.razaoSocial || data.nome || '',
+          email: data.email || '',
+          ddd_telefone_1: data.telefone || data.ddd_telefone_1 || '',
+          municipio: data.cidade || data.municipio || '',
+          uf: data.estado || data.uf || '',
+          cep: data.cep || '',
+          logradouro: data.logradouro || '',
+          numero: data.numero || '',
+          bairro: data.bairro || '',
+          inscricao_estadual: data.inscricao_estadual || ''
         });
         setStatus('Dados do CNPJ preenchidos automaticamente.', 'var(--success-color, #10b981)');
       } catch (error) {
@@ -685,23 +689,25 @@ const App = {
     };
 
     const fill = (data) => {
-      setValue('prosp-razao-social', data.razaoSocial, true);
-      setValue('prosp-nome-fantasia', data.nomeFantasia, true);
-      setValue('prosp-name', data.nomeFantasia || data.razaoSocial, false);
-      setValue('prosp-phone', data.telefone, false);
-      setValue('prosp-city', data.municipio, false);
-      setValue('prosp-zipcode', data.cep, true);
-      setValue('prosp-address', data.logradouro, true);
-      setValue('prosp-number', data.numero, true);
-      setValue('prosp-neighborhood', data.bairro, true);
-      setValue('prosp-cnae', data.cnaePrincipal, true);
-      setValue('prosp-cnae-desc', data.cnaeDescricao, true);
+      setValue('prosp-razao-social', data.razao_social || data.razaoSocial || data.nome || '', true);
+      setValue('prosp-nome-fantasia', data.nome_fantasia || data.nomeFantasia || data.fantasia || '', true);
+      setValue('prosp-name', data.nome_fantasia || data.nomeFantasia || data.fantasia || data.razao_social || data.razaoSocial || data.nome || '', false);
+      setValue('prosp-phone', data.telefone || data.ddd_telefone_1 || '', false);
+      setValue('prosp-city', data.cidade || data.municipio || '', false);
+      setValue('prosp-zipcode', data.cep || '', true);
+      setValue('prosp-address', data.logradouro || '', true);
+      setValue('prosp-number', data.numero || '', true);
+      setValue('prosp-neighborhood', data.bairro || '', true);
+      setValue('prosp-cnae', data.cnae_principal || data.cnaePrincipal || '', true);
+      setValue('prosp-cnae-desc', data.cnae_descricao || data.cnaeDescricao || '', true);
     };
 
     const lookup = async () => {
       const digits = (cnpjInput.value || '').replace(/\D/g, '');
       if (digits.length !== 14) {
+        unlock();
         setStatus(digits.length ? 'Digite os 14 números do CNPJ.' : '');
+        lastLookup = '';
         return;
       }
       if (digits === lastLookup) return;
