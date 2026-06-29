@@ -1041,11 +1041,7 @@ app.post('/api/store/:key', async (req, res) => {
   }
 });
 
-// Helper to check company and role access to a request
-function isAdminUser(user) {
-  const perms = Array.isArray(user.permissions) ? user.permissions : [];
-  return user.profile === 'Administrador' || perms.includes('Administrador');
-}
+
 
 function canApproveFinancial(user) {
   const perms = Array.isArray(user.permissions) ? user.permissions : [];
