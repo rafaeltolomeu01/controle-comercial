@@ -2501,8 +2501,7 @@ const App = {
           document.getElementById('mov-modelo-adesivar').setAttribute('required', '');
           document.getElementById('mov-voltagem-adesivar').setAttribute('required', '');
           document.getElementById('mov-foto-antes').setAttribute('required', '');
-          const fd = document.getElementById('mov-foto-depois'); if (fd) { fd.removeAttribute('required'); fd.value = ''; }
-          const fdg = document.getElementById('mov-foto-depois-group') || (fd ? fd.closest('.form-group') : null); if (fdg) fdg.style.display = 'none';
+          document.getElementById('mov-foto-depois').setAttribute('required', '');
           document.getElementById('mov-obs-adesivar').setAttribute('required', '');
         }
       });
@@ -3989,10 +3988,21 @@ const App = {
       document.getElementById('perm-user-username').value = user.username || user.login || '';
       document.getElementById('perm-user-email').value = user.email || '';
       document.getElementById('perm-user-phone').value = user.phone || '';
-      document.getElementById('perm-user-password').value = user.password || '';
+      const permPassInput = document.getElementById('perm-user-password');
+      if (permPassInput) {
+        permPassInput.value = user.password || '';
+        permPassInput.type = 'password';
+        permPassInput.placeholder = user.password ? 'Senha cadastrada' : 'Digite uma senha';
+      }
+      const permPassToggle = document.getElementById('btn-toggle-perm-password');
+      if (permPassToggle && permPassInput && permPassToggle.dataset.bound !== '1') {
+        permPassToggle.addEventListener('click', () => {
+          permPassInput.type = permPassInput.type === 'password' ? 'text' : 'password';
+        });
+        permPassToggle.dataset.bound = '1';
+      }
       document.getElementById('perm-user-profile').value = user.profile;
       document.getElementById('perm-user-status').value = user.status;
-      document.getElementById('perm-user-empresa').value = user.empresa_id || '';
       document.getElementById('perm-user-unit').value = user.unitId || 'all';
 
       // Photo preview setup
@@ -4096,13 +4106,13 @@ const App = {
       const savedLinks = user.linked_users || [];
 
       const rebuildHierarchyLists = () => {
-        const currentCompany = document.getElementById('perm-user-empresa').value.trim();
+        const currentCompany = (document.getElementById('perm-user-empresa')?.value || user.empresa_id || '').trim();
         const currentUnit = document.getElementById('perm-user-unit').value;
         
         const sellers = usersList.filter(u => 
           (u.profile === 'Vendedor' || u.role === 'Vendedor' || u.tipo === 'Vendedor' || u.user_type === 'Vendedor') && 
           u.status === 'LIBERADO' &&
-          (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
+          (!currentCompany || u.empresa_id === currentCompany || u.company_id === currentCompany || !u.empresa_id) && 
           (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
           u.id !== user.id
         );
@@ -4110,7 +4120,7 @@ const App = {
         const supervisors = usersList.filter(u => 
           (u.profile === 'Supervisor' || u.role === 'Supervisor' || u.tipo === 'Supervisor' || u.user_type === 'Supervisor') && 
           u.status === 'LIBERADO' &&
-          (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
+          (!currentCompany || u.empresa_id === currentCompany || u.company_id === currentCompany || !u.empresa_id) && 
           (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
           u.id !== user.id
         );
@@ -4199,7 +4209,7 @@ const App = {
     const email = document.getElementById('perm-user-email').value.trim();
     const phone = document.getElementById('perm-user-phone').value.trim();
     const password = document.getElementById('perm-user-password').value;
-    const empresa_id = document.getElementById('perm-user-empresa').value.trim();
+    const empresa_id = (document.getElementById('perm-user-empresa')?.value || Store.getLoggedUser()?.empresa_id || '').trim();
     const unitId = document.getElementById('perm-user-unit').value;
     const photo = window.CurrentUserModalPhotoBase64 || '';
 
@@ -5654,7 +5664,7 @@ const App = {
     const printWin = window.open('', '_blank');
     printWin.document.write(`<!doctype html><html><head><title>Dossiê de Movimentação #${mov.id}</title>
       <style>
-        @page{size:A4 portrait;margin:8mm} body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:0;font-size:10.5px;width:194mm;max-height:281mm;overflow:hidden} *{box-sizing:border-box} h1{font-size:16px;color:#2563eb;margin:0 0 6px} h3{font-size:12px;color:#2563eb;border-bottom:1px solid #bbb;padding-bottom:3px;margin:6px 0} .header{display:flex;justify-content:space-between;border:1px solid #bbb;padding:10px;border-radius:8px;margin-bottom:14px}.pdf-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pdf-box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.danger h4{color:#dc2626}.success h4{color:#059669}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.pdf-photo{border:1px solid #bbb;padding:8px;text-align:center;border-radius:8px}.pdf-photo img{max-width:100%;max-height:95px;object-fit:contain}.pdf-photo-label{font-weight:bold;margin-bottom:6px}.blank{height:26px;border-bottom:1px solid #111;margin:6px 0 12px}.parecer{height:38px;border:1px solid #111;margin-top:4px}.pdf-box{break-inside:avoid}.photos{break-inside:avoid}
+        body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:24px;font-size:12px} h1{font-size:20px;color:#2563eb;margin:0 0 12px} h3{font-size:14px;color:#2563eb;border-bottom:1px solid #bbb;padding-bottom:5px} .header{display:flex;justify-content:space-between;border:1px solid #bbb;padding:10px;border-radius:8px;margin-bottom:14px}.pdf-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pdf-box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.danger h4{color:#dc2626}.success h4{color:#059669}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.pdf-photo{border:1px solid #bbb;padding:8px;text-align:center;border-radius:8px}.pdf-photo img{max-width:100%;max-height:180px}.pdf-photo-label{font-weight:bold;margin-bottom:6px}.blank{height:26px;border-bottom:1px solid #111;margin:6px 0 12px}.parecer{height:80px;border:1px solid #111;margin-top:6px}
       </style></head><body>
       <h1>Dossiê de Movimentação #${mov.id}</h1>
       <div class="header"><div><b>Tipo de Operação:</b> ${mov.tipo_solicitacao}</div><div><b>Status:</b> ${mov.status}</div></div>
@@ -5918,7 +5928,7 @@ const App = {
       return `<div class="photo"><b>${esc(label)}</b><img src="${esc(finalUrl)}"></div>`;
     };
     const html = `<!doctype html><html><head><title>Ficha Comercial ${esc(client.id)}</title><style>
-      @page{size:A4 portrait;margin:8mm}body{font-family:Arial,sans-serif;background:#fff;color:#111;margin:0;font-size:9.5px;width:194mm;max-height:281mm;overflow:hidden}*{box-sizing:border-box} h1{color:#2563eb;font-size:16px;margin:0 0 6px} h3{color:#2563eb;font-size:11px;border-bottom:1px solid #bbb;padding-bottom:3px;margin:5px 0}.header{display:flex;justify-content:space-between;border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #bbb;border-radius:8px;padding:7px;margin-bottom:7px;break-inside:avoid} p{margin:3px 0}.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.photo{border:1px solid #bbb;border-radius:8px;padding:8px;text-align:center;break-inside:avoid}.photo img{max-width:100%;height:54px;object-fit:cover}.empty{height:38px;display:flex;align-items:center;justify-content:center;color:#777;border:1px dashed #bbb;margin-top:4px}.footer{margin-top:18px;font-size:10px;color:#555;border-top:1px solid #bbb;padding-top:8px}@media print{button{display:none}.grid{grid-template-columns:1fr 1fr}}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;margin:24px;font-size:12px} h1{color:#2563eb;font-size:20px;margin:0 0 8px} h3{color:#2563eb;font-size:14px;border-bottom:1px solid #bbb;padding-bottom:5px}.header{display:flex;justify-content:space-between;border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px} p{margin:5px 0}.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.photo{border:1px solid #bbb;border-radius:8px;padding:8px;text-align:center;break-inside:avoid}.photo img{max-width:100%;height:120px;object-fit:cover}.empty{height:80px;display:flex;align-items:center;justify-content:center;color:#777;border:1px dashed #bbb;margin-top:8px}.footer{margin-top:18px;font-size:10px;color:#555;border-top:1px solid #bbb;padding-top:8px}@media print{button{display:none}.grid{grid-template-columns:1fr 1fr}}
     </style></head><body><h1>Ficha Comercial Completa do Cliente</h1><div class="header"><div><b>ID:</b> ${esc(client.id)}</div><div><b>Status:</b> ${esc(client.status)}</div></div>
     <div class="grid"><div class="box"><h3>1. Identificação Comercial</h3><p><b>Nome Fantasia:</b> ${esc(client.name)}</p><p><b>Razão Social:</b> ${esc(client.companyName)}</p><p><b>CNPJ:</b> ${esc(client.cnpj)}</p><p><b>Inscrição Estadual:</b> ${esc(client.ie)}</p><p><b>Categoria:</b> ${esc(client.category)}</p><p><b>Telefone:</b> ${esc(client.phone)}</p><p><b>E-mail:</b> ${esc(client.email)}</p><p><b>Vendedor:</b> ${esc(UI.getUserName(client.userId))}</p><p><b>Unidade:</b> ${esc(UI.getUnitName(client.unitId))}</p><p><b>Score:</b> ${esc(client.score)} ${esc(client.classification)}</p></div>
     <div class="box"><h3>2. Logística e Localização</h3><p><b>Cidade:</b> ${esc(client.city)}</p><p><b>Endereço:</b> ${esc(client.addressFull || [client.street, client.number, client.neighborhood].filter(Boolean).join(', '))}</p><p><b>Pavimentação:</b> ${esc(client.pavementType)}</p><p><b>Horário:</b> ${esc(client.deliverySchedule)}</p><p><b>Primeiro Pedido:</b> ${esc(client.firstOrderPayment)}</p><p><b>Forma de Recompra:</b> ${esc(client.repurchasePayment)}</p></div>
@@ -6984,81 +6994,40 @@ App.copyExchangeHistoryMessage = async function(simId) {
 };
 
 
-// =============================================================
-// PATCH FINAL - correções solicitadas 29/06/2026
-// =============================================================
+
+// PATCH: botões de mostrar/ocultar senha em usuários e permissões
 (function(){
-  if (!window.App || window.__ccCorrecoes2906Patch) return;
-  window.__ccCorrecoes2906Patch = true;
-
-  App.goAllowed = function(hash) {
-    const allowed = Store.getUserAllowedRoutes(Store.getLoggedUser()) || [];
-    if (allowed.includes(hash)) {
-      window.location.hash = hash;
-    } else {
-      alert('Acesso negado. Você não tem permissão para acessar este módulo.');
-    }
-  };
-
-  const labelType = (t) => typeof t === 'object' ? (t.name || t.label || t.value || '') : String(t || '');
-  const fillSelectFromEquipmentTypes = (select) => {
-    if (!select) return;
-    const current = select.value;
-    const types = (Store.getEquipmentTypes ? Store.getEquipmentTypes() : []).map(labelType).filter(Boolean);
-    select.innerHTML = '<option value="" disabled selected>Selecione...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
-    if (current && types.includes(current)) select.value = current;
-  };
-
-  const oldFillMovEquipmentDropdown = App.fillMovEquipmentDropdown ? App.fillMovEquipmentDropdown.bind(App) : null;
-  App.fillMovEquipmentDropdown = function() {
-    if (oldFillMovEquipmentDropdown) oldFillMovEquipmentDropdown();
-    fillSelectFromEquipmentTypes(document.getElementById('mov-equipment-type'));
-    fillSelectFromEquipmentTypes(document.getElementById('ticket-open-eq-type'));
-    const sellerInput = document.getElementById('mov-vendedor-solicitante');
-    if (sellerInput) {
-      sellerInput.removeAttribute('readonly');
-      sellerInput.style.backgroundColor = '';
-      sellerInput.placeholder = 'Digite o vendedor responsável...';
-    }
-  };
-
-  const oldFillEquipmentsDropdown = App.fillEquipmentsDropdown ? App.fillEquipmentsDropdown.bind(App) : null;
-  App.fillEquipmentsDropdown = function() {
-    if (oldFillEquipmentsDropdown) oldFillEquipmentsDropdown();
-    fillSelectFromEquipmentTypes(document.getElementById('ticket-open-eq-type'));
-  };
-
-  const oldSetupEvents = App.setupEventListeners ? App.setupEventListeners.bind(App) : null;
-  App.setupEventListeners = function() {
-    if (oldSetupEvents) oldSetupEvents();
-    fillSelectFromEquipmentTypes(document.getElementById('ticket-open-eq-type'));
-    fillSelectFromEquipmentTypes(document.getElementById('mov-equipment-type'));
-
-    const tipo = document.getElementById('mov-tipo-solicitacao');
-    const fotoDepois = document.getElementById('mov-foto-depois');
-    const fotoDepoisGroup = document.getElementById('mov-foto-depois-group') || (fotoDepois ? fotoDepois.closest('.form-group') : null);
-    const toggleFotoDepois = () => {
-      if (!fotoDepoisGroup || !fotoDepois) return;
-      // Na solicitação inicial de adesivar, quem executa colocará a foto depois.
-      if (tipo && tipo.value === 'Adesivar') {
-        fotoDepoisGroup.style.display = 'none';
-        fotoDepois.removeAttribute('required');
-        fotoDepois.value = '';
-      } else {
-        fotoDepoisGroup.style.display = '';
-        fotoDepois.removeAttribute('required');
-      }
-    };
-    if (tipo && !tipo.dataset.ccFotoDepoisPatch) {
-      tipo.dataset.ccFotoDepoisPatch = '1';
-      tipo.addEventListener('change', toggleFotoDepois);
-      toggleFotoDepois();
-    }
-  };
-
-  const oldGenerateMovementDossierPdf = App.generateMovementDossierPdf ? App.generateMovementDossierPdf.bind(App) : null;
-  App.generateMovementDossierPdf = function() {
-    if (!oldGenerateMovementDossierPdf) return;
-    oldGenerateMovementDossierPdf();
-  };
+  if (window.ccUserPasswordTogglesPatch) return;
+  window.ccUserPasswordTogglesPatch = true;
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest && e.target.closest('#btn-toggle-user-pass, #btn-toggle-perm-password');
+    if (!btn) return;
+    const input = btn.id === 'btn-toggle-user-pass' ? document.getElementById('user-pass') : document.getElementById('perm-user-password');
+    if (input) input.type = input.type === 'password' ? 'text' : 'password';
+  });
 })();
+
+
+// PATCH: aprovação financeira de despesas de campo
+App.approveExpenseReembolso = async function(id, status) {
+  try {
+    let observacao = '';
+    if (status === 'Reprovado') {
+      observacao = prompt('Informe o motivo da reprovação:') || '';
+      if (!observacao.trim()) {
+        alert('Motivo obrigatório para reprovar.');
+        return;
+      }
+    }
+    await this.fetchFromApi(`/api/despesas-reembolsos/${id}/approval`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, observacao })
+    });
+    this.showToast(status === 'Aprovado' ? 'Despesa aprovada com sucesso.' : 'Despesa reprovada com sucesso.');
+    await this.loadExpenses();
+    if (window.UI) UI.updateBalanceCards();
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao avaliar despesa: ' + (err.message || err));
+  }
+};

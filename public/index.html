@@ -117,11 +117,7 @@
         </a>
         <a id="menu-despesas-dashboard" class="nav-link" href="#despesas-dashboard" style="display: none !important; padding-left: 28px; font-size: 0.82rem;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          &nbsp;Dashboard de Despesas
-        </a>
-        <a id="menu-relatorios" class="nav-link" href="#relatorios" style="display:none !important;">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Relatórios
+          &nbsp;Aprovação de Despesas
         </a>
         <a id="menu-simulador-troca" class="nav-link" href="#simulador-troca" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 22v-6c0-1.1.9-2 2-2h10l-4-4"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 2v6c0 1.1-.9 2-2 2H9l4-4"/></svg>
@@ -457,7 +453,10 @@
           </div>
           <div class="form-group">
             <label for="perm-user-password" style="font-weight: bold; margin-bottom: 6px; display: block;">Senha</label>
-            <input type="text" id="perm-user-password" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="password" id="perm-user-password" placeholder="Deixe em branco para manter a senha atual" autocomplete="new-password" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
+              <button type="button" id="btn-toggle-perm-password" class="btn btn-secondary" title="Mostrar/Ocultar senha" style="min-height:46px; width:48px; padding:0;">👁</button>
+            </div>
           </div>
           <div class="form-group">
             <label for="perm-user-profile" style="font-weight: bold; margin-bottom: 6px; display: block;">Perfil do Usuário</label>
@@ -479,10 +478,6 @@
               <option value="LIBERADO">LIBERADO</option>
               <option value="INATIVO">INATIVO</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label for="perm-user-empresa" style="font-weight: bold; margin-bottom: 6px; display: block;">Empresa (CNPJ)</label>
-            <input type="text" id="perm-user-empresa" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
           </div>
           <div class="form-group">
             <label for="perm-user-unit" style="font-weight: bold; margin-bottom: 6px; display: block;">Unidade vinculada</label>
@@ -535,6 +530,10 @@
             <span>Clientes</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
+            <input type="checkbox" class="perm-checkbox" value="Prospecção (Leads)" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Prospecção (Leads)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
             <input type="checkbox" class="perm-checkbox" value="Equipamentos" style="width: 18px; height: 18px; cursor: pointer;">
             <span>Equipamentos</span>
           </label>
@@ -571,8 +570,8 @@
             <span>Aprovação de Despesas</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Relatórios" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Relatórios</span>
+            <input type="checkbox" class="perm-checkbox" value="Simulador de Troca" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Simulador de Troca</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
             <input type="checkbox" class="perm-checkbox" value="Usuários e Permissões" style="width: 18px; height: 18px; cursor: pointer;">

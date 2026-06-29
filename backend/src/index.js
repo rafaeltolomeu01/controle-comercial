@@ -671,64 +671,6 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Bloqueio real por módulo também no backend/API.
-app.use('/api', (req, res, next) => {
-  if (!req.user) return next();
-  const publicApi = ['/api/login','/api/usuarios/login','/api/usuarios/register','/api/uploads'];
-  if (publicApi.some(p => req.path.startsWith(p.replace('/api','')) || req.originalUrl.startsWith(p))) return next();
-  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-  if (req.user.profile === 'Administrador' || perms.includes('Administrador')) return next();
-  const strict = perms.length > 0;
-  const has = (...names) => names.some(n => perms.includes(n));
-  const profile = req.user.profile;
-  const allowByProfile = (module) => {
-    if (strict) return false;
-    const defaults = {
-      prospeccao: ['Vendedor','Supervisor','Gerente'],
-      clientes: ['Vendedor','Supervisor','Gerente'],
-      aprovacao: ['Supervisor','Gerente'],
-      equipamentos: ['Supervisor','Gerente','Conferente','Responsável Equipamentos'],
-      movimentacao: ['Vendedor','Supervisor','Gerente','Conferente','Responsável Equipamentos'],
-      chamados: ['Supervisor','Gerente','Mecânico','Responsável Equipamentos'],
-      despesas: ['Vendedor','Supervisor','Gerente','Financeiro'],
-      financeiro: ['Vendedor','Supervisor','Gerente','Financeiro'],
-      usuarios: ['Supervisor','Gerente'],
-      configuracoes: [],
-      troca: ['Vendedor','Supervisor','Gerente']
-    };
-    return (defaults[module] || []).includes(profile);
-  };
-  const can = (module) => {
-    if (allowByProfile(module)) return true;
-    if (module === 'prospeccao') return has('Prospecção','Prospecção (Leads)');
-    if (module === 'clientes') return has('Clientes');
-    if (module === 'aprovacao') return has('Aprovação de Clientes');
-    if (module === 'equipamentos') return has('Equipamentos','Produtos');
-    if (module === 'movimentacao') return has('Movimentação','Movimentação de Equipamentos','Estoque');
-    if (module === 'chamados') return has('Chamados','Chamados Mecânicos');
-    if (module === 'despesas') return has('Despesas','Despesas de Campo','Financeiro','Solicitação de Saldo','Aprovação de Despesas');
-    if (module === 'financeiro') return has('Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Despesas de Campo','Aprovação de Despesas');
-    if (module === 'usuarios') return has('Usuários','Usuários e Permissões');
-    if (module === 'configuracoes') return has('Configurações','Configurações Gerais');
-    if (module === 'troca') return has('Simulador de Troca');
-    return true;
-  };
-  const url = req.originalUrl;
-  let module = null;
-  if (url.includes('/api/usuarios/vendedores')) module = null;
-  else if (url.includes('/api/prospeccoes')) module = 'prospeccao';
-  else if (url.includes('/api/clientes')) module = 'clientes';
-  else if (url.includes('/api/equipamentos/movimentacoes')) module = 'movimentacao';
-  else if (url.includes('/api/equipamentos')) module = 'equipamentos';
-  else if (url.includes('/api/chamados')) module = 'chamados';
-  else if (url.includes('/api/despesas-reembolsos')) module = 'despesas';
-  else if (url.includes('/api/despesas')) module = 'financeiro';
-  else if (url.includes('/api/usuarios')) module = 'usuarios';
-  else if (url.includes('/api/unidades') || url.includes('/api/config') || url.includes('/api/company')) module = 'configuracoes';
-  else if (url.includes('/api/exchange')) module = 'troca';
-  if (module && !can(module)) return res.status(403).json({ error: 'Acesso negado. Você não tem permissão para acessar este módulo.' });
-  next();
-});
 
 // Proxy de CNPJ. Consulta BrasilAPI com fallback para ReceitaWS para evitar bloqueio de CORS e instabilidade.
 app.get('/api/cnpj/:cnpj', async (req, res) => {
@@ -2134,21 +2076,16 @@ app.get('/api/historico-exclusoes', async (req, res) => {
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id });
+    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
     movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
-    let mov = await movQuery.first();
-    // O dossiê deve abrir pelo ID correto mesmo quando o nome da empresa/unidade foi alterado.
-    if (mov && req.user.profile !== 'Administrador') {
-      const sameEmpresa = !req.user.empresa_name || !mov.empresa || String(mov.empresa).toLowerCase() === String(req.user.empresa_name).toLowerCase() || String(mov.empresa).toLowerCase() === String(req.user.empresa_id || '').toLowerCase();
-      if (!sameEmpresa) mov = null;
-    }
+    const mov = await movQuery.first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
     }
 
     const permittedIds = await getPermittedSellerIds(req.user, db);
     const staffProfiles = ['Administrador', 'Responsável Equipamentos', 'Conferente', 'Financeiro'];
-    if (!staffProfiles.includes(req.user.profile) && !permittedIds.map(String).includes(String(mov.vendedor_id))) {
+    if (!staffProfiles.includes(req.user.profile) && !permittedIds.includes(mov.vendedor_id)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -2174,7 +2111,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id });
+    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
     movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
     const mov = await movQuery.first();
     if (!mov) {
@@ -2182,7 +2119,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
     }
     if (req.user.profile === 'Supervisor' || req.user.profile === 'Gerente') {
       const permittedIds = await getPermittedSellerIds(req.user, db);
-      if (!permittedIds.map(String).includes(String(mov.vendedor_id))) {
+      if (!permittedIds.includes(mov.vendedor_id)) {
         return res.status(403).json({ error: 'Acesso negado: movimentação fora da sua cadeia.' });
       }
     }

@@ -249,7 +249,7 @@ const UI = {
       .reduce((sum, curr) => sum + (Number(curr.totalAprovado) || 0), 0);
       
     const totalSpent = expenses
-      .filter(e => e.status === 'Aprovado' || e.status === 'Pendente')
+      .filter(e => e.status === 'Aprovado' || e.status === 'Aprovada')
       .reduce((sum, curr) => sum + (Number(curr.value) || 0), 0);
       
     const balanceRemaining = totalApproved - totalSpent;
@@ -807,9 +807,17 @@ const UI = {
           <td style="font-weight: 600;">${valorStr}</td>
           <td><span class="badge-status ${statusClass}">${exp.status}</span></td>
           <td>
-            <button class="btn btn-secondary btn-sm" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
-              PDF
-            </button>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.generateExpenseComprovantePdf('${exp.id}')">PDF</button>
+              ${(() => {
+                const perms = Array.isArray(user?.permissions) ? user.permissions : [];
+                const canApprove = user?.profile === 'Administrador' || user?.profile === 'Financeiro' || perms.includes('Administrador') || perms.includes('Financeiro') || perms.includes('Aprovação de Despesas');
+                return canApprove && exp.status === 'Pendente' ? `
+                  <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveExpenseReembolso('${exp.id}', 'Aprovado')">Aprovar</button>
+                  <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveExpenseReembolso('${exp.id}', 'Reprovado')">Reprovar</button>
+                ` : '';
+              })()}
+            </div>
           </td>
         </tr>
       `;
@@ -1453,12 +1461,21 @@ const UI = {
       clientSendableEqType.innerHTML = '<option value="" selected disabled>Selecione...</option>' + 
         equipmentTypes.map(type => `<option value="${labelType(type)}">${labelType(type)}</option>`).join('');
     }
-
-    const movModeloAdicao = document.getElementById('mov-modelo-adicao');
-    if (movModeloAdicao && movModeloAdicao.tagName === 'SELECT') {
-      movModeloAdicao.innerHTML = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' + 
-        equipmentTypes.map(type => `<option value="${type}">${type}</option>`).join('');
-    }
+    const modelSelectIds = ['mov-modelo-adicao', 'mov-modelo-antigo', 'mov-modelo-novo', 'mov-modelo-recolha', 'mov-modelo-adesivar'];
+    const normalizeEqName = (type) => {
+      if (type && typeof type === 'object') return type.name || type.nome || type.label || type.value || type.modelo || type.id || '';
+      return String(type || '');
+    };
+    const modelOptions = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' +
+      equipmentTypes.map(type => {
+        const name = normalizeEqName(type);
+        const safe = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return safe ? `<option value="${safe}">${safe}</option>` : '';
+      }).join('');
+    modelSelectIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.tagName === 'SELECT') el.innerHTML = modelOptions;
+    });
   },
 
   /**
@@ -1470,7 +1487,6 @@ const UI = {
     const rejectionReasons = Store.getRejectionReasons();
     const prospectLossReasons = Store.getProspectLossReasons();
     const expenseCategories = Store.getExpenseCategories();
-    const notificationEmails = Store.getNotificationEmails();
 
     const renderList = (elementId, items, listKey) => {
       const container = document.getElementById(elementId);
@@ -1499,11 +1515,6 @@ const UI = {
     renderList('config-exp-categories-list', expenseCategories, 'expense_categories');
     renderList('config-rejection-reasons-list', rejectionReasons, 'rejection_reasons');
     renderList('config-loss-reasons-list', prospectLossReasons, 'prospect_loss_reasons');
-
-    const emailsInput = document.getElementById('config-emails-input');
-    if (emailsInput) {
-      emailsInput.value = notificationEmails.join(', ');
-    }
   },
 
   /**
@@ -1906,56 +1917,3 @@ const UI = {
 };
 
 window.UI = UI;
-
-// =============================================================
-// PATCH UI PERMISSÕES/DASHBOARD/UNIDADES
-// =============================================================
-(function(){
-  if (!window.UI || window.__ccUiPermissionPatch) return;
-  window.__ccUiPermissionPatch = true;
-  const oldApply = UI.applyPermissions ? UI.applyPermissions.bind(UI) : function(){};
-  UI.hasRoute = function(hash) {
-    const user = Store.getLoggedUser();
-    return (Store.getUserAllowedRoutes(user) || []).includes(hash);
-  };
-  UI.applyPermissions = function() {
-    oldApply();
-    const allowed = Store.getUserAllowedRoutes(Store.getLoggedUser());
-    const show = (id, hash, display='flex') => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = allowed.includes(hash) ? display : 'none';
-    };
-    // Relatórios removido do sistema
-    ['menu-relatorios','mobile-menu-relatorios'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-    // Cards do painel
-    show('dash-card-approvals', '#aprovacao');
-    show('dash-card-tickets', '#chamados');
-    show('dash-card-expenses', '#despesas');
-    const balanceAllowed = allowed.includes('#solicitacao-despesas') || allowed.includes('#despesas-dashboard') || allowed.includes('#despesas');
-    const bal = document.getElementById('dash-card-balance'); if (bal) bal.style.display = balanceAllowed ? 'flex' : 'none';
-    // Ações rápidas
-    show('quick-btn-prospeccao', '#prospeccao', 'inline-flex');
-    show('quick-btn-clientes', '#clientes', 'inline-flex');
-    show('quick-btn-chamados', '#chamados', 'inline-flex');
-    show('quick-btn-expenses', '#despesas', 'inline-flex');
-    // Gráficos ligados a financeiro/despesas
-    document.querySelectorAll('.dashboard-insight-card').forEach(el => { el.style.display = (allowed.includes('#despesas') || allowed.includes('#solicitacao-despesas') || allowed.includes('#despesas-dashboard')) ? '' : 'none'; });
-  };
-  const oldUnits = UI.renderUnits ? UI.renderUnits.bind(UI) : null;
-  UI.renderUnits = function() {
-    const units = Store.getUnits ? Store.getUnits() : [];
-    const prospects = Store.getProspects ? Store.getProspects() : [];
-    const clients = Store.getClients ? Store.getClients() : [];
-    const tickets = Store.getTickets ? Store.getTickets() : [];
-    const movements = Store.getMovements ? Store.getMovements() : [];
-    const listBody = document.getElementById('units-table-body');
-    if (!listBody) return oldUnits ? oldUnits() : undefined;
-    listBody.innerHTML = units.map(unit => {
-      const unitProspects = prospects.filter(p => String(p.unitId) === String(unit.id)).length;
-      const unitClients = clients.filter(c => String(c.unitId) === String(unit.id) && c.status === 'Aprovado').length;
-      const unitTickets = tickets.filter(t => String(t.unitId) === String(unit.id) && (t.status === 'Aberto' || t.status === 'Em Atendimento')).length;
-      const unitMovements = movements.filter(m => String(m.unitId || m.unit_id || '') === String(unit.id) || String(m.empresa || '').toLowerCase() === String(unit.name || '').toLowerCase()).length;
-      return `<tr><td style="font-family:monospace;">${unit.id}</td><td style="font-weight:600;">${unit.name}</td><td style="text-align:center;">${unitProspects}</td><td style="text-align:center;">${unitClients}</td><td style="text-align:center;"><span class="badge-status ${unitTickets > 0 ? 'badge-danger' : 'badge-success'}">${unitTickets} ativos</span></td><td style="text-align:center;">${unitMovements}</td><td style="text-align:center;"><button class="btn btn-secondary btn-sm" onclick="App.editUnit('${unit.id}')">Editar</button></td></tr>`;
-    }).join('');
-  };
-})();
