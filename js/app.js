@@ -384,6 +384,8 @@ const App = {
       case '#movimentacao':
         headerTitle.textContent = 'Movimentação de Equipamentos';
         this.fillMovEquipmentDropdown();
+        UI.populateUnitDropdowns();
+        UI.populateMovementCompanyDropdown();
         
         // Prefill logged seller responsavel
         const sellerInput = document.getElementById('mov-vendedor-solicitante');
@@ -1054,9 +1056,15 @@ const App = {
 
     // 6. Add Client Form Submit
     const clientForm = document.getElementById('client-form');
-    if (clientForm) {
-      clientForm.addEventListener('submit', (e) => {
+    if (clientForm && clientForm.dataset.submitBound !== '1') {
+      clientForm.dataset.submitBound = '1';
+      clientForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (this._clientSubmitting) return;
+        this._clientSubmitting = true;
+        const clientSubmitBtn = clientForm.querySelector('button[type="submit"]');
+        if (clientSubmitBtn) { clientSubmitBtn.disabled = true; clientSubmitBtn.dataset.originalText = clientSubmitBtn.textContent; clientSubmitBtn.textContent = 'Salvando...'; }
+        try {
         const name = document.getElementById('client-name').value;
         const cnpj = document.getElementById('client-cnpj').value;
         const phone = document.getElementById('client-phone').value;
@@ -1098,6 +1106,7 @@ const App = {
         const firstOrderReason = document.getElementById('client-first-order-reason') ? document.getElementById('client-first-order-reason').value.trim() : '';
         const repurchasePayment = document.getElementById('client-repurchase-payment').value;
         const hasBonus = document.getElementById('client-has-bonus').value;
+        const bonusValue = parseFloat(document.getElementById('client-bonus-value')?.value || '0') || 0;
         const sellerAnalysis = document.getElementById('client-seller-analysis').value;
         const route = (document.getElementById('client-route') ? document.getElementById('client-route').value : '');
 
@@ -1105,35 +1114,33 @@ const App = {
           alert('Por favor, informe o Motivo para não ser à vista no Primeiro Pedido.');
           return;
         }
+        if (hasBonus === 'Sim') {
+          if (!bonusValue || bonusValue <= 0) { alert('Informe o valor da bonificação.'); return; }
+          if (firstOrderValue > 0 && bonusValue > firstOrderValue) { alert('A bonificação não pode ser maior que o valor da primeira compra.'); return; }
+        }
 
         const userId = loggedUser.profile === 'Vendedor' ? loggedUser.id : document.getElementById('client-seller').value;
 
         // CNPJ without punctuation for folder naming in URL
         const cnpjVal = cnpj.replace(/\D/g, '') || '00000000000000';
 
-        // Photos URLs mapping and caching
+        // Photos URLs reais: nunca usar link/placeholder fixo. Se não enviar, fica vazio.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
-        
-        suffixes.forEach(suffix => {
+        for (const suffix of suffixes) {
           const fileInput = document.getElementById(`client-photo-${suffix}`);
-          const mockUrl = `https://s3.amazonaws.com/controle-campo/clientes/${cnpjVal}/${suffix}.jpg`;
-          
+          photoUrls[suffix] = '';
           if (fileInput && fileInput.files && fileInput.files[0]) {
-            const file = fileInput.files[0];
-            const localUrl = URL.createObjectURL(file);
-            
-            if (!window.TempPhotosCache) window.TempPhotosCache = {};
-            window.TempPhotosCache[mockUrl] = localUrl;
-            
-            photoUrls[suffix] = mockUrl;
-          } else {
-            // Fallback mock link if file input was bypassed or modified
-            photoUrls[suffix] = mockUrl;
+            photoUrls[suffix] = await this.uploadFile(fileInput.files[0]);
           }
-        });
+        }
 
         const clients = Store.getClients();
+        const cnpjLimpo = (cnpj || '').replace(/\D/g, '');
+        if (cnpjLimpo && clients.some(c => String(c.unitId) === String(unitId) && String(c.cnpj || '').replace(/\D/g, '') === cnpjLimpo)) {
+          alert('Já existe cliente com este CNPJ nesta unidade.');
+          return;
+        }
         const newClient = {
           id: 'CL-' + Math.floor(100 + Math.random() * 900),
           name,
@@ -1171,6 +1178,7 @@ const App = {
           firstOrderReason,
           repurchasePayment,
           hasBonus,
+          bonusValue,
           sellerAnalysis,
           route,
           rejectionReason: '',
@@ -1217,6 +1225,13 @@ const App = {
         if (formContainer) formContainer.classList.add('hidden');
 
         this.showToast('Cadastro comercial completo enviado para aprovação!');
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao salvar cadastro do cliente: ' + (err.message || err));
+        } finally {
+          this._clientSubmitting = false;
+          if (clientSubmitBtn) { clientSubmitBtn.disabled = false; clientSubmitBtn.textContent = clientSubmitBtn.dataset.originalText || 'Cadastrar Cliente'; }
+        }
       });
     }
 
@@ -1235,6 +1250,23 @@ const App = {
             firstOrderReasonInput.removeAttribute('required');
             firstOrderReasonInput.value = '';
           }
+        }
+      });
+    }
+
+
+    // Bonificação: se escolher Sim, exigir valor da bonificação para o score
+    const hasBonusSelect = document.getElementById('client-has-bonus');
+    const bonusContainer = document.getElementById('client-bonus-value-container');
+    const bonusInput = document.getElementById('client-bonus-value');
+    if (hasBonusSelect && !hasBonusSelect.dataset.boundBonus) {
+      hasBonusSelect.dataset.boundBonus = '1';
+      hasBonusSelect.addEventListener('change', () => {
+        const show = hasBonusSelect.value === 'Sim';
+        if (bonusContainer) bonusContainer.style.display = show ? 'grid' : 'none';
+        if (bonusInput) {
+          bonusInput.required = show;
+          if (!show) bonusInput.value = '';
         }
       });
     }
@@ -1308,7 +1340,7 @@ const App = {
         const formContainer = document.getElementById('ticket-form-container');
         const formEl = document.getElementById('ticket-open-form');
         if (formContainer) formContainer.classList.add('hidden');
-        if (formEl) formEl.reset();
+        if (formEl) { formEl.reset(); delete formEl.dataset.editingId; const b = formEl.querySelector('button[type="submit"]'); if (b) b.textContent = 'Cadastrar Unidade'; }
         const previewCont = document.getElementById('preview-ticket-open-photo-container');
         if (previewCont) previewCont.style.display = 'none';
       });
@@ -1424,7 +1456,7 @@ const App = {
         const formContainer = document.getElementById('unit-form-container');
         const formEl = document.getElementById('unit-form');
         if (formContainer) formContainer.classList.add('hidden');
-        if (formEl) formEl.reset();
+        if (formEl) { formEl.reset(); delete formEl.dataset.editingId; const b = formEl.querySelector('button[type="submit"]'); if (b) b.textContent = 'Cadastrar Unidade'; }
       });
     }
 
@@ -1496,11 +1528,8 @@ const App = {
             previewImg.src = localUrl;
             containerEl.style.display = 'block';
             
-            // Also cache it in window.TempPhotosCache using a temporary mock URL so it can be previewed even before submit if needed
+            // Prévia local somente na tela; o envio real gera URL pelo backend.
             if (!window.TempPhotosCache) window.TempPhotosCache = {};
-            const cnpjVal = (document.getElementById('client-cnpj').value || 'temp').replace(/\D/g, '') || '00000000000000';
-            const tempMockUrl = `https://s3.amazonaws.com/controle-campo/clientes/${cnpjVal}/${suffix}.jpg`;
-            window.TempPhotosCache[tempMockUrl] = localUrl;
           } else {
             containerEl.style.display = 'none';
           }
@@ -2126,26 +2155,33 @@ const App = {
 
     // 14. Add Unit Form Submit
     const unitForm = document.getElementById('unit-form');
-    if (unitForm) {
+    if (unitForm && unitForm.dataset.submitBound !== '1') {
+      unitForm.dataset.submitBound = '1';
       unitForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const name = document.getElementById('unit-name').value.trim();
         if (!name) return;
 
         const units = Store.getUnits();
-        const newUnit = {
-          id: Date.now().toString(),
-          name
-        };
-
-        units.push(newUnit);
+        const editingId = unitForm.dataset.editingId || '';
+        if (editingId) {
+          const unit = units.find(u => String(u.id) === String(editingId));
+          if (unit) unit.name = name;
+          delete unitForm.dataset.editingId;
+        } else {
+          const newUnit = { id: Date.now().toString(), name };
+          units.push(newUnit);
+        }
         Store.saveUnits(units);
         UI.populateUnitDropdowns(); // Refresh dropdowns across all forms
+        if (UI.populateMovementCompanyDropdown) UI.populateMovementCompanyDropdown();
         UI.renderUnits();           // Refresh units list stats
         unitForm.reset();
+        const submitBtn = unitForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.textContent = 'Cadastrar Unidade';
         const formContainer = document.getElementById('unit-form-container');
         if (formContainer) formContainer.classList.add('hidden');
-        this.showToast('Unidade cadastrada com sucesso!');
+        this.showToast(editingId ? 'Unidade atualizada com sucesso!' : 'Unidade cadastrada com sucesso!');
       });
     }
 
@@ -4214,7 +4250,7 @@ const App = {
           username,
           email,
           phone,
-          password,
+          ...(password ? { password } : {}),
           empresa_id: safeEmpresa,
           unitId: safeUnit,
           photo,
@@ -4266,6 +4302,28 @@ const App = {
   /**
    * Delete user permanently from the system.
    */
+  editUnit(unitId) {
+    const user = Store.getLoggedUser();
+    if (!user || user.profile !== 'Administrador') {
+      alert('Somente administrador pode editar unidades.');
+      return;
+    }
+    const units = Store.getUnits();
+    const unit = units.find(u => String(u.id) === String(unitId));
+    if (!unit) return;
+    const formContainer = document.getElementById('unit-form-container');
+    const formEl = document.getElementById('unit-form');
+    const nameInput = document.getElementById('unit-name');
+    if (formContainer) formContainer.classList.remove('hidden');
+    if (formEl) formEl.dataset.editingId = unit.id;
+    if (nameInput) {
+      nameInput.value = unit.name;
+      nameInput.focus();
+    }
+    const submitBtn = formEl ? formEl.querySelector('button[type="submit"]') : null;
+    if (submitBtn) submitBtn.textContent = 'Atualizar Unidade';
+  },
+
   async deleteUser(userId, event) {
     if (event) {
       event.preventDefault();
@@ -5097,7 +5155,8 @@ const App = {
     const cliente_cidade = document.getElementById('mov-client-city').value.trim();
     const cliente_endereco = document.getElementById('mov-client-address').value.trim();
     const cliente_vendedor = document.getElementById('mov-client-seller').value.trim();
-    const empresa = document.getElementById('mov-empresa').value;
+    const movEmpresaSelect = document.getElementById('mov-empresa');
+    const empresa = movEmpresaSelect ? (movEmpresaSelect.options[movEmpresaSelect.selectedIndex]?.text || movEmpresaSelect.value) : '';
     const vendedor_solicitante = document.getElementById('mov-vendedor-solicitante').value;
 
     if (!cliente_nome || !cliente_cidade) {
@@ -5227,6 +5286,7 @@ const App = {
         
         const sellerInput = document.getElementById('mov-vendedor-solicitante');
         if (sellerInput && loggedUser) sellerInput.value = loggedUser.name;
+        UI.populateMovementCompanyDropdown();
 
         const formContainer = document.getElementById('movement-form-container');
         if (formContainer) formContainer.classList.add('hidden');
@@ -5845,6 +5905,28 @@ const App = {
   /**
    * Preview a selected photo in full-screen modal
    */
+
+  generateClientPdfFromCurrent() {
+    const client = this.currentClientFicha;
+    if (!client) { alert('Abra uma ficha antes de gerar o PDF.'); return; }
+    const esc = (v) => String(v ?? '-').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+    const money = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
+    const addPhoto = (url, label) => {
+      const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
+      if (!finalUrl) return `<div class="photo"><b>${esc(label)}</b><div class="empty">Imagem não enviada</div></div>`;
+      return `<div class="photo"><b>${esc(label)}</b><img src="${esc(finalUrl)}"></div>`;
+    };
+    const html = `<!doctype html><html><head><title>Ficha Comercial ${esc(client.id)}</title><style>
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;margin:24px;font-size:12px} h1{color:#2563eb;font-size:20px;margin:0 0 8px} h3{color:#2563eb;font-size:14px;border-bottom:1px solid #bbb;padding-bottom:5px}.header{display:flex;justify-content:space-between;border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px} p{margin:5px 0}.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.photo{border:1px solid #bbb;border-radius:8px;padding:8px;text-align:center;break-inside:avoid}.photo img{max-width:100%;height:120px;object-fit:cover}.empty{height:80px;display:flex;align-items:center;justify-content:center;color:#777;border:1px dashed #bbb;margin-top:8px}.footer{margin-top:18px;font-size:10px;color:#555;border-top:1px solid #bbb;padding-top:8px}@media print{button{display:none}.grid{grid-template-columns:1fr 1fr}}
+    </style></head><body><h1>Ficha Comercial Completa do Cliente</h1><div class="header"><div><b>ID:</b> ${esc(client.id)}</div><div><b>Status:</b> ${esc(client.status)}</div></div>
+    <div class="grid"><div class="box"><h3>1. Identificação Comercial</h3><p><b>Nome Fantasia:</b> ${esc(client.name)}</p><p><b>Razão Social:</b> ${esc(client.companyName)}</p><p><b>CNPJ:</b> ${esc(client.cnpj)}</p><p><b>Inscrição Estadual:</b> ${esc(client.ie)}</p><p><b>Categoria:</b> ${esc(client.category)}</p><p><b>Telefone:</b> ${esc(client.phone)}</p><p><b>E-mail:</b> ${esc(client.email)}</p><p><b>Vendedor:</b> ${esc(UI.getUserName(client.userId))}</p><p><b>Unidade:</b> ${esc(UI.getUnitName(client.unitId))}</p><p><b>Score:</b> ${esc(client.score)} ${esc(client.classification)}</p></div>
+    <div class="box"><h3>2. Logística e Localização</h3><p><b>Cidade:</b> ${esc(client.city)}</p><p><b>Endereço:</b> ${esc(client.addressFull || [client.street, client.number, client.neighborhood].filter(Boolean).join(', '))}</p><p><b>Pavimentação:</b> ${esc(client.pavementType)}</p><p><b>Horário:</b> ${esc(client.deliverySchedule)}</p><p><b>Primeiro Pedido:</b> ${esc(client.firstOrderPayment)}</p><p><b>Forma de Recompra:</b> ${esc(client.repurchasePayment)}</p></div>
+    <div class="box"><h3>3. Mapeamento de Mercado</h3><p><b>Amaretto Próximo:</b> ${esc(client.nearbyAmaretto)}</p><p><b>Concorrência Próxima:</b> ${esc(client.nearbyCompetitor)}</p><p><b>Já trabalha com sorvetes:</b> ${esc(client.iceCreamExperience)}</p><p><b>Trabalhará com ambas as marcas:</b> ${esc(client.dualBrandPreference)}</p></div>
+    <div class="box"><h3>4. Equipamentos & Financeiro</h3><p><b>Qtd Equipamentos:</b> ${esc(client.equipmentQty)}</p><p><b>Equipamento Solicitado:</b> ${esc(client.requestedEqType)}</p><p><b>Padrão que pode enviar:</b> ${esc(client.sendableEqType)}</p><p><b>Valor 1ª Compra:</b> ${money(client.firstOrderValue)}</p><p><b>Média Prevista:</b> ${money(client.predictedAverage)}</p><p><b>Bonificação:</b> ${esc(client.hasBonus)} ${client.bonusValue ? '('+money(client.bonusValue)+')' : ''}</p></div></div>
+    <div class="box"><h3>5. Análise do Vendedor</h3><p>${esc(client.sellerAnalysis)}</p></div><div class="box"><h3>6. Fotos do Cadastro</h3><div class="photos">${addPhoto(client.photoFachada,'Fachada')}${addPhoto(client.photoInterna01,'Interna 01')}${addPhoto(client.photoInterna02,'Interna 02')}${addPhoto(client.photoInterna03,'Interna 03')}${addPhoto(client.photoRua01,'Externa Rua 01')}${addPhoto(client.photoRua02,'Externa Rua 02')}${addPhoto(client.photoCnpj,'Foto CNPJ')}</div></div><div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} por ${(Store.getLoggedUser()||{}).name || '-'} - Controle de Campo</div><script>setTimeout(()=>window.print(),500)<\/script></body></html>`;
+    const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+  },
+
   showImagePreview(url) {
     const modal = document.getElementById('modal-image-preview');
     const img = document.getElementById('modal-preview-img');

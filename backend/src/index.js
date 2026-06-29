@@ -1858,6 +1858,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
   }
 
   const now = new Date().toISOString();
+  const empresaMovimentacao = empresa || req.user.empresa_name || req.user.empresa_id;
 
   try {
     // 1. Cadastra automaticamente o patrimônio antigo/único se não existir
@@ -1867,7 +1868,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       if (!exists) {
         await db('equipamentos_patrimonio').insert({
           patrimonio: pCode,
-          empresa: req.user.empresa_name || req.user.empresa_id,
+          empresa: empresaMovimentacao,
           modelo: modelo || modelo_novo || 'Modelo não especificado',
           voltagem: voltagem || voltagem_nova || '110',
           status: 'Pendente',
@@ -1883,7 +1884,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       if (!existsNew) {
         await db('equipamentos_patrimonio').insert({
           patrimonio: patrimonio_novo,
-          empresa: req.user.empresa_name || req.user.empresa_id,
+          empresa: empresaMovimentacao,
           modelo: modelo_novo || 'Modelo não especificado',
           voltagem: voltagem_nova || '110',
           status: 'Pendente',
@@ -1897,7 +1898,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     const recentLimit = new Date(Date.now() - 15000).toISOString();
     const duplicate = await db('equipamentos_movimentacoes')
       .where({
-        empresa: req.user.empresa_name || req.user.empresa_id,
+        empresa: empresaMovimentacao,
         tipo_solicitacao,
         vendedor_id: req.user.id,
         cliente_nome,
@@ -1914,7 +1915,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
 
     // 4. Insere a movimentação
     const newId = await insertAndGetId('equipamentos_movimentacoes', {
-      empresa: req.user.empresa_name || req.user.empresa_id,
+      empresa: empresaMovimentacao,
       tipo_solicitacao,
       vendedor_solicitante,
       vendedor_id: req.user.id,
@@ -2819,7 +2820,7 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
     if (phone !== undefined) {
       updatedData.phone = phone;
     }
-    if (password !== undefined) {
+    if (password !== undefined && String(password).trim() !== '') {
       updatedData.password = password;
     }
     if (photo !== undefined) {
