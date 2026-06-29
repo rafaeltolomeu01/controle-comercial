@@ -1,0 +1,21 @@
+PASSO A PASSO PARA SUBIR NO RENDER
+
+1) Suba esta pasta no GitHub:
+   git add .
+   git commit -m "Versao limpa para Render"
+   git push origin main
+
+2) No Render, configure:
+   Build Command: npm install
+   Start Command: npm start
+
+3) Variaveis de ambiente obrigatorias:
+   DATABASE_URL = URL do PostgreSQL do Render
+   JWT_SECRET = qualquer senha grande/aleatoria
+   NODE_ENV = production
+
+4) O arquivo aberto pelo sistema e:
+   public/index.html
+
+5) Se aparecer versao antiga no navegador:
+   aperte Ctrl + F5 ou abra em guia anonima.
