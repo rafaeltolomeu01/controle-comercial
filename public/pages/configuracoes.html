@@ -86,4 +86,17 @@
                 <!-- Injected dynamically -->
               </ul>
             </div>
+
+            <!-- Notification Emails -->
+            <div class="card" style="margin-bottom:0; display:flex; flex-direction:column;">
+              <span class="card-title">E-mails de Notificações</span>
+              <hr style="border-color: var(--border-color); margin: 12px 0;">
+              <form id="config-emails-form" style="flex-grow:1; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label for="config-emails-input">Destinatários (separados por vírgula)</label>
+                  <textarea id="config-emails-input" rows="4" required placeholder="exemplo1@dominio.com, exemplo2@dominio.com" style="font-family: monospace; font-size: 0.8rem;"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Salvar E-mails</button>
+              </form>
+            </div>
           </div>

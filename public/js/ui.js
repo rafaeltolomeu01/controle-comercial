@@ -249,7 +249,7 @@ const UI = {
       .reduce((sum, curr) => sum + (Number(curr.totalAprovado) || 0), 0);
       
     const totalSpent = expenses
-      .filter(e => e.status === 'Aprovado' || e.status === 'Aprovada')
+      .filter(e => e.status === 'Aprovado' || e.status === 'Pendente')
       .reduce((sum, curr) => sum + (Number(curr.value) || 0), 0);
       
     const balanceRemaining = totalApproved - totalSpent;
@@ -807,17 +807,9 @@ const UI = {
           <td style="font-weight: 600;">${valorStr}</td>
           <td><span class="badge-status ${statusClass}">${exp.status}</span></td>
           <td>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.generateExpenseComprovantePdf('${exp.id}')">PDF</button>
-              ${(() => {
-                const perms = Array.isArray(user?.permissions) ? user.permissions : [];
-                const canApprove = user?.profile === 'Administrador' || user?.profile === 'Financeiro' || perms.includes('Administrador') || perms.includes('Financeiro') || perms.includes('Aprovação de Despesas');
-                return canApprove && exp.status === 'Pendente' ? `
-                  <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveExpenseReembolso('${exp.id}', 'Aprovado')">Aprovar</button>
-                  <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveExpenseReembolso('${exp.id}', 'Reprovado')">Reprovar</button>
-                ` : '';
-              })()}
-            </div>
+            <button class="btn btn-secondary btn-sm" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
+              PDF
+            </button>
           </td>
         </tr>
       `;
@@ -1220,6 +1212,7 @@ const UI = {
     const prospects = Store.getProspects();
     const clients = Store.getClients();
     const tickets = Store.getTickets();
+    const movements = Store.getMovements ? Store.getMovements() : [];
     const listBody = document.getElementById('units-table-body');
     if (!listBody) return;
 
@@ -1461,21 +1454,12 @@ const UI = {
       clientSendableEqType.innerHTML = '<option value="" selected disabled>Selecione...</option>' + 
         equipmentTypes.map(type => `<option value="${labelType(type)}">${labelType(type)}</option>`).join('');
     }
-    const modelSelectIds = ['mov-modelo-adicao', 'mov-modelo-antigo', 'mov-modelo-novo', 'mov-modelo-recolha', 'mov-modelo-adesivar'];
-    const normalizeEqName = (type) => {
-      if (type && typeof type === 'object') return type.name || type.nome || type.label || type.value || type.modelo || type.id || '';
-      return String(type || '');
-    };
-    const modelOptions = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' +
-      equipmentTypes.map(type => {
-        const name = normalizeEqName(type);
-        const safe = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        return safe ? `<option value="${safe}">${safe}</option>` : '';
-      }).join('');
-    modelSelectIds.forEach(id => {
-      const el = document.getElementById(id);
-      if (el && el.tagName === 'SELECT') el.innerHTML = modelOptions;
-    });
+
+    const movModeloAdicao = document.getElementById('mov-modelo-adicao');
+    if (movModeloAdicao && movModeloAdicao.tagName === 'SELECT') {
+      movModeloAdicao.innerHTML = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' + 
+        equipmentTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+    }
   },
 
   /**
@@ -1487,6 +1471,7 @@ const UI = {
     const rejectionReasons = Store.getRejectionReasons();
     const prospectLossReasons = Store.getProspectLossReasons();
     const expenseCategories = Store.getExpenseCategories();
+    const notificationEmails = Store.getNotificationEmails();
 
     const renderList = (elementId, items, listKey) => {
       const container = document.getElementById(elementId);
@@ -1515,6 +1500,11 @@ const UI = {
     renderList('config-exp-categories-list', expenseCategories, 'expense_categories');
     renderList('config-rejection-reasons-list', rejectionReasons, 'rejection_reasons');
     renderList('config-loss-reasons-list', prospectLossReasons, 'prospect_loss_reasons');
+
+    const emailsInput = document.getElementById('config-emails-input');
+    if (emailsInput) {
+      emailsInput.value = notificationEmails.join(', ');
+    }
   },
 
   /**

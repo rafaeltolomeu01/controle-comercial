@@ -384,19 +384,19 @@ const Store = {
     
     // If user has the 'Administrador' profile, OR has the 'Administrador' permission (Acesso Total)
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#historico-exclusoes'];
+      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#historico-exclusoes'];
     }
     
     // Fallback if no permissions are set
     if (perms.length === 0) {
       const allowed = ['#dashboard'];
       const profileRoutes = {
-        'Supervisor': ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#empresa', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#unidades', '#usuarios', '#simulador-troca'],
-        'Financeiro': ['#dashboard', '#despesas', '#solicitacao-despesas', '#despesas-dashboard'],
+        'Supervisor': ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#relatorios', '#empresa', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#unidades', '#usuarios', '#simulador-troca'],
+        'Financeiro': ['#dashboard', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios'],
         'Conferente': ['#dashboard', '#equipamentos', '#movimentacao'],
         'Responsável Equipamentos': ['#dashboard', '#equipamentos', '#movimentacao', '#chamados'],
         'Mecânico': ['#dashboard', '#chamados'],
-        'Vendedor': ['#dashboard', '#prospeccao', '#clientes', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#simulador-troca']
+        'Vendedor': ['#dashboard', '#prospeccao', '#clientes', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#relatorios', '#simulador-troca']
       };
       const extra = profileRoutes[user.profile] || [];
       extra.forEach(r => {
@@ -411,11 +411,7 @@ const Store = {
     
     if (perms.includes('Clientes')) {
       allowed.push('#clientes');
-    }
-    if (perms.includes('Prospecção (Leads)') || perms.includes('Prospeccao (Leads)') || perms.includes('Prospecção') || perms.includes('Prospeccao')) {
       allowed.push('#prospeccao');
-    }
-    if (perms.includes('Aprovação de Clientes')) {
       allowed.push('#aprovacao');
     }
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) {
@@ -445,8 +441,8 @@ const Store = {
     if (perms.includes('Aprovação de Despesas')) {
       allowed.push('#despesas-dashboard');
     }
-        if (perms.includes('Simulador de Troca')) {
-      allowed.push('#simulador-troca');
+    if (perms.includes('Relatórios')) {
+      allowed.push('#relatorios');
     }
     if (perms.includes('Usuários') || perms.includes('Usuários e Permissões')) {
       allowed.push('#usuarios');
@@ -507,21 +503,19 @@ window.Store = Store;
     if (!user) return ['#dashboard'];
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
     }
     const allowed = ['#dashboard','#pdf'];
     const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });
-    if (perms.length === 0 && user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#simulador-troca');
-    if (perms.length === 0 && (user.profile === 'Supervisor' || user.profile === 'Gerente')) add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#usuarios','#simulador-troca');
-    if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard');
-    if (perms.includes('Clientes')) add('#clientes');
-    if (perms.includes('Prospecção (Leads)') || perms.includes('Prospeccao (Leads)') || perms.includes('Prospecção') || perms.includes('Prospeccao')) add('#prospeccao');
-    if (perms.includes('Aprovação de Clientes')) add('#aprovacao');
+    if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
+    if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
+    if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios');
+    if (perms.includes('Clientes')) add('#clientes','#prospeccao','#aprovacao');
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) add('#equipamentos','#movimentacao');
     if (perms.includes('Chamados') || perms.includes('Chamados Mecânicos')) add('#chamados');
     if (perms.includes('Solicitação de Saldo') || perms.includes('Despesas') || perms.includes('Despesas de Campo')) add('#despesas','#solicitacao-despesas');
     if (perms.includes('Aprovação de Saldo') || perms.includes('Aprovação de Despesas')) add('#despesas-dashboard','#despesas');
-    if (perms.includes('Simulador de Troca')) add('#simulador-troca');
+    if (perms.includes('Relatórios')) add('#relatorios');
     if (perms.includes('Usuários') || perms.includes('Usuários e Permissões')) add('#usuarios');
     if (perms.includes('Configurações') || perms.includes('Configurações Gerais')) add('#configuracoes','#empresa','#unidades');
     return allowed;

@@ -3988,21 +3988,10 @@ const App = {
       document.getElementById('perm-user-username').value = user.username || user.login || '';
       document.getElementById('perm-user-email').value = user.email || '';
       document.getElementById('perm-user-phone').value = user.phone || '';
-      const permPassInput = document.getElementById('perm-user-password');
-      if (permPassInput) {
-        permPassInput.value = user.password || '';
-        permPassInput.type = 'password';
-        permPassInput.placeholder = user.password ? 'Senha cadastrada' : 'Digite uma senha';
-      }
-      const permPassToggle = document.getElementById('btn-toggle-perm-password');
-      if (permPassToggle && permPassInput && permPassToggle.dataset.bound !== '1') {
-        permPassToggle.addEventListener('click', () => {
-          permPassInput.type = permPassInput.type === 'password' ? 'text' : 'password';
-        });
-        permPassToggle.dataset.bound = '1';
-      }
+      document.getElementById('perm-user-password').value = user.password || '';
       document.getElementById('perm-user-profile').value = user.profile;
       document.getElementById('perm-user-status').value = user.status;
+      document.getElementById('perm-user-empresa').value = user.empresa_id || '';
       document.getElementById('perm-user-unit').value = user.unitId || 'all';
 
       // Photo preview setup
@@ -4106,13 +4095,13 @@ const App = {
       const savedLinks = user.linked_users || [];
 
       const rebuildHierarchyLists = () => {
-        const currentCompany = (document.getElementById('perm-user-empresa')?.value || user.empresa_id || '').trim();
+        const currentCompany = document.getElementById('perm-user-empresa').value.trim();
         const currentUnit = document.getElementById('perm-user-unit').value;
         
         const sellers = usersList.filter(u => 
           (u.profile === 'Vendedor' || u.role === 'Vendedor' || u.tipo === 'Vendedor' || u.user_type === 'Vendedor') && 
           u.status === 'LIBERADO' &&
-          (!currentCompany || u.empresa_id === currentCompany || u.company_id === currentCompany || !u.empresa_id) && 
+          (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
           (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
           u.id !== user.id
         );
@@ -4120,7 +4109,7 @@ const App = {
         const supervisors = usersList.filter(u => 
           (u.profile === 'Supervisor' || u.role === 'Supervisor' || u.tipo === 'Supervisor' || u.user_type === 'Supervisor') && 
           u.status === 'LIBERADO' &&
-          (!currentCompany || u.empresa_id === currentCompany || u.company_id === currentCompany || !u.empresa_id) && 
+          (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
           (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
           u.id !== user.id
         );
@@ -4209,7 +4198,7 @@ const App = {
     const email = document.getElementById('perm-user-email').value.trim();
     const phone = document.getElementById('perm-user-phone').value.trim();
     const password = document.getElementById('perm-user-password').value;
-    const empresa_id = (document.getElementById('perm-user-empresa')?.value || Store.getLoggedUser()?.empresa_id || '').trim();
+    const empresa_id = document.getElementById('perm-user-empresa').value.trim();
     const unitId = document.getElementById('perm-user-unit').value;
     const photo = window.CurrentUserModalPhotoBase64 || '';
 
@@ -6993,41 +6982,3 @@ App.copyExchangeHistoryMessage = async function(simId) {
   }
 };
 
-
-
-// PATCH: botões de mostrar/ocultar senha em usuários e permissões
-(function(){
-  if (window.ccUserPasswordTogglesPatch) return;
-  window.ccUserPasswordTogglesPatch = true;
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest && e.target.closest('#btn-toggle-user-pass, #btn-toggle-perm-password');
-    if (!btn) return;
-    const input = btn.id === 'btn-toggle-user-pass' ? document.getElementById('user-pass') : document.getElementById('perm-user-password');
-    if (input) input.type = input.type === 'password' ? 'text' : 'password';
-  });
-})();
-
-
-// PATCH: aprovação financeira de despesas de campo
-App.approveExpenseReembolso = async function(id, status) {
-  try {
-    let observacao = '';
-    if (status === 'Reprovado') {
-      observacao = prompt('Informe o motivo da reprovação:') || '';
-      if (!observacao.trim()) {
-        alert('Motivo obrigatório para reprovar.');
-        return;
-      }
-    }
-    await this.fetchFromApi(`/api/despesas-reembolsos/${id}/approval`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, observacao })
-    });
-    this.showToast(status === 'Aprovado' ? 'Despesa aprovada com sucesso.' : 'Despesa reprovada com sucesso.');
-    await this.loadExpenses();
-    if (window.UI) UI.updateBalanceCards();
-  } catch (err) {
-    console.error(err);
-    alert('Erro ao avaliar despesa: ' + (err.message || err));
-  }
-};
