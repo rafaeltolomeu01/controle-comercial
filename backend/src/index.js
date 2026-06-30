@@ -2375,8 +2375,27 @@ app.get('/api/historico-exclusoes', async (req, res) => {
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
-    movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
+    const actorPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+    const isActorAdmin = req.user.profile === 'Administrador'
+      || actorPerms.includes('Administrador')
+      || actorPerms.includes('Administrador (Acesso Total)');
+
+    // A lista de movimentações já respeita as permissões do usuário.
+    // O dossiê não pode aplicar um filtro de empresa mais restritivo do que a lista,
+    // senão a linha aparece, mas o botão "Dossiê" retorna "Movimentação não encontrada".
+    let movQuery = db('equipamentos_movimentacoes').where('id', id);
+    movQuery = movQuery.where(function() {
+      this.where('excluido', false).orWhereNull('excluido');
+    });
+
+    if (!isActorAdmin) {
+      movQuery = movQuery.andWhere(function() {
+        this.where('empresa', req.user.empresa_name || '')
+          .orWhere('empresa', req.user.empresa_id || '')
+          .orWhere('vendedor_id', req.user.id);
+      });
+    }
+
     const mov = await movQuery.first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
@@ -2384,7 +2403,7 @@ app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
 
     const permittedIds = await getPermittedSellerIds(req.user, db);
     const staffProfiles = ['Administrador', 'Responsável Equipamentos', 'Conferente', 'Financeiro'];
-    if (!staffProfiles.includes(req.user.profile) && !permittedIds.includes(mov.vendedor_id)) {
+    if (!isActorAdmin && !staffProfiles.includes(req.user.profile) && !permittedIds.map(String).includes(String(mov.vendedor_id))) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -2418,8 +2437,19 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
+    const isActorAdmin = req.user.profile === 'Administrador'
+      || movementPerms.includes('Administrador')
+      || movementPerms.includes('Administrador (Acesso Total)');
+
+    let movQuery = db('equipamentos_movimentacoes').where('id', id);
     movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
+    if (!isActorAdmin) {
+      movQuery = movQuery.andWhere(function(){
+        this.where('empresa', req.user.empresa_name || '')
+          .orWhere('empresa', req.user.empresa_id || '')
+          .orWhere('vendedor_id', req.user.id);
+      });
+    }
     const mov = await movQuery.first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
