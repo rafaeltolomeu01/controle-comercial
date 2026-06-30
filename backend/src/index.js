@@ -2282,9 +2282,17 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   const { id } = req.params;
   const { status, motivo_reprovacao, patrimonio_novo, modelo_novo, voltagem_nova } = req.body;
 
-  const allowed = ['Administrador', 'Supervisor', 'Responsável Equipamentos'];
-  if (!allowed.includes(req.user.profile)) {
-    return res.status(403).json({ error: 'Acesso negado: perfil sem privilégio de aprovação.' });
+  const movementPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const canApproveMovement = req.user.profile === 'Administrador'
+    || req.user.profile === 'Responsável Equipamentos'
+    || movementPerms.includes('Administrador')
+    || movementPerms.includes('Administrador (Acesso Total)')
+    || movementPerms.includes('Confirmação de Movimentação')
+    || movementPerms.includes('Confirmação de Troca')
+    || movementPerms.includes('Avaliação de Movimentação')
+    || movementPerms.includes('Equipamentos');
+  if (!canApproveMovement) {
+    return res.status(403).json({ error: 'Acesso negado: somente responsável por equipamentos ou usuário com permissão de confirmação pode aprovar movimentação.' });
   }
 
   if (status === 'Reprovado' && !motivo_reprovacao) {
@@ -3359,15 +3367,18 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
     if (record.status !== 'Correção Solicitada') return res.status(400).json({ error: 'Esta despesa não está aguardando correção.' });
     const b = req.body || {};
     const updates = {
+      unitId: b.unitId !== undefined && b.unitId !== '' ? String(b.unitId) : record.unitId,
+      date: b.date !== undefined && b.date !== '' ? String(b.date) : record.date,
+      time: b.time !== undefined && b.time !== '' ? String(b.time) : record.time,
       finalidade: b.finalidade || record.finalidade,
       operacao: b.operacao || record.operacao,
       descreva: b.descreva !== undefined ? b.descreva : record.descreva,
       veiculo: b.veiculo !== undefined ? b.veiculo : record.veiculo,
       km: b.km !== undefined && b.km !== '' ? parseInt(b.km, 10) : record.km,
-      foto_odometro: b.foto_odometro || record.foto_odometro,
-      foto_comprovante: b.foto_comprovante || record.foto_comprovante,
+      foto_odometro: b.foto_odometro !== undefined ? b.foto_odometro : record.foto_odometro,
+      foto_comprovante: b.foto_comprovante !== undefined ? b.foto_comprovante : record.foto_comprovante,
       value: b.value !== undefined && b.value !== '' ? ccNum(b.value) : record.value,
-      observation: b.observation || b.observacao || record.observation,
+      observation: b.observation !== undefined ? b.observation : (b.observacao !== undefined ? b.observacao : record.observation),
       status: 'Pendente',
       updated_at: new Date().toISOString()
     };
