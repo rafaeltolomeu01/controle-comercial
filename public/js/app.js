@@ -5608,7 +5608,7 @@ const App = {
       }
 
       const user = Store.getLoggedUser();
-      const isManager = user && ['Administrador', 'Supervisor', 'Responsável Equipamentos'].includes(user.profile);
+      const isManager = user && ['Administrador', 'Responsável Equipamentos', 'Gestor de Equipamentos'].includes(user.profile);
       const managerPanel = document.getElementById('dossie-manager-panel');
       
       if (isManager && mov.status === 'Pendente') {

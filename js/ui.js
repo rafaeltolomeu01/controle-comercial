@@ -638,7 +638,15 @@ const UI = {
     const listBody = document.getElementById('movements-table-body');
     if (!listBody) return;
     const user = Store.getLoggedUser();
-    const isAdmin = user && user.profile === 'Administrador';
+    const normalizeProfile = (value) => String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+    const userProfile = normalizeProfile(user && user.profile);
+    const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+    const isAdmin = user && (
+      ['administrador', 'administrador sistema'].includes(userProfile)
+      || userPermissions.some(p => ['administrador', 'administrador acesso total'].includes(p))
+    );
     document.querySelectorAll('.admin-only-movement-delete').forEach(el => el.style.display = isAdmin ? '' : 'none');
     const delBtn = document.getElementById('btn-delete-selected-movements');
     if (delBtn) delBtn.style.display = isAdmin ? 'inline-flex' : 'none';

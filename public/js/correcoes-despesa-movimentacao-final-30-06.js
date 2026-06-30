@@ -21,9 +21,14 @@
   function canConfirmMovement(){
     const u = currentUser();
     const profile = norm(u.profile);
+
+    // Regra obrigatória: vendedor e supervisor só visualizam o dossiê.
+    // Mesmo que tenham alguma permissão genérica marcada, não podem aprovar/reprovar.
+    if (profile === 'vendedor' || profile === 'supervisor') return false;
+
     if (profile === 'administrador' || hasPerm('Administrador') || hasPerm('Administrador (Acesso Total)')) return true;
-    if (profile.includes('responsavel equipamentos') || profile.includes('patrimonio')) return true;
-    return hasPerm('Confirmação de Movimentação') || hasPerm('Confirmação de Troca') || hasPerm('Avaliação de Movimentação') || hasPerm('Equipamentos');
+    if (profile.includes('responsavel equipamentos') || profile.includes('gestor de equipamentos') || profile.includes('patrimonio')) return true;
+    return hasPerm('Confirmação de Movimentação') || hasPerm('Confirmação de Troca') || hasPerm('Avaliação de Movimentação');
   }
 
   function setVal(id, val){ const el = document.getElementById(id); if (el) el.value = val ?? ''; }

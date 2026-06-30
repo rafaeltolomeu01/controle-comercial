@@ -1201,22 +1201,37 @@ app.delete('/api/prospeccoes/:id', async (req, res) => {
   }
 });
 
-// Secure endpoint for physical file uploads
+// Upload físico antigo mantido por compatibilidade, mas agora também salva no banco.
+// Assim as fotos continuam disponíveis em outro celular e após reinício do Render.
 app.post('/api/upload', (req, res) => {
-  upload.single('file')(req, res, (err) => {
+  upload.single('file')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       return res.status(400).json({ error: `Erro de upload: ${err.message}` });
     } else if (err) {
       return res.status(400).json({ error: err.message });
     }
-    
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
 
-    const companyId = req.user ? req.user.empresa_id : '001';
-    const fileUrl = `/uploads/${companyId}/${req.file.filename}`;
-    res.json({ success: true, url: fileUrl });
+    try {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+      await db('app_uploads').insert({
+        id,
+        empresa_id: (req.user && req.user.empresa_id) || '001',
+        user_id: req.user ? String(req.user.id) : null,
+        module: 'geral',
+        filename: req.file.originalname || req.file.filename || id,
+        mime_type: req.file.mimetype || 'application/octet-stream',
+        data_base64: fileBuffer.toString('base64')
+      });
+      fs.unlink(req.file.path, () => {});
+      return res.json({ success: true, id, url: `/api/uploads/${id}` });
+    } catch (dbErr) {
+      console.error('Erro ao persistir upload no banco:', dbErr);
+      const companyId = req.user ? req.user.empresa_id : '001';
+      const fileUrl = `/uploads/${companyId}/${req.file.filename}`;
+      return res.json({ success: true, url: fileUrl, warning: 'Upload salvo apenas no disco.' });
+    }
   });
 });
 
