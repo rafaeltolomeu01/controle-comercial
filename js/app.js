@@ -4787,8 +4787,33 @@ const App = {
         }
       }
  
+      const mediaToDataUrlForPdf = async (url) => {
+        if (!url) return '';
+        const raw = String(url).trim();
+        if (raw.startsWith('data:')) return raw;
+        const src = raw.startsWith('http') || raw.startsWith('/') ? raw : '/' + raw.replace(/^\/+/, '');
+        try {
+          const token = Store.getToken && Store.getToken();
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const res = await fetch(src, { headers });
+          if (!res.ok) throw new Error('Arquivo não encontrado');
+          const blob = await res.blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn('Não foi possível carregar imagem para PDF:', src, e.message || e);
+          return '';
+        }
+      };
+      const fotoOdometroPdf = await mediaToDataUrlForPdf(exp.foto_odometro);
+      const fotoComprovantePdf = await mediaToDataUrlForPdf(exp.foto_comprovante);
+
       // Check for attached photos
-      if (exp.foto_odometro || exp.foto_comprovante) {
+      if (fotoOdometroPdf || fotoComprovantePdf) {
         y += 5;
         if (y > 200) {
           doc.addPage();
@@ -4806,7 +4831,7 @@ const App = {
         doc.setFont('Helvetica', 'normal');
         y += 8;
  
-        if (exp.foto_odometro && exp.foto_comprovante) {
+        if (fotoOdometroPdf && fotoComprovantePdf) {
           if (y + 65 > 280) {
             doc.addPage();
             doc.setDrawColor(37, 99, 235);
@@ -4818,15 +4843,15 @@ const App = {
             doc.text('Odômetro:', 15, y);
             doc.text('Comprovante:', 110, y);
             y += 4;
-            doc.addImage(exp.foto_odometro, 'JPEG', 15, y, 80, 60);
-            doc.addImage(exp.foto_comprovante, 'JPEG', 110, y, 80, 60);
+            doc.addImage(fotoOdometroPdf, 'JPEG', 15, y, 80, 60);
+            doc.addImage(fotoComprovantePdf, 'JPEG', 110, y, 80, 60);
             y += 65;
           } catch (imgErr) {
             console.error('Error adding images to PDF:', imgErr);
             doc.text('[Erro ao renderizar imagens no PDF]', 15, y);
             y += 10;
           }
-        } else if (exp.foto_comprovante) {
+        } else if (fotoComprovantePdf) {
           if (y + 80 > 280) {
             doc.addPage();
             doc.setDrawColor(37, 99, 235);
@@ -4837,7 +4862,7 @@ const App = {
           try {
             doc.text('Comprovante:', 15, y);
             y += 4;
-            doc.addImage(exp.foto_comprovante, 'JPEG', 15, y, 100, 75);
+            doc.addImage(fotoComprovantePdf, 'JPEG', 15, y, 100, 75);
             y += 80;
           } catch (imgErr) {
             console.error('Error adding comprovante to PDF:', imgErr);

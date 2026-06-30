@@ -27,12 +27,59 @@
   }
 
   function setVal(id, val){ const el = document.getElementById(id); if (el) el.value = val ?? ''; }
+  function normalizeMediaUrl(url){
+    if (!url) return '';
+    if (window.TempPhotosCache && window.TempPhotosCache[url]) return window.TempPhotosCache[url];
+    const raw = String(url).trim();
+    if (!raw || raw === 'null' || raw === 'undefined') return '';
+    if (raw.startsWith('data:') || raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/')) return raw;
+    return '/' + raw.replace(/^\/+/, '');
+  }
+  function ensureCurrentMediaBox(kind, url){
+    const input = document.getElementById(kind === 'odo' ? 'exp-odometro-img' : 'exp-comprovante-img');
+    if (!input || !url) return;
+    const id = kind === 'odo' ? 'cc-current-odometro' : 'cc-current-comprovante';
+    let box = document.getElementById(id);
+    if (!box) {
+      box = document.createElement('div');
+      box.id = id;
+      box.style.cssText = 'margin-top:8px;padding:8px;border:1px dashed var(--border-color);border-radius:6px;font-size:12px;';
+      input.insertAdjacentElement('afterend', box);
+    }
+    const src = normalizeMediaUrl(url);
+    box.innerHTML = `<div style="margin-bottom:6px;font-weight:600;">Arquivo atual mantido. Envie outro somente se precisar substituir.</div>
+      <img src="${src.replace(/"/g,'&quot;')}" style="max-height:90px;max-width:160px;border-radius:4px;border:1px solid var(--border-color);cursor:pointer;object-fit:cover;"
+        onclick="event.stopPropagation(); App.showFacadeImage('${src.replace(/'/g, "\'")}')"
+        onerror="this.style.display='none'; this.insertAdjacentHTML('afterend','<div style=&quot;color:#f59e0b;&quot;>Imagem antiga não encontrada. Envie novamente para substituir.</div>');">`;
+  }
   function showPreview(kind, url){
-    if (!url) return;
+    const src = normalizeMediaUrl(url);
+    if (!src) return;
     const p = document.getElementById(kind === 'odo' ? 'preview-odometro' : 'preview-comprovante');
     const img = document.getElementById(kind === 'odo' ? 'img-preview-odometro' : 'img-preview-comprovante');
     if (p) p.style.display = 'block';
-    if (img) img.src = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
+    if (img) {
+      img.src = src;
+      img.style.cursor = 'pointer';
+      img.onclick = () => App.showFacadeImage(src);
+      img.onerror = () => { img.style.display='none'; };
+    }
+    ensureCurrentMediaBox(kind, src);
+  }
+  function forceFullExpenseFormVisible(){
+    ['group-exp-comuns','group-exp-abastecimento'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = id === 'group-exp-abastecimento' ? el.style.display : 'block';
+    });
+    const comuns = document.getElementById('group-exp-comuns');
+    if (comuns) comuns.style.display = 'block';
+    ['exp-val','exp-date','exp-comprovante-img','exp-obs'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        const fg = el.closest('.form-group');
+        if (fg) fg.style.display = 'block';
+      }
+    });
   }
   function updateExpenseConditionalFields(){
     const finalidade = document.getElementById('exp-finalidade')?.value || '';
@@ -87,6 +134,7 @@
           km: document.getElementById('exp-km')?.value || null,
           value: moneyNum(document.getElementById('exp-val')?.value),
           date: document.getElementById('exp-date')?.value || current.date || '',
+          time: current.time || '',
           observation: document.getElementById('exp-obs')?.value || '',
           foto_odometro: await uploadIfSelected('exp-odometro-img', current.foto_odometro),
           foto_comprovante: await uploadIfSelected('exp-comprovante-img', current.foto_comprovante)
@@ -126,6 +174,7 @@
           window.__expenseCorrectionOriginal = current;
           form.dataset.correctionId = current.id;
           container.classList.remove('hidden');
+          forceFullExpenseFormVisible();
           const title = document.querySelector('#expense-form-card .card-title'); if (title) title.textContent = 'Corrigir Despesa e Reenviar';
           const btn = form.querySelector('button[type="submit"]'); if (btn) btn.textContent = 'Salvar Correção e Reenviar';
           if (window.UI?.populateUnitDropdowns) UI.populateUnitDropdowns();
@@ -141,6 +190,7 @@
           const comp = document.getElementById('exp-comprovante-img'); if (comp) comp.required = !current.foto_comprovante;
           const odo = document.getElementById('exp-odometro-img'); if (odo) odo.required = false;
           updateExpenseConditionalFields();
+          forceFullExpenseFormVisible();
           showPreview('comp', current.foto_comprovante);
           showPreview('odo', current.foto_odometro);
           installCorrectionSubmitHandler();

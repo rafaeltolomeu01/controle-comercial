@@ -798,11 +798,11 @@ const UI = {
       let photosHtml = '';
       if (exp.foto_comprovante) {
         const finalUrl = window.TempPhotosCache?.[exp.foto_comprovante] || exp.foto_comprovante;
-        photosHtml += `<img src="${finalUrl}" title="Comprovante" style="width:24px; height:24px; object-fit:cover; border-radius:4px; margin-right:4px; vertical-align:middle; cursor:pointer;" onclick="event.stopPropagation(); App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')">`;
+        photosHtml += `<img src="${finalUrl}" title="Comprovante" style="width:24px; height:24px; object-fit:cover; border-radius:4px; margin-right:4px; vertical-align:middle; cursor:pointer;" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend','<span style=&quot;color:#f59e0b;font-size:11px;margin-right:4px;&quot;>imagem indisponível</span>');" onclick="event.stopPropagation(); App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')">`;
       }
       if (exp.foto_odometro) {
         const finalUrl = window.TempPhotosCache?.[exp.foto_odometro] || exp.foto_odometro;
-        photosHtml += `<img src="${finalUrl}" title="Odômetro" style="width:24px; height:24px; object-fit:cover; border-radius:4px; margin-right:4px; vertical-align:middle; cursor:pointer;" onclick="event.stopPropagation(); App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')">`;
+        photosHtml += `<img src="${finalUrl}" title="Odômetro" style="width:24px; height:24px; object-fit:cover; border-radius:4px; margin-right:4px; vertical-align:middle; cursor:pointer;" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend','<span style=&quot;color:#f59e0b;font-size:11px;margin-right:4px;&quot;>imagem indisponível</span>');" onclick="event.stopPropagation(); App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')">`;
       }
 
       const finalidadeDisplay = `
