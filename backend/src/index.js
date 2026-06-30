@@ -3416,6 +3416,25 @@ app.get('/api/chamados', async (req, res) => {
   }
 });
 
+
+
+// Delete chamado mecânico (somente administrador)
+app.delete('/api/chamados/:id', async (req, res) => {
+  try {
+    const user = req.user || {};
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    const admin = user.profile === 'Administrador' || perms.includes('Administrador') || perms.includes('Administrador (Acesso Total)');
+    if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir chamados.' });
+    const existing = await db('chamados_tecnicos').where({ id: req.params.id }).first();
+    if (!existing) return res.status(404).json({ error: 'Chamado não encontrado.' });
+    await db('chamados_tecnicos').where({ id: req.params.id }).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir chamado:', err);
+    res.status(500).json({ error: 'Erro ao excluir chamado.' });
+  }
+});
+
 app.get('/api/chamados/:id', async (req, res) => {
   try {
     const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();

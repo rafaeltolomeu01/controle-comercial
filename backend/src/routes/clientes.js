@@ -48,4 +48,25 @@ router.get('/api/clientes/:id/ficha', async (req, res) => {
   }
 });
 
+
+
+// DELETE /api/clientes/:id - exclusão de cliente (somente administrador)
+router.delete('/api/clientes/:id', async (req, res) => {
+  const { id } = req.params;
+  const db = req.app.get('db');
+  try {
+    const user = req.user || {};
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    const admin = user.profile === 'Administrador' || perms.includes('Administrador') || perms.includes('Administrador (Acesso Total)');
+    if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir clientes.' });
+    const existing = await db('clientes').where({ id }).first();
+    if (!existing) return res.status(404).json({ error: 'Cliente não encontrado.' });
+    await db('clientes').where({ id }).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir cliente:', err);
+    res.status(500).json({ error: 'Erro ao excluir cliente.' });
+  }
+});
+
 module.exports = router;
