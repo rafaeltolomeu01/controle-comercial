@@ -100,16 +100,12 @@
         }
       });
 
-      const reg = await navigator.serviceWorker.register('/sw.js');
-      
-      const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
-      if (keyResp && keyResp.publicKey && 'PushManager' in window) {
-        const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-        if (permission === 'granted') {
-          const existing = await reg.pushManager.getSubscription();
-          const sub = existing || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlBase64ToUint8Array(keyResp.publicKey) });
-          await api('/api/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
-        }
+      await navigator.serviceWorker.register('/sw.js');
+
+      // Não solicitar permissão automaticamente ao abrir o sistema.
+      // A permissão deve ser solicitada apenas quando o usuário clicar em "Receber Push no Celular".
+      if ('Notification' in window && Notification.permission === 'granted' && 'PushManager' in window) {
+        await App.setupPushNotificationsManual({ silent: true });
       }
     } catch (err) { console.warn('Push não habilitado neste ambiente:', err.message); }
   }
@@ -207,27 +203,43 @@
       } catch(e) {}
     };
 
-    App.setupPushNotificationsManual = async function() {
-      if (!('serviceWorker' in navigator)) return alert('Notificações Push não são suportadas neste navegador/dispositivo.');
+    App.setupPushNotificationsManual = async function(options) {
+      const silent = !!(options && options.silent);
+      const fail = (msg) => { if (!silent) alert(msg); return false; };
+      if (!window.isSecureContext) return fail('Notificações Push exigem HTTPS. No Render/domínio HTTPS deve funcionar normalmente.');
+      if (!('serviceWorker' in navigator)) return fail('Este navegador não suporta Service Worker. Use Chrome ou Edge atualizado.');
+      if (!('Notification' in window)) return fail('Este navegador não suporta a API de Notificações. Use Chrome ou Edge atualizado.');
+      if (!('PushManager' in window)) return fail('Este navegador não suporta PushManager/Web Push. Use Chrome ou Edge atualizado.');
       try {
         const reg = await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register('/sw.js');
         const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
-        if (keyResp && keyResp.publicKey && 'PushManager' in window) {
-          const permission = await Notification.requestPermission();
-          if (permission === 'granted') {
-            const existing = await reg.pushManager.getSubscription();
-            const sub = existing || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlBase64ToUint8Array(keyResp.publicKey) });
-            await api('/api/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
-            alert('Notificações Push ativadas com sucesso neste dispositivo!');
-          } else {
-            alert('Permissão de notificação negada. Ative as permissões nas configurações do seu navegador.');
-          }
-        } else {
-          alert('Este navegador/dispositivo não oferece suporte a Push Notifications nativas.');
-        }
+        if (!keyResp || !keyResp.publicKey) return fail('Chave pública VAPID não encontrada no servidor. Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Render.');
+
+        let permission = Notification.permission;
+        if (permission === 'default' && !silent) permission = await Notification.requestPermission();
+        if (permission === 'default' && silent) return false;
+        if (permission !== 'granted') return fail('Permissão de notificação negada. Ative as notificações deste site nas configurações do navegador e clique novamente em Receber Push no Celular.');
+
+        const existing = await reg.pushManager.getSubscription();
+        const sub = existing || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlBase64ToUint8Array(keyResp.publicKey) });
+        await api('/api/push/subscribe', {
+          method:'POST',
+          body: JSON.stringify({
+            subscription: sub,
+            permission,
+            device: {
+              platform: navigator.platform || '',
+              userAgent: navigator.userAgent || '',
+              language: navigator.language || '',
+              installedPWA: (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || !!window.navigator.standalone
+            }
+          })
+        });
+        if (!silent) alert('Notificações Push ativadas com sucesso neste dispositivo!');
+        return true;
       } catch (err) {
         console.error(err);
-        alert('Erro ao ativar notificações: ' + err.message);
+        return fail('Erro ao ativar notificações: ' + (err.message || err));
       }
     };
   }

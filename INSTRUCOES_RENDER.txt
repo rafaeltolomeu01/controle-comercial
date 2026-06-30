@@ -19,3 +19,14 @@ PASSO A PASSO PARA SUBIR NO RENDER
 
 5) Se aparecer versao antiga no navegador:
    aperte Ctrl + F5 ou abra em guia anonima.
+
+PUSH NOTIFICATIONS / PWA
+1. Gere as chaves VAPID localmente ou no shell do Render:
+   node -e "const webpush=require('web-push'); console.log(webpush.generateVAPIDKeys())"
+2. No Render, adicione estas variáveis de ambiente:
+   VAPID_PUBLIC_KEY=<publicKey gerada>
+   VAPID_PRIVATE_KEY=<privateKey gerada>
+   VAPID_SUBJECT=mailto:seuemail@seudominio.com.br
+3. Faça novo deploy.
+4. No sistema, entre logado e clique em Notificações > Receber Push no Celular.
+5. Permita a notificação no navegador. O dispositivo ficará cadastrado no banco.

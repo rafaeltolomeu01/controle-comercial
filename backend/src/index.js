@@ -28,6 +28,38 @@ const configFilePath = path.join(__dirname, 'emails_config.json');
 
 const db = knex(process.env.NODE_ENV === 'production' ? config.production : config.development);
 
+let runtimeVapidKeys = null;
+function getVapidKeys() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY, runtime: false };
+  }
+  try {
+    const webpush = require('web-push');
+    if (!runtimeVapidKeys) {
+      runtimeVapidKeys = webpush.generateVAPIDKeys();
+      console.warn('Push: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY não configuradas. Usando chaves temporárias; configure no Render para manter as inscrições após reiniciar.');
+    }
+    return { ...runtimeVapidKeys, runtime: true };
+  } catch (_) {
+    return { publicKey: '', privateKey: '', runtime: true };
+  }
+}
+async function logPushEvent(row) {
+  try {
+    if (await db.schema.hasTable('push_logs')) {
+      await db('push_logs').insert({
+        empresa_id: row.empresa_id || '001',
+        user_id: row.user_id ? String(row.user_id) : null,
+        subscription_id: row.subscription_id || null,
+        status: row.status || 'info',
+        title: row.title || null,
+        error: row.error || null,
+        created_at: new Date().toISOString()
+      });
+    }
+  } catch (_) {}
+}
+
 const insertAndGetId = async (tableName, record, idColumn = 'id') => {
   if (db.client.config.client === 'sqlite3') {
     const [insertedId] = await db(tableName).insert(record);
@@ -248,6 +280,25 @@ async function initDb() {
       table.unique(['user_id', 'endpoint']);
     });
     console.log('Database: Tabela push_subscriptions criada com sucesso.');
+  }
+  const pushSubCols = await db('push_subscriptions').columnInfo().catch(() => ({}));
+  if (!pushSubCols.device_info) await db.schema.table('push_subscriptions', table => table.text('device_info').nullable());
+  if (!pushSubCols.user_agent) await db.schema.table('push_subscriptions', table => table.text('user_agent').nullable());
+  if (!pushSubCols.permission) await db.schema.table('push_subscriptions', table => table.string('permission').nullable());
+  if (!pushSubCols.last_success_at) await db.schema.table('push_subscriptions', table => table.timestamp('last_success_at').nullable());
+  if (!pushSubCols.last_error) await db.schema.table('push_subscriptions', table => table.text('last_error').nullable());
+  if (!await db.schema.hasTable('push_logs')) {
+    await db.schema.createTable('push_logs', table => {
+      table.increments('id').primary();
+      table.string('empresa_id').notNullable().defaultTo('001');
+      table.string('user_id').nullable();
+      table.integer('subscription_id').nullable();
+      table.string('status').notNullable().defaultTo('info');
+      table.string('title').nullable();
+      table.text('error').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+    console.log('Database: Tabela push_logs criada com sucesso.');
   }
 
   // 7B. Tabela real de prospecções/leads.
@@ -844,15 +895,31 @@ app.put('/api/notificacoes/:id/read', async (req, res) => {
 app.post('/api/push/subscribe', async (req, res) => {
   try {
     const sub = req.body && req.body.subscription;
-    if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Inscrição push inválida.' });
-    const record = { empresa_id: req.user.empresa_id || '001', user_id: req.user.id, endpoint: sub.endpoint, keys_json: JSON.stringify(sub.keys || {}), updated_at: new Date().toISOString() };
-    const existing = await db('push_subscriptions').where({ user_id: req.user.id, endpoint: sub.endpoint }).first();
+    if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+      return res.status(400).json({ error: 'Inscrição push inválida.' });
+    }
+    const record = {
+      empresa_id: req.user.empresa_id || '001',
+      user_id: String(req.user.id),
+      endpoint: sub.endpoint,
+      keys_json: JSON.stringify(sub.keys || {}),
+      device_info: JSON.stringify(req.body.device || {}),
+      user_agent: req.headers['user-agent'] || '',
+      permission: req.body.permission || 'granted',
+      updated_at: new Date().toISOString()
+    };
+    const existing = await db('push_subscriptions').where({ user_id: String(req.user.id), endpoint: sub.endpoint }).first();
+    let subscriptionId = existing && existing.id;
     if (existing) await db('push_subscriptions').where({ id: existing.id }).update(record);
-    else await db('push_subscriptions').insert({ ...record, created_at: new Date().toISOString() });
-    res.json({ success: true });
+    else subscriptionId = await insertAndGetId('push_subscriptions', { ...record, created_at: new Date().toISOString() });
+    await logPushEvent({ empresa_id: req.user.empresa_id, user_id: req.user.id, subscription_id: subscriptionId, status: 'subscribed', title: 'Dispositivo cadastrado' });
+    res.json({ success: true, subscriptionId });
   } catch (err) { console.error('Erro ao salvar push:', err); res.status(500).json({ error: 'Erro ao salvar push.' }); }
 });
-app.get('/api/push/vapid-public-key', async (req, res) => res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' }));
+app.get('/api/push/vapid-public-key', async (req, res) => {
+  const keys = getVapidKeys();
+  res.json({ publicKey: keys.publicKey || '', configured: !!keys.publicKey, runtime: !!keys.runtime });
+});
 
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
 app.post('/api/uploads/base64', async (req, res) => {
@@ -940,15 +1007,27 @@ async function notifyResponsibleByPermission(empresaId, permissions, payload = {
 async function sendPushToUsers(userIds, payload) {
   let webpush;
   try { webpush = require('web-push'); } catch (_) { return; }
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!publicKey || !privateKey) return;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:notificacoes@controlecampo.local', publicKey, privateKey);
+  const keys = getVapidKeys();
+  if (!keys.publicKey || !keys.privateKey) return;
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:notificacoes@controlecampo.local', keys.publicKey, keys.privateKey);
   const subs = await db('push_subscriptions').whereIn('user_id', userIds.map(String));
   for (const sub of subs) {
     try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: JSON.parse(sub.keys_json || '{}') }, JSON.stringify(payload));
+      const subscription = { endpoint: sub.endpoint, keys: JSON.parse(sub.keys_json || '{}') };
+      await webpush.sendNotification(subscription, JSON.stringify({
+        title: payload.title || 'Controle de Campo',
+        body: payload.body || '',
+        module: payload.module || 'geral',
+        record_id: payload.record_id || '',
+        target_hash: payload.target_hash || '/',
+        created_at: new Date().toISOString()
+      }));
+      await db('push_subscriptions').where({ id: sub.id }).update({ last_success_at: new Date().toISOString(), last_error: null }).catch(()=>{});
+      await logPushEvent({ empresa_id: sub.empresa_id, user_id: sub.user_id, subscription_id: sub.id, status: 'sent', title: payload.title || 'Controle de Campo' });
     } catch (err) {
+      const msg = err && (err.body || err.message || String(err));
+      await db('push_subscriptions').where({ id: sub.id }).update({ last_error: msg, updated_at: new Date().toISOString() }).catch(()=>{});
+      await logPushEvent({ empresa_id: sub.empresa_id, user_id: sub.user_id, subscription_id: sub.id, status: 'error', title: payload.title || 'Controle de Campo', error: msg });
       if ([404,410].includes(err.statusCode)) await db('push_subscriptions').where({ id: sub.id }).delete().catch(()=>{});
     }
   }
