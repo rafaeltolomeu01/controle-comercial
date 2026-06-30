@@ -3182,32 +3182,42 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
 // Approve/Reject travel expense refund
 app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
   const { id } = req.params;
-  const { status, observacao } = req.body; // status: Aprovado, Reprovado, Correção Solicitada
+  const { status, observacao, observation } = req.body || {}; // status: Aprovado, Reprovado, Correção Solicitada
+  const note = String(observacao || observation || '').trim();
 
   if (!['Aprovado','Reprovado','Correção Solicitada'].includes(status)) {
     return res.status(400).json({ error: 'Status inválido para avaliação de despesa.' });
   }
 
-  if ((status === 'Reprovado' || status === 'Correção Solicitada') && (!observacao || !observacao.trim())) {
-    return res.status(400).json({ error: 'A justificativa é obrigatória para reprovar a despesa.' });
+  if ((status === 'Reprovado' || status === 'Correção Solicitada') && !note) {
+    return res.status(400).json({ error: 'A justificativa é obrigatória para reprovar ou enviar a despesa para correção.' });
   }
 
-  const allowed = ['Administrador', 'Financeiro'];
-  if (!allowed.includes(req.user.profile) && !req.user.permissions.includes('Aprovação de Despesas') && !req.user.permissions.includes('Administrador')) {
+  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const canApproveExpense = req.user.profile === 'Administrador'
+    || req.user.profile === 'Financeiro'
+    || perms.includes('Aprovação de Despesas')
+    || perms.includes('Financeiro')
+    || perms.includes('Administrador')
+    || perms.includes('Administrador (Acesso Total)');
+
+  if (!canApproveExpense) {
     return res.status(403).json({ error: 'Sem permissão para aprovar despesas.' });
   }
 
   try {
-    const record = await db('despesas_reembolsos')
-      .where({ id, empresa_id: req.user.empresa_id })
-      .first();
+    let recordQuery = db('despesas_reembolsos').where({ id });
+    if (req.user.profile !== 'Administrador' && !perms.includes('Administrador') && req.user.empresa_id) {
+      recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
+    }
+    const record = await recordQuery.first();
 
     if (!record) {
-      return res.status(404).json({ error: 'Despesa não encontrada' });
+      return res.status(404).json({ error: 'Despesa não encontrada.' });
     }
 
-    const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const actorPerms = perms;
+    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador') || actorPerms.includes('Administrador (Acesso Total)');
     if (!isActorAdmin) {
       const permittedIds = await getPermittedSellerIds(req.user, db);
       if (!permittedIds.map(String).includes(String(record.userId))) {
@@ -3217,19 +3227,23 @@ app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
 
     await db('despesas_reembolsos').where({ id }).update({
       status,
-      observation: observacao || '',
+      observation: note,
       updated_at: new Date().toISOString()
     });
 
-    // Auditoria
-    await db('auditoria_logs').insert({
-      usuario_id: req.user.id,
-      acao: status === 'Aprovado' ? 'APROVOU_DESPESA' : 'REPROVOU_DESPESA',
-      detalhes: `Despesa de campo #${id} avaliada como ${status.toUpperCase()} por ${req.user.name || req.user.id}. Observação: "${observacao || '-'}"`,
-      empresa_id: req.user.empresa_id
-    });
+    // Auditoria não pode transformar uma aprovação salva em erro para o usuário.
+    try {
+      await db('auditoria_logs').insert({
+        usuario_id: req.user.id,
+        acao: status === 'Aprovado' ? 'APROVOU_DESPESA' : (status === 'Reprovado' ? 'REPROVOU_DESPESA' : 'ENVIOU_DESPESA_CORRECAO'),
+        detalhes: `Despesa de campo #${id} avaliada como ${status.toUpperCase()} por ${req.user.name || req.user.id}. Observação: "${note || '-'}"`,
+        empresa_id: req.user.empresa_id
+      });
+    } catch (auditErr) {
+      console.warn('Falha ao registrar auditoria da despesa, mas a aprovação foi salva:', auditErr.message);
+    }
 
-    res.json({ success: true });
+    res.json({ success: true, id, status, observacao: note });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao avaliar despesa de campo' });
