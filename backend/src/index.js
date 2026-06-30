@@ -2420,16 +2420,18 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   const { status, motivo_reprovacao, patrimonio_novo, modelo_novo, voltagem_nova } = req.body;
 
   const movementPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-  const canApproveMovement = req.user.profile === 'Administrador'
-    || req.user.profile === 'Responsável Equipamentos'
+  // Regra de segurança: Supervisor e Vendedor NÃO podem confirmar/aprovar/reprovar movimentação.
+  // A confirmação fica restrita ao Administrador ou Responsável Equipamentos.
+  const profile = String(req.user.profile || '');
+  const isSupervisorOrSeller = profile === 'Supervisor' || profile === 'Vendedor';
+  const canApproveMovement = !isSupervisorOrSeller && (
+    profile === 'Administrador'
+    || profile === 'Responsável Equipamentos'
     || movementPerms.includes('Administrador')
     || movementPerms.includes('Administrador (Acesso Total)')
-    || movementPerms.includes('Confirmação de Movimentação')
-    || movementPerms.includes('Confirmação de Troca')
-    || movementPerms.includes('Avaliação de Movimentação')
-    || movementPerms.includes('Equipamentos');
+  );
   if (!canApproveMovement) {
-    return res.status(403).json({ error: 'Acesso negado: somente responsável por equipamentos ou usuário com permissão de confirmação pode aprovar movimentação.' });
+    return res.status(403).json({ error: 'Acesso negado: somente Administrador ou Responsável Equipamentos pode aprovar/reprovar movimentação.' });
   }
 
   if (status === 'Reprovado' && !motivo_reprovacao) {
