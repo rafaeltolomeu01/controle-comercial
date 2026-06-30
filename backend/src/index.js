@@ -3409,7 +3409,7 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
       operacao: b.operacao || record.operacao,
       descreva: b.descreva !== undefined ? b.descreva : record.descreva,
       veiculo: b.veiculo !== undefined ? b.veiculo : record.veiculo,
-      km: b.km !== undefined && b.km !== '' ? parseInt(b.km, 10) : record.km,
+      km: b.km === null || b.km === '' ? null : (b.km !== undefined && !isNaN(parseInt(b.km, 10)) ? parseInt(b.km, 10) : record.km),
       foto_odometro: b.foto_odometro !== undefined ? b.foto_odometro : record.foto_odometro,
       foto_comprovante: b.foto_comprovante !== undefined ? b.foto_comprovante : record.foto_comprovante,
       value: b.value !== undefined && b.value !== '' ? ccNum(b.value) : record.value,
