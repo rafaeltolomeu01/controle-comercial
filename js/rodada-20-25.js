@@ -44,6 +44,7 @@
   }
 
   function ensureTabs(){
+    return; // abas controladas por js/correcao-abas-navegacao-30-06.js
     const host = document.querySelector('#view-despesas .view-tabs, #view-solicitacao-despesas .view-tabs, #view-despesas-dashboard .view-tabs');
     if (!host) return;
     const tabs = [
@@ -244,5 +245,5 @@
   App.onRouteChanged = function(hash){ if (hash !== '#despesas') sessionStorage.removeItem('cc_expense_approval_mode'); const r = oldRoute(hash); setTimeout(()=>{ ensureTabs(); UI.updateBalanceCards?.(); },120); return r; };
 
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ensureTabs(); UI.updateBalanceCards?.();},800));
-  new MutationObserver(()=>setTimeout(ensureTabs,80)).observe(document.documentElement,{childList:true,subtree:true});
+  // MutationObserver de abas desativado para evitar pisca-pisca/duplicidade.
 })();

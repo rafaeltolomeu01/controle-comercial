@@ -21,6 +21,7 @@
   }
 
   function cleanTabs(){
+    return; // abas controladas por js/correcao-abas-navegacao-30-06.js
     document.querySelectorAll('.view-tabs').forEach(host=>{
       const original = [...host.querySelectorAll('a,button')];
       const byText = new Map();
@@ -208,5 +209,5 @@
   const oldRoute = window.App?.onRouteChanged?.bind(App);
   if(oldRoute && !App.__ccRouteAtual){ App.__ccRouteAtual=true; App.onRouteChanged=function(hash){ if(hash!=='#despesas') sessionStorage.removeItem('cc_expense_approval_mode'); const r=oldRoute(hash); setTimeout(()=>{cleanTabs();enhanceBulkActions();ensureBatchPdfButton();},150); return r; }; }
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{cleanTabs();enhanceBulkActions();ensureBatchPdfButton();},900));
-  new MutationObserver(()=>setTimeout(()=>{cleanTabs();enhanceBulkActions();ensureBatchPdfButton();},120)).observe(document.documentElement,{childList:true,subtree:true});
+  new MutationObserver(()=>setTimeout(()=>{enhanceBulkActions();ensureBatchPdfButton();},120)).observe(document.documentElement,{childList:true,subtree:true});
 })();

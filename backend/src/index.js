@@ -3696,7 +3696,73 @@ app.get('/api/exchange/simulations/:id', async (req, res) => {
     console.error('Erro ao carregar detalhes da simulação:', err);
     res.status(500).json({ error: 'Erro ao carregar detalhes da simulação.' });
   }
-});// Client ficha route
+});
+
+// 6. Update simulation - somente o próprio usuário ou administrador pode editar
+app.put('/api/exchange/simulations/:id', async (req, res) => {
+  const { id } = req.params;
+  const { cliente_codigo, cliente_nome_fantasia, total, generated_message, items } = req.body;
+  const companyId = (req.user && req.user.empresa_id) || '001';
+  const userId = (req.user && req.user.id) || 'demo_user';
+
+  if (!cliente_codigo || !cliente_nome_fantasia || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Dados da simulação inválidos ou incompletos.' });
+  }
+
+  try {
+    const sim = await db('exchange_simulations')
+      .where({ id, company_id: companyId })
+      .first();
+
+    if (!sim) return res.status(404).json({ error: 'Simulação não encontrada.' });
+
+    const perfil = String((req.user && (req.user.profile || req.user.perfil || req.user.role)) || '').toLowerCase();
+    const isAdminUser = perfil.includes('admin') || perfil.includes('administrador');
+    if (!isAdminUser && String(sim.seller_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Você só pode editar trocas cadastradas por você.' });
+    }
+
+    await db('exchange_simulations')
+      .where({ id })
+      .update({
+        cliente_codigo,
+        cliente_nome_fantasia,
+        total: parseFloat(total) || 0,
+        generated_message,
+        updated_at: new Date().toISOString()
+      });
+
+    await db('exchange_simulation_items').where({ simulation_id: id }).del();
+
+    const itemsToInsert = items.map(it => ({
+      simulation_id: id,
+      product_id: it.product_id || null,
+      codigo: it.codigo,
+      produto: it.produto,
+      categoria: it.categoria || 'Outros',
+      tipo: it.tipo,
+      quantidade: parseInt(it.quantidade, 10) || 0,
+      valor_base: parseFloat(it.valor_base) || 0,
+      total_item: parseFloat(it.total_item) || 0,
+      created_at: new Date().toISOString()
+    }));
+
+    await db('exchange_simulation_items').insert(itemsToInsert);
+
+    await db('auditoria_logs').insert({
+      usuario_id: userId,
+      acao: 'EDITOU_SIMULACAO_TROCA',
+      detalhes: `Simulação de troca #${id} editada para cliente ${cliente_nome_fantasia} (${cliente_codigo}).`,
+      empresa_id: companyId
+    }).catch(() => {});
+
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error('Erro ao editar simulação:', err);
+    res.status(500).json({ error: 'Erro ao editar simulação de troca.' });
+  }
+});
+// Client ficha route
 const clientesRoutes = require('./routes/clientes');
 app.use(clientesRoutes);
 
