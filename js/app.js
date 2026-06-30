@@ -1080,7 +1080,7 @@ const App = {
         if (loggedUser && loggedUser.profile === 'Vendedor' && loggedUser.unitId !== 'all') {
           unitId = loggedUser.unitId;
         }
-        const category = document.getElementById('client-category').value;
+        const category = App.normalizeConfigText(document.getElementById('client-category').value);
 
         // Commercial fields
         const companyName = document.getElementById('client-company-name').value;
@@ -1134,15 +1134,23 @@ const App = {
         // Não usar filesystem/localStorage para fotos de cliente. Cada campo tem URL própria.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
-        await Promise.all(suffixes.map(async (suffix) => {
+        const failedPhotos = [];
+        for (const suffix of suffixes) {
           const fileInput = document.getElementById(`client-photo-${suffix}`);
           photoUrls[suffix] = '';
           if (fileInput && fileInput.files && fileInput.files[0]) {
             const file = fileInput.files[0];
-            const base64 = await Store.fileToBase64(file);
-            photoUrls[suffix] = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+            try {
+              const base64 = await Store.fileToBase64(file);
+              const savedUrl = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+              if (savedUrl) photoUrls[suffix] = savedUrl;
+              else failedPhotos.push(suffix);
+            } catch (uploadErr) {
+              console.error(`Erro ao salvar foto do cliente (${suffix}):`, uploadErr);
+              failedPhotos.push(suffix);
+            }
           }
-        }));
+        }
 
         const clients = Store.getClients();
         const cnpjLimpo = (cnpj || '').replace(/\D/g, '');
@@ -1233,6 +1241,9 @@ const App = {
         const formContainer = document.getElementById('client-form-container');
         if (formContainer) formContainer.classList.add('hidden');
 
+        if (failedPhotos.length) {
+          alert('Cadastro salvo, mas algumas fotos não foram salvas: ' + failedPhotos.join(', ') + '. Tente reenviar somente essas fotos na edição do cliente.');
+        }
         this.showToast('Cadastro comercial completo enviado para aprovação!');
         } catch (err) {
           console.error(err);
@@ -7252,3 +7263,85 @@ App.copyExchangeHistoryMessage = async function(simId) {
   }
 };
 
+
+
+/**
+ * Correções 30/06 - categorias, padrão de equipamentos e upload resiliente de fotos.
+ * Não reescreve módulos: apenas normaliza dados vindos de configuração e ajusta selects.
+ */
+App.normalizeConfigText = function(item) {
+  if (item == null) return '';
+  if (typeof item === 'string') return item.trim();
+  if (typeof item === 'number') return String(item).trim();
+  if (typeof item === 'object') {
+    return String(item.name || item.nome || item.title || item.titulo || item.label || item.descricao || item.description || item.value || '').trim();
+  }
+  return String(item).trim();
+};
+
+App.getCleanClientCategories = function() {
+  const raw = (window.Store && typeof Store.getClientCategories === 'function') ? Store.getClientCategories() : [];
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map(App.normalizeConfigText)
+    .filter(v => v && v !== '[object Object]' && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+};
+
+App.getCleanEquipmentTypes = function() {
+  const raw = (window.Store && typeof Store.getEquipmentTypes === 'function') ? Store.getEquipmentTypes() : [];
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map(App.normalizeConfigText)
+    .filter(v => v && v !== '[object Object]' && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+};
+
+App.applyClientCorrectionsToSelects = function() {
+  const cat = document.getElementById('client-category');
+  if (cat) {
+    const current = App.normalizeConfigText(cat.value);
+    const categories = App.getCleanClientCategories();
+    cat.innerHTML = '<option value="" disabled>Selecione...</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (current && categories.includes(current)) cat.value = current;
+  }
+
+  const requested = document.getElementById('client-requested-eq-type');
+  if (requested) {
+    const current = App.normalizeConfigText(requested.value);
+    const types = App.getCleanEquipmentTypes();
+    requested.innerHTML = '<option value="" disabled>Selecione...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (current && types.includes(current)) requested.value = current;
+  }
+
+  const sendable = document.getElementById('client-sendable-eq-type');
+  if (sendable) {
+    const current = App.normalizeConfigText(sendable.value);
+    const patterns = ['Alto padrão', 'Médio padrão', 'Baixo padrão'];
+    sendable.innerHTML = '<option value="" disabled>Selecione o padrão...</option>' + patterns.map(p => `<option value="${p}">${p}</option>`).join('');
+    if (current && patterns.includes(current)) sendable.value = current;
+  }
+};
+
+(function patchClientConfigDropdowns() {
+  const originalSetup = App.setupEventListeners;
+  if (typeof originalSetup === 'function' && !App._clientCorrectionsSetupPatched) {
+    App._clientCorrectionsSetupPatched = true;
+    App.setupEventListeners = function(...args) {
+      const result = originalSetup.apply(this, args);
+      setTimeout(() => App.applyClientCorrectionsToSelects(), 0);
+      return result;
+    };
+  }
+
+  const originalNavigate = App.navigate;
+  if (typeof originalNavigate === 'function' && !App._clientCorrectionsNavigatePatched) {
+    App._clientCorrectionsNavigatePatched = true;
+    App.navigate = function(...args) {
+      const result = originalNavigate.apply(this, args);
+      setTimeout(() => App.applyClientCorrectionsToSelects(), 0);
+      return result;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', () => setTimeout(() => App.applyClientCorrectionsToSelects(), 300));
+  window.addEventListener('hashchange', () => setTimeout(() => App.applyClientCorrectionsToSelects(), 300));
+})();
