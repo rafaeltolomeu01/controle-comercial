@@ -3547,12 +3547,16 @@ const App = {
     };
 
     if (!list || list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted);">Nenhuma solicitação encontrada.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted);">Nenhuma solicitação encontrada.</td></tr>`;
       return;
     }
 
     const fmt = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
     const loggedUser = Store.getLoggedUser() || {};
+    const adminUser = isAdminLike(loggedUser);
+
+    // Garante botão de excluir selecionados acima da tabela
+    this._ensureBulkDeleteSolicitacoes();
 
     tbody.innerHTML = list.map(req => {
       let statusClass = 'badge-warning';
@@ -3562,12 +3566,16 @@ const App = {
 
       const isOwner = String(req.usuario_id || req.userId || '') === String(loggedUser.id || '');
       const canEdit = req.status === 'Pendente' && isOwner;
-      const canDelete = req.status === 'Pendente' && (isOwner || isAdminLike(loggedUser));
+      // Admin pode excluir qualquer status; dono só pode excluir Pendente
+      const canDelete = adminUser || (req.status === 'Pendente' && isOwner);
       const editButton = canEdit ? `<button class="btn btn-secondary btn-sm" onclick="App.editExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Editar</button>` : '';
       const deleteButton = canDelete ? `<button class="btn btn-danger btn-sm" onclick="App.deleteExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Excluir</button>` : '';
+      // Checkbox apenas para admin
+      const checkboxCol = adminUser ? `<td onclick="event.stopPropagation()" style="width:34px;text-align:center;"><input type="checkbox" class="cc-sol-check" value="${req.id}" style="width:16px;height:16px;cursor:pointer;"></td>` : '<td></td>';
 
       return `
-        <tr>
+        <tr data-id="${req.id}">
+          ${checkboxCol}
           <td style="font-family: monospace; font-size: 0.75rem;">#${req.id}</td>
           <td>${safeDateBR(req.data_solicitacao || req.created_at || req.createdAt)}</td>
           <td style="font-weight: 600;">${req.solicitante}</td>
@@ -3588,7 +3596,80 @@ const App = {
         </tr>
       `;
     }).join('');
+
+    // Atualiza visibilidade do botão de excluir selecionados conforme checkboxes
+    this._updateBulkDeleteBtn();
   },
+
+  _ensureBulkDeleteSolicitacoes() {
+    const tbody = document.getElementById('despesas-solicitacoes-table-body');
+    if (!tbody) return;
+    const table = tbody.closest('table');
+    if (!table) return;
+
+    // Cabeçalho: adiciona coluna de checkbox se não tiver
+    const thead = table.querySelector('thead tr');
+    if (thead && !thead.querySelector('.cc-sol-check-all-th')) {
+      const th = document.createElement('th');
+      th.className = 'cc-sol-check-all-th';
+      th.style.cssText = 'width:34px;text-align:center;';
+      th.innerHTML = '<input type="checkbox" id="cc-sol-check-all" title="Selecionar todos" style="width:16px;height:16px;cursor:pointer;">';
+      thead.insertBefore(th, thead.firstChild);
+      document.getElementById('cc-sol-check-all')?.addEventListener('change', (e) => {
+        document.querySelectorAll('.cc-sol-check').forEach(cb => cb.checked = e.target.checked);
+        this._updateBulkDeleteBtn();
+      });
+    }
+
+    // Botão excluir selecionados
+    const card = tbody.closest('.card');
+    if (card && !document.getElementById('cc-btn-excluir-selecionados')) {
+      const btn = document.createElement('button');
+      btn.id = 'cc-btn-excluir-selecionados';
+      btn.className = 'btn btn-danger btn-sm';
+      btn.textContent = 'Excluir Selecionados';
+      btn.style.cssText = 'display:none; margin: 0 0 10px 8px; float:right;';
+      btn.onclick = () => this._deleteSelectedSolicitacoes();
+      const cardHeader = card.querySelector('.card-header');
+      if (cardHeader) cardHeader.appendChild(btn);
+    }
+
+    // Listener para atualizar botão ao marcar/desmarcar
+    if (!tbody.dataset.bulkListenerAdded) {
+      tbody.dataset.bulkListenerAdded = '1';
+      tbody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('cc-sol-check')) this._updateBulkDeleteBtn();
+      });
+    }
+  },
+
+  _updateBulkDeleteBtn() {
+    const n = document.querySelectorAll('.cc-sol-check:checked').length;
+    const btn = document.getElementById('cc-btn-excluir-selecionados');
+    if (btn) btn.style.display = n > 0 ? 'inline-block' : 'none';
+  },
+
+  async _deleteSelectedSolicitacoes() {
+    const ids = [...document.querySelectorAll('.cc-sol-check:checked')].map(cb => cb.value).filter(Boolean);
+    if (!ids.length) return;
+    if (!confirm(`Confirma exclusão de ${ids.length} solicitação(ões) selecionada(s)?`)) return;
+    let erros = 0;
+    for (const id of ids) {
+      try {
+        await this.fetchFromApi(`/api/despesas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } catch (e) {
+        erros++;
+        console.error('Erro ao excluir solicitação ' + id, e);
+      }
+    }
+    this.showToast(erros === 0 ? `${ids.length} solicitação(ões) excluída(s)!` : `Concluído com ${erros} erro(s).`);
+    // Desmarcar tudo e recarregar
+    const chkAll = document.getElementById('cc-sol-check-all');
+    if (chkAll) chkAll.checked = false;
+    this._updateBulkDeleteBtn();
+    await this.loadDespesasDashboard?.();
+  },
+
 
   /**
    * Detail expense request modal
