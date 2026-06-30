@@ -267,23 +267,25 @@ const Store = {
   getProspects() { return this.getList('prospects', DEFAULT_PROSPECTS); },
   saveProspects(data) { return this.saveList('prospects', data); },
 
-  // Seller filter utilities
-  setCurrentSellerId(id) { localStorage.setItem('selectedSellerId', id); },
+  // Utilitários de filtro por vendedor
+  setCurrentSellerId(id) { localStorage.setItem('selectedSellerId', id || ''); },
   getCurrentSellerId() { return localStorage.getItem('selectedSellerId') || ''; },
 
-  // Client getters/setters (filtered by selected seller)
+  // Clientes: getter com filtro por vendedor selecionado (para exibição)
   getClients() {
     const all = this.getList('clients', DEFAULT_CLIENTS);
     const sellerId = this.getCurrentSellerId();
     if (!sellerId) return all;
-    return all.filter(c => String(c.vendedor_id || '') === String(sellerId));
+    return all.filter(c => String(c.vendedor_id || c.vendedor || '') === String(sellerId));
   },
+  // Retorna TODOS os clientes independente do filtro (para uso interno)
+  getAllClients() { return this.getList('clients', DEFAULT_CLIENTS); },
   saveClients(data) { return this.saveList('clients', data); },
 
-  // Delete a client locally and sync to backend
+  // Exclui cliente localmente (usando lista COMPLETA) e sincroniza com backend
   async deleteClient(id) {
-    const clients = this.getClients().filter(c => c.id !== id);
-    this.saveClients(clients);
+    const allClients = this.getAllClients().filter(c => String(c.id) !== String(id));
+    this.saveClients(allClients);
     try {
       await this.backendRequest(`/api/clientes/${id}`, { method: 'DELETE' });
     } catch (e) {
@@ -291,10 +293,25 @@ const Store = {
     }
   },
 
-  // Seller filter utilities
-  setCurrentSellerId(id) { localStorage.setItem('selectedSellerId', id); },
-  getCurrentSellerId() { return localStorage.getItem('selectedSellerId') || ''; },
+  // Formata data/hora para fuso de Brasília
+  formatBRDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return dateStr; }
+  },
 
+  // Formata apenas a data (sem hora)
+  formatBRDateOnly(dateStr) {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (_) { return dateStr; }
+  },
 
 
   getEquipments() { return this.getList('equipments', DEFAULT_EQUIPMENTS); },
