@@ -15,10 +15,31 @@
   window.CC_safeDateBR = function(value){
     if (!value) return '-';
     const raw = String(value).trim();
+    
+    // 1. Já no formato BR: manter intacto
     const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:.*?(\d{2}):(\d{2}))?/);
     if (br) return `${br[1]}/${br[2]}/${br[3]}${br[4] ? ' ' + br[4] + ':' + br[5] : ''}`;
+    
+    // 2. Data pura YYYY-MM-DD (ou com hora zerada de BD): exibir diretamente sem deslocamento de timezone
+    const pureDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s]00:00:00)?/);
+    if (pureDate && !raw.includes('T') && !raw.includes('Z')) {
+      return `${pureDate[3]}/${pureDate[2]}/${pureDate[1]}`;
+    }
+    
+    // 3. Timestamp ISO completo com fuso horário (ex: Z, -03:00): converter para o fuso local do navegador
+    if (raw.includes('T') || raw.includes('Z') || raw.includes('-03') || raw.includes('+00')) {
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        const datePart = d.toLocaleDateString('pt-BR');
+        const timePart = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        return `${datePart} ${timePart}`;
+      }
+    }
+    
+    // 4. Regex fallback para outros formatos ISO
     const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
     if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}${iso[4] ? ' ' + iso[4] + ':' + iso[5] : ''}`;
+    
     const d = new Date(raw);
     return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
   };

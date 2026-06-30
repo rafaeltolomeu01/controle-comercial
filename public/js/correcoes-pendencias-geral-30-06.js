@@ -114,7 +114,48 @@
   async function pollNotifications(){
     try {
       const list = await api('/api/notificacoes');
-      renderNotifications(list || []);
+      const unread = (list || []).filter(n => !n.read);
+      
+      // Update bell badge
+      const badge = document.getElementById('cc-notification-badge');
+      if (badge) {
+        if (unread.length > 0) {
+          badge.textContent = unread.length;
+          badge.style.display = 'block';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      // Hide the old dashboard box overlay entirely
+      const box = document.getElementById('cc-notifications-box');
+      if (box) box.style.display = 'none';
+
+      // Auto-refresh notifications page if active
+      if (window.location.hash === '#notificacoes') {
+        const container = document.getElementById('notif-page-list');
+        if (container) {
+          // Render items inside page
+          if (!list || !list.length) {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Nenhuma notificação encontrada.</div>';
+          } else {
+            container.innerHTML = list.map(n => `
+              <div style="padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 15px; background: ${n.read ? 'transparent' : 'rgba(37,99,235,0.06)'}; border-left: 4px solid ${n.read ? 'var(--border-color)' : 'var(--primary-color)'};">
+                <div>
+                  <strong style="display: block; margin-bottom: 4px;">${escapeHtml(n.title)}</strong>
+                  <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 6px;">${escapeHtml(n.body || '')}</div>
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">${n.created_at ? new Date(n.created_at).toLocaleString('pt-BR') : ''}</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  ${n.read ? '' : `<button class="btn btn-secondary btn-sm" onclick="App.markNotificationRead(${n.id})" type="button" style="padding: 4px 10px; font-size: 0.75rem;">Marcar como lida</button>`}
+                  <button class="btn btn-primary btn-sm" onclick="App.openNotification(${n.id}, '${escapeAttr(n.target_hash || '')}')" type="button" style="padding: 4px 10px; font-size: 0.75rem;">Abrir</button>
+                </div>
+              </div>
+            `).join('');
+          }
+        }
+      }
+
       (list || []).filter(n => !n.read).slice(0,5).forEach(n => {
         if (!lastNotifIds.has(n.id) && window.Notification && Notification.permission === 'granted') {
           new Notification(n.title || 'Controle de Campo', { body: n.body || '', tag: 'cc-'+n.id });
@@ -124,32 +165,60 @@
     } catch (_) {}
   }
   function renderNotifications(list){
-    const unread = (list || []).filter(n => !n.read);
-    let box = document.getElementById('cc-notifications-box');
-    const dashboard = document.querySelector('#view-dashboard .view-content, #dashboard, .dashboard-content, main');
-    if (!dashboard) return;
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'cc-notifications-box';
-      box.className = 'card';
-      box.style.cssText = 'margin:16px 0;border-color:rgba(37,99,235,.35);';
-      dashboard.prepend(box);
-    }
-    if (!unread.length) { box.style.display = 'none'; return; }
-    box.style.display = '';
-    box.innerHTML = `<div class="card-header"><span class="card-title">Notificações pendentes (${unread.length})</span></div>` + unread.slice(0,6).map(n => `
-      <div style="padding:10px 0;border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:space-between;align-items:flex-start;">
-        <div><strong>${escapeHtml(n.title)}</strong><div style="color:var(--text-muted);font-size:.9rem;">${escapeHtml(n.body || '')}</div></div>
-        <button class="btn btn-primary btn-sm" onclick="App.openNotification(${n.id}, '${escapeAttr(n.target_hash || '')}')">Abrir</button>
-      </div>`).join('');
+    // Obsolete - using subpage
   }
   function escapeHtml(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function escapeAttr(v){ return String(v ?? '').replace(/'/g, '\\&#39;'); }
-  if (window.App && !App.openNotification) {
+  
+  if (window.App) {
     App.openNotification = async function(id, hash){
       await api(`/api/notificacoes/${id}/read`, { method:'PUT' }).catch(()=>{});
       if (hash) window.location.hash = hash;
       setTimeout(pollNotifications, 400);
+    };
+
+    App.loadNotificationPage = async function() {
+      await pollNotifications();
+    };
+
+    App.markNotificationRead = async function(id) {
+      await api(`/api/notificacoes/${id}/read`, { method:'PUT' }).catch(()=>{});
+      pollNotifications();
+    };
+
+    App.markAllNotificationsRead = async function() {
+      try {
+        const list = await api('/api/notificacoes');
+        const unread = (list || []).filter(n => !n.read);
+        for (const n of unread) {
+          await api(`/api/notificacoes/${n.id}/read`, { method:'PUT' }).catch(()=>{});
+        }
+        pollNotifications();
+      } catch(e) {}
+    };
+
+    App.setupPushNotificationsManual = async function() {
+      if (!('serviceWorker' in navigator)) return alert('Notificações Push não são suportadas neste navegador/dispositivo.');
+      try {
+        const reg = await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register('/sw.js');
+        const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
+        if (keyResp && keyResp.publicKey && 'PushManager' in window) {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            const existing = await reg.pushManager.getSubscription();
+            const sub = existing || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlBase64ToUint8Array(keyResp.publicKey) });
+            await api('/api/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
+            alert('Notificações Push ativadas com sucesso neste dispositivo!');
+          } else {
+            alert('Permissão de notificação negada. Ative as permissões nas configurações do seu navegador.');
+          }
+        } else {
+          alert('Este navegador/dispositivo não oferece suporte a Push Notifications nativas.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao ativar notificações: ' + err.message);
+      }
     };
   }
 

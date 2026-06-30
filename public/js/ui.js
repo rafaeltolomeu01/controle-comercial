@@ -888,7 +888,7 @@ const UI = {
           const d = new Date(raw);
           return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
         };
-        let dateStr = safeDateBR(req.data_solicitacao || req.created_at || req.createdAt);
+        let dateStr = safeDateBR(req.created_at || req.createdAt || req.data_solicitacao);
 
         return `
           <tr class="mobile-summary-row" onclick="App.showDespesaDetails('${req.id}')">
@@ -1482,6 +1482,12 @@ const UI = {
     if (movModeloAdicao && movModeloAdicao.tagName === 'SELECT') {
       movModeloAdicao.innerHTML = '<option value="" selected disabled>Selecione o modelo cadastrado...</option>' + 
         equipmentTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+    }
+
+    const ticketOpenEqType = document.getElementById('ticket-open-eq-type');
+    if (ticketOpenEqType) {
+      ticketOpenEqType.innerHTML = '<option value="" selected disabled>Selecione...</option>' + 
+        equipmentTypes.map(type => `<option value="${typeof type === 'object' ? (type.name || type.label || type.value) : type}">${typeof type === 'object' ? (type.name || type.label || type.value) : type}</option>`).join('');
     }
   },
 

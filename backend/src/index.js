@@ -9,6 +9,12 @@ function ccNum(v) {
   const n = parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
 }
+function getBrasiliaDateTime() {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const timeStr = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+  return { date: dateStr, time: timeStr, iso: now.toISOString() };
+}
 
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -1287,14 +1293,14 @@ app.post('/api/store/:key', async (req, res) => {
           };
           if (existingClient) {
             if (client.status === 'Aprovado' && existingClient.status !== 'Aprovado') {
-              clientData.data_aprovacao = new Date().toISOString().split('T')[0];
+              clientData.data_aprovacao = getBrasiliaDateTime().date;
             }
             await db('clientes').where({ id: client.id }).update(clientData);
           } else {
             await db('clientes').insert({
               id: client.id,
               ...clientData,
-              data_cadastro: new Date().toISOString().split('T')[0]
+              data_cadastro: getBrasiliaDateTime().date
             });
           }
         }
@@ -1402,9 +1408,9 @@ app.post('/api/despesas', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
 
-  const now = new Date();
-  const data_solicitacao = now.toISOString().split('T')[0];
-  const hora_solicitacao = now.toTimeString().split(' ')[0];
+  const bdt = getBrasiliaDateTime();
+  const data_solicitacao = bdt.date;
+  const hora_solicitacao = bdt.time;
 
   const newReq = {
     empresa_id: targetEmpresaId,
@@ -1418,8 +1424,8 @@ app.post('/api/despesas', async (req, res) => {
     valor_abastecimento: valor_abastecimento || 0,
     rota_destino: rota_destino || '',
     placa_veiculo: placa_veiculo || '',
-    created_at: now.toISOString(),
-    updated_at: now.toISOString()
+    created_at: bdt.iso,
+    updated_at: bdt.iso
   };
 
   try {
@@ -1830,9 +1836,9 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
       return res.status(400).json({ error: 'A avaliação detalhada dos itens é obrigatória.' });
     }
 
-    const now = new Date();
-    const data_aprovacao = now.toISOString().split('T')[0];
-    const hora_aprovacao = now.toTimeString().split(' ')[0];
+    const bdt = getBrasiliaDateTime();
+    const data_aprovacao = bdt.date;
+    const hora_aprovacao = bdt.time;
 
     let allApprovedIntegral = true;
     let allReproved = true;
@@ -1968,9 +1974,7 @@ app.delete('/api/despesas/:id', async (req, res) => {
       return res.status(errorStatus).json({ error: errorMessage });
     }
 
-    if (request.status !== 'Pendente') {
-      return res.status(400).json({ error: 'Apenas solicitações Pendentes podem ser excluídas.' });
-    }
+    // Permitir que o administrador exclua solicitações em qualquer status
 
     await db('despesas_solicitacoes').where({ id }).delete();
     res.json({ success: true });
@@ -3225,13 +3229,14 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
   const empresa_id = req.user.empresa_id;
 
   try {
+    const bdt = getBrasiliaDateTime();
     const newRecord = {
       id,
       empresa_id,
       userId: req.user.id,
       unitId: (req.user.unitId && req.user.unitId !== 'all') ? req.user.unitId : (unitId || 'all'),
-      date: date || new Date().toISOString().split('T')[0],
-      time: time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      date: date || bdt.date,
+      time: time || bdt.time.slice(0, 5),
       finalidade,
       operacao,
       descreva: descreva || '',
@@ -3364,9 +3369,7 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
 
-    if (record.status !== 'Pendente') {
-      return res.status(400).json({ error: 'Apenas despesas com status Pendente podem ser excluídas.' });
-    }
+    // Permitir que o administrador exclua reembolsos em qualquer status
 
     const isOwner = String(record.userId) === String(req.user.id);
     

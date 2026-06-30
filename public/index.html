@@ -191,7 +191,14 @@
           </div>
         </div>
 
-        <div class="company-badge">
+        <div class="company-badge" style="display: flex; align-items: center; gap: 12px;">
+          <div id="btn-notification-bell" style="position: relative; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-main);" onclick="window.location.hash = '#notificacoes'">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span id="cc-notification-badge" style="display: none; position: absolute; top: -4px; right: -4px; background: #ef4444; color: #fff; font-size: 0.65rem; font-weight: bold; padding: 1px 5px; border-radius: 10px; min-width: 15px; text-align: center; border: 1.5px solid var(--bg-card);">0</span>
+          </div>
           <img class="badge-logo" src="icon.svg" alt="Logo">
           <span class="badge-name">Distribuidora JDS</span>
         </div>
@@ -250,6 +257,9 @@
 
         <!-- VIEW: A4 PRINT SHEET PREVIEW -->
         <section id="view-pdf" class="view-panel"></section>
+
+        <!-- VIEW: NOTIFICATIONS VIEW -->
+        <section id="view-notificacoes" class="view-panel"></section>
 
         <!-- DISCRETE BRAND FOOTER (Visible on all app screens) -->
         <footer class="discrete-footer no-print">

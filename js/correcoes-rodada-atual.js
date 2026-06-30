@@ -77,7 +77,8 @@
       'expenses-table-body': { get:'getExpenses', save:'saveExpenses', endpoint:'/api/despesas-reembolsos', reload:()=>App.loadExpenses?.(), selector:(x)=>x.id },
       'clients-table-body': { get:'getClients', save:'saveClients', endpoint:'/api/clientes', reload:()=>App.refreshAllLists?.(), selector:(x)=>x.id },
       'tickets-table-body': { get:'getTickets', save:'saveTickets', endpoint:'/api/chamados', reload:()=>App.loadTickets?.(), selector:(x)=>x.id },
-      'prospects-table-body': { get:'getProspects', save:'saveProspects', endpoint:'/api/prospeccoes', reload:()=>App.loadProspects?.(), selector:(x)=>x.id }
+      'prospects-table-body': { get:'getProspects', save:'saveProspects', endpoint:'/api/prospeccoes', reload:()=>App.loadProspects?.(), selector:(x)=>x.id },
+      'balances-table-body': { get:'getBalanceRequests', save:'saveBalances', endpoint:'/api/despesas', reload:()=>App.refreshAllLists?.(), selector:(x)=>x.id }
     }[tbodyId];
   }
   function extractRowId(tr){

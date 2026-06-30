@@ -431,6 +431,12 @@ const App = {
         headerTitle.textContent = 'Dashboard de Despesas';
         this.loadDespesasDashboard();
         break;
+      case '#notificacoes':
+        headerTitle.textContent = 'Notificações';
+        if (window.App && App.loadNotificationPage) {
+          App.loadNotificationPage();
+        }
+        break;
       case '#relatorios':
         headerTitle.textContent = 'Relatórios Gerenciais';
         if (Store.syncAllFromBackend) Store.syncAllFromBackend({ forceRemote: true }).then(() => UI.renderDashboard());
@@ -5416,8 +5422,45 @@ const App = {
     }
   },
 
+  async syncLocalExpenses() {
+    try {
+      const cached = this.readFastCache('despesas_reembolsos_api', []);
+      const unsynced = cached.filter(e => String(e.id || '').startsWith('LOCAL-DP-'));
+      if (!unsynced.length) return;
+      for (const exp of unsynced) {
+        const result = await this.fetchFromApi('/api/despesas-reembolsos', {
+          method: 'POST',
+          body: JSON.stringify({
+            date: exp.date,
+            time: exp.time,
+            finalidade: exp.finalidade,
+            operacao: exp.operacao,
+            descreva: exp.descreva,
+            veiculo: exp.veiculo,
+            km: exp.km,
+            foto_odometro: exp.foto_odometro,
+            foto_comprovante: exp.foto_comprovante,
+            value: exp.value,
+            observation: exp.observation,
+            unitId: exp.unitId,
+            userId: exp.userId,
+            userName: exp.userName
+          })
+        });
+        if (result && (result.success || result.id)) {
+          const freshList = this.readFastCache('despesas_reembolsos_api', []);
+          const next = freshList.filter(e => e.id !== exp.id);
+          this.writeFastCache('despesas_reembolsos_api', next);
+        }
+      }
+    } catch (err) {
+      console.warn('Falha na sincronização de despesas locais:', err);
+    }
+  },
+
   async loadExpenses() {
     try {
+      await this.syncLocalExpenses();
       await this.loadListFast({
         key: 'despesas_reembolsos_api',
         endpoint: '/api/despesas-reembolsos',
