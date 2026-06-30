@@ -858,14 +858,18 @@ const UI = {
 
         const fmt = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
         
-        let dateStr = '-';
-        if (req.data_solicitacao) {
-          try {
-            dateStr = new Date(req.data_solicitacao + 'T00:00:00').toLocaleDateString('pt-BR');
-          } catch(e) {
-            dateStr = req.data_solicitacao;
-          }
-        }
+        const safeDateBR = (value) => {
+          if (!value) return '-';
+          if (typeof window !== 'undefined' && window.CC_safeDateBR) return window.CC_safeDateBR(value);
+          const raw = String(value).trim();
+          const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:.*?(\d{2}):(\d{2}))?/);
+          if (br) return `${br[1]}/${br[2]}/${br[3]}${br[4] ? ' ' + br[4] + ':' + br[5] : ''}`;
+          const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
+          if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}${iso[4] ? ' ' + iso[4] + ':' + iso[5] : ''}`;
+          const d = new Date(raw);
+          return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
+        };
+        let dateStr = safeDateBR(req.data_solicitacao || req.created_at || req.createdAt);
 
         return `
           <tr class="mobile-summary-row" onclick="App.showDespesaDetails('${req.id}')">

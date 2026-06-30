@@ -1,5 +1,14 @@
 const express = require('express');
-function ccNum(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/\./g,'').replace(',', '.').replace(/[^0-9.-]/g,'')); return Number.isFinite(n) ? n : 0; }
+function ccNum(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (v === null || v === undefined || v === '') return 0;
+  let raw = String(v).trim().replace(/[^0-9,.-]/g, '');
+  // Formato brasileiro com vírgula decimal: 1.234,56 -> 1234.56
+  if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
+  // Formato numérico do banco/API: 1234.56 deve continuar 1234.56, não 123456
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : 0;
+}
 
 const cors = require('cors');
 const bodyParser = require('body-parser');

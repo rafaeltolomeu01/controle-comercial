@@ -9,7 +9,9 @@
   const num = (v) => {
     if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
     if (v === null || v === undefined || v === '') return 0;
-    const n = parseFloat(String(v).replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,''));
+    let raw = String(v).trim().replace(/[^0-9,.-]/g,'');
+    if (raw.includes(',')) raw = raw.replace(/\./g,'').replace(',','.');
+    const n = parseFloat(raw);
     return Number.isFinite(n) ? n : 0;
   };
   window.CC_num = num;

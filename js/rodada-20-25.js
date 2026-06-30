@@ -2,7 +2,14 @@
 (function(){
   'use strict';
   const money = (v) => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v)||0);
-  const num = (v) => { const n = Number(String(v ?? '').replace(/\./g,'').replace(',','.')); return Number.isFinite(n) ? n : 0; };
+  const num = (v) => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if (v === null || v === undefined || v === '') return 0;
+    let raw = String(v).trim().replace(/[^0-9,.-]/g,'');
+    if (raw.includes(',')) raw = raw.replace(/\./g,'').replace(',','.');
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : 0;
+  };
   const statusText = (s) => String(s || '').toLowerCase();
   const isApproved = (s) => /aprovad/.test(statusText(s));
   const isRejected = (s) => /reprovad|rejeitad/.test(statusText(s));
