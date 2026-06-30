@@ -1130,16 +1130,19 @@ const App = {
         // CNPJ without punctuation for folder naming in URL
         const cnpjVal = cnpj.replace(/\D/g, '') || '00000000000000';
 
-        // Photos URLs reais: nunca usar link/placeholder fixo. Se não enviar, fica vazio.
+        // Fotos permanentes do cadastro: salva TODAS no PostgreSQL/app_uploads.
+        // Não usar filesystem/localStorage para fotos de cliente. Cada campo tem URL própria.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
-        for (const suffix of suffixes) {
+        await Promise.all(suffixes.map(async (suffix) => {
           const fileInput = document.getElementById(`client-photo-${suffix}`);
           photoUrls[suffix] = '';
           if (fileInput && fileInput.files && fileInput.files[0]) {
-            photoUrls[suffix] = await this.uploadFile(fileInput.files[0]);
+            const file = fileInput.files[0];
+            const base64 = await Store.fileToBase64(file);
+            photoUrls[suffix] = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
           }
-        }
+        }));
 
         const clients = Store.getClients();
         const cnpjLimpo = (cnpj || '').replace(/\D/g, '');
@@ -6118,7 +6121,80 @@ const App = {
     <div class="box"><h3>3. Mapeamento de Mercado</h3><p><b>Amaretto Próximo:</b> ${esc(client.nearbyAmaretto)}</p><p><b>Concorrência Próxima:</b> ${esc(client.nearbyCompetitor)}</p><p><b>Já trabalha com sorvetes:</b> ${esc(client.iceCreamExperience)}</p><p><b>Trabalhará com ambas as marcas:</b> ${esc(client.dualBrandPreference)}</p></div>
     <div class="box"><h3>4. Equipamentos & Financeiro</h3><p><b>Qtd Equipamentos:</b> ${esc(client.equipmentQty)}</p><p><b>Equipamento Solicitado:</b> ${esc(client.requestedEqType)}</p><p><b>Padrão que pode enviar:</b> ${esc(client.sendableEqType)}</p><p><b>Valor 1ª Compra:</b> ${money(client.firstOrderValue)}</p><p><b>Média Prevista:</b> ${money(client.predictedAverage)}</p><p><b>Bonificação:</b> ${esc(client.hasBonus)} ${client.bonusValue ? '('+money(client.bonusValue)+')' : ''}</p></div></div>
     <div class="box"><h3>5. Análise do Vendedor</h3><p>${esc(client.sellerAnalysis)}</p></div><div class="box"><h3>6. Fotos do Cadastro</h3><div class="photos">${addPhoto(client.photoFachada,'Fachada')}${addPhoto(client.photoInterna01,'Interna 01')}${addPhoto(client.photoInterna02,'Interna 02')}${addPhoto(client.photoInterna03,'Interna 03')}${addPhoto(client.photoRua01,'Externa Rua 01')}${addPhoto(client.photoRua02,'Externa Rua 02')}${addPhoto(client.photoCnpj,'Foto CNPJ')}</div></div><div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} por ${(Store.getLoggedUser()||{}).name || '-'} - Controle de Campo</div><script>setTimeout(()=>window.print(),500)<\/script></body></html>`;
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+    this.showPdfPreviewModal(html, `Ficha Comercial ${esc(client.id)}`);
+  },
+
+  showPdfPreviewModal(html, title = 'Visualização do PDF') {
+    let modal = document.getElementById('modal-pdf-preview-corrigido');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-pdf-preview-corrigido';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:none;align-items:center;justify-content:center;padding:12px;';
+      modal.innerHTML = `
+        <div style="background:#fff;color:#111;width:min(1100px,100%);height:min(92vh,900px);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.35);">
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #ddd;">
+            <strong id="pdf-preview-title">Visualização do PDF</strong>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <button type="button" id="pdf-preview-print" class="btn btn-primary">Imprimir</button>
+              <button type="button" id="pdf-preview-download" class="btn btn-secondary">Baixar HTML</button>
+              <button type="button" id="pdf-preview-close" class="btn btn-danger">Fechar</button>
+            </div>
+          </div>
+          <iframe id="pdf-preview-frame" title="Visualização do PDF" style="border:0;width:100%;height:100%;background:#fff;"></iframe>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.querySelector('#pdf-preview-close').addEventListener('click', () => { modal.style.display = 'none'; });
+      modal.addEventListener('click', (ev) => { if (ev.target === modal) modal.style.display = 'none'; });
+    }
+    const cleanHtml = String(html || '').replace(/<script>[\s\S]*?window\.print\([\s\S]*?<\/script>/gi, '');
+    modal.querySelector('#pdf-preview-title').textContent = title;
+    const frame = modal.querySelector('#pdf-preview-frame');
+    frame.srcdoc = cleanHtml;
+    modal.style.display = 'flex';
+    modal.querySelector('#pdf-preview-print').onclick = () => {
+      if (frame.contentWindow) { frame.contentWindow.focus(); frame.contentWindow.print(); }
+    };
+    modal.querySelector('#pdf-preview-download').onclick = () => {
+      const blob = new Blob([cleanHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${String(title || 'ficha').replace(/[^a-z0-9_-]+/gi, '-')}.html`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  },
+
+  async deleteClient(clientId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const loggedUser = Store.getLoggedUser && Store.getLoggedUser();
+    const isAdmin = loggedUser && (loggedUser.profile === 'Administrador' || (loggedUser.permissions || []).includes('Administrador') || (loggedUser.permissions || []).includes('Admin'));
+    if (!isAdmin) { alert('Somente Administrador pode apagar cadastro definitivamente.'); return; }
+    if (!confirm('Tem certeza que deseja apagar definitivamente este cadastro? Esta ação não poderá ser desfeita.')) return;
+    try {
+      const current = Store.getClients ? Store.getClients() : [];
+      const removed = current.find(c => String(c.id) === String(clientId));
+      const next = current.filter(c => String(c.id) !== String(clientId));
+      if (next.length === current.length) { alert('Cadastro não encontrado.'); return; }
+      Store.saveClients(next);
+      if (Store.saveToBackend) Store.saveToBackend('clients', next);
+      try {
+        await this.fetchFromApi(`/api/store/${encodeURIComponent('clients')}`, { method: 'POST', body: JSON.stringify({ data: next, hardDeleteId: clientId }) });
+      } catch (e) {
+        console.warn('Exclusão já foi aplicada localmente; sincronização direta falhou:', e.message || e);
+      }
+      if (Store.syncAllFromBackend) await Store.syncAllFromBackend({ forceRemote: true });
+      this.currentClientFicha = null;
+      const fichaModal = document.getElementById('modal-client-ficha');
+      if (fichaModal) fichaModal.style.display = 'none';
+      UI.renderClients(Store.getClients());
+      UI.renderApprovals(Store.getClients());
+      UI.renderDashboard();
+      this.showToast('Cadastro apagado definitivamente do banco/listas.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao apagar cadastro: ' + (err.message || err));
+    }
   },
 
   showImagePreview(url) {
