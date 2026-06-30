@@ -102,9 +102,6 @@
 
       const reg = await navigator.serviceWorker.register('/sw.js');
       
-      // Force checking for updates immediately on load
-      reg.update().catch(()=>{});
-
       const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
       if (keyResp && keyResp.publicKey && 'PushManager' in window) {
         const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;

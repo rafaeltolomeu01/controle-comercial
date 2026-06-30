@@ -89,9 +89,12 @@
   }
 
   async function setupNotifications(){
-    if (!('serviceWorker' in navigator)) return;
+    const container = document.getElementById('notification-status-box');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      if (container) container.innerHTML = '<div class="alert alert-warning">Notificações não suportadas neste navegador.</div>';
+      return;
+    }
     try {
-      // Auto-reload current clients when new Service Worker takes control (updates PWA automatically)
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
@@ -101,12 +104,10 @@
       });
 
       const reg = await navigator.serviceWorker.register('/sw.js');
-      
-      // Force checking for updates immediately on load
       reg.update().catch(()=>{});
 
       const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
-      if (keyResp && keyResp.publicKey && 'PushManager' in window) {
+      if (keyResp && keyResp.publicKey) {
         const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
         if (permission === 'granted') {
           const existing = await reg.pushManager.getSubscription();
@@ -114,7 +115,7 @@
           await api('/api/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
         }
       }
-    } catch (err) { console.warn('Push não habilitado neste ambiente:', err.message); }
+    } catch (err) { console.warn('Push não habilitado:', err.message); }
   }
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
