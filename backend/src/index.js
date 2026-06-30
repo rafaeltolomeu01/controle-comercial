@@ -936,7 +936,7 @@ app.post('/api/uploads/base64', async (req, res) => {
 
     const mimeType = match[1];
     const base64Data = match[2];
-    const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+    const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf','image/jpg','image/heic','image/heif'];
     if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Tipo de arquivo não permitido.' });
 
     const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();

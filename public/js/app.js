@@ -1133,11 +1133,21 @@ const App = {
         // Photos URLs reais: nunca usar link/placeholder fixo. Se não enviar, fica vazio.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
+        const failedPhotos = [];
         for (const suffix of suffixes) {
           const fileInput = document.getElementById(`client-photo-${suffix}`);
           photoUrls[suffix] = '';
           if (fileInput && fileInput.files && fileInput.files[0]) {
-            photoUrls[suffix] = await this.uploadFile(fileInput.files[0]);
+            const file = fileInput.files[0];
+            try {
+              const base64 = await this.compressImageAndGetBase64(file);
+              const savedUrl = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+              if (savedUrl) photoUrls[suffix] = savedUrl;
+              else failedPhotos.push(suffix);
+            } catch (uploadErr) {
+              console.error(`Erro ao salvar foto do cliente (${suffix}):`, uploadErr);
+              failedPhotos.push(suffix);
+            }
           }
         }
 
@@ -1230,6 +1240,9 @@ const App = {
         const formContainer = document.getElementById('client-form-container');
         if (formContainer) formContainer.classList.add('hidden');
 
+        if (failedPhotos.length) {
+          alert('Cadastro salvo, mas algumas fotos não foram salvas: ' + failedPhotos.join(', ') + '. Tente reenviar somente essas fotos na edição do cliente.');
+        }
         this.showToast('Cadastro comercial completo enviado para aprovação!');
         } catch (err) {
           console.error(err);
@@ -3137,6 +3150,53 @@ const App = {
       body: JSON.stringify({ dataUrl, filename, module })
     });
     return result.url || '';
+  },
+
+  compressImageAndGetBase64(file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+        reader.readAsDataURL(file);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+        reader.readAsDataURL(file);
+      };
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target.result;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
   },
 
   async uploadFile(file) {
@@ -6118,25 +6178,31 @@ App.showTicketDetails = function(id) {
     modal = document.createElement('div');
     modal.id = 'modal-ticket-details-mobile';
     modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:3000; background:rgba(0,0,0,.72); align-items:center; justify-content:center; padding:14px;';
-    modal.innerHTML = `
-      <div class="login-card" style="max-width:640px; width:100%; max-height:90vh; overflow:auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px;">
-          <h3 style="margin:0; color:var(--primary-color);">Detalhes do Chamado</h3>
-          <button class="btn btn-secondary" onclick="document.getElementById('modal-ticket-details-mobile').style.display='none'" style="width:auto;">Fechar</button>
-        </div>
-        <div id="modal-ticket-details-mobile-content"></div>
-      </div>`;
     document.body.appendChild(modal);
   }
+
+  modal.innerHTML = `
+    <div class="login-card" style="max-width:640px; width:100%; max-height:90vh; overflow:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px;">
+        <h3 style="margin:0; color:var(--primary-color);">Detalhes do Chamado</h3>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" onclick="App.generateTicketPdf('${String(ticket.id).replace(/'/g, "\\'")}')" style="width:auto; font-size:0.85rem; padding:6px 12px;">Gerar PDF</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('modal-ticket-details-mobile').style.display='none'" style="width:auto; font-size:0.85rem; padding:6px 12px;">Fechar</button>
+        </div>
+      </div>
+      <div id="modal-ticket-details-mobile-content"></div>
+    </div>`;
 
   const content = document.getElementById('modal-ticket-details-mobile-content');
   const row = (label, value) => `<div style="display:flex; justify-content:space-between; gap:14px; border-bottom:1px solid var(--border-color); padding:9px 0;"><strong style="color:var(--text-muted);">${label}</strong><span style="text-align:right;">${value || '—'}</span></div>`;
   
+  const isValidPhoto = (url) => url && url !== 'null' && url !== 'undefined' && url !== '/uploads/null' && url !== '/uploads/undefined' && url !== '/uploads/';
+
   const mediaList = [];
-  if (ticket.defectPhoto) mediaList.push({ url: ticket.defectPhoto, label: 'Foto Defeito' });
-  if (ticket.fotoAntes) mediaList.push({ url: ticket.fotoAntes, label: 'Foto Antes' });
-  if (ticket.fotoDepois) mediaList.push({ url: ticket.fotoDepois, label: 'Foto Depois' });
-  if (ticket.fotoPlaqueta) mediaList.push({ url: ticket.fotoPlaqueta, label: 'Foto Plaqueta' });
+  if (isValidPhoto(ticket.defectPhoto)) mediaList.push({ url: ticket.defectPhoto, label: 'Foto Defeito' });
+  if (isValidPhoto(ticket.fotoAntes)) mediaList.push({ url: ticket.fotoAntes, label: 'Foto Antes' });
+  if (isValidPhoto(ticket.fotoDepois)) mediaList.push({ url: ticket.fotoDepois, label: 'Foto Depois' });
+  if (isValidPhoto(ticket.fotoPlaqueta)) mediaList.push({ url: ticket.fotoPlaqueta, label: 'Foto Plaqueta' });
 
   let photosHtml = '';
   if (mediaList.length > 0) {
@@ -6149,11 +6215,30 @@ App.showTicketDetails = function(id) {
             return `
               <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; text-align: center;">
                 <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">${item.label}</span>
-                <img src="${finalUrl}" style="max-width: 100%; max-height: 80px; border-radius: 4px; cursor: pointer;" onclick="App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')">
+                <img src="${finalUrl}" style="max-width: 100%; max-height: 80px; border-radius: 4px; cursor: pointer;" onclick="App.showFacadeImage('${finalUrl.replace(/'/g, "\\'")}')" onerror="this.parentElement.style.display='none'">
               </div>
             `;
           }).join('')}
         </div>
+      </div>
+    `;
+  }
+
+  let techDetailsHtml = '';
+  if (ticket.status === 'Resolvido') {
+    const partsStr = Array.isArray(ticket.parts) ? ticket.parts.join(', ') : (ticket.parts || '—');
+    const servicesStr = Array.isArray(ticket.services) ? ticket.services.join(', ') : (ticket.services || '—');
+    techDetailsHtml = `
+      <div style="margin-top:16px; border-top:2px solid var(--primary-color); padding-top:14px;">
+        <h4 style="margin:0 0 10px 0; color:var(--primary-color); font-size:0.95rem;">Laudo Técnico de Manutenção</h4>
+        ${row('Início do Atendimento', (ticket.date || '') + ' ' + (ticket.startTime || ''))}
+        ${row('Hora de Conclusão', ticket.endTime || '—')}
+        ${row('Peças Utilizadas', partsStr)}
+        ${row('Serviços Executados', servicesStr)}
+        ${row('Problema Encontrado', ticket.faultDescription)}
+        ${row('Solução Aplicada', ticket.solutionDescription)}
+        ${row('Carga de Gás (g)', ticket.gasCharge ? (ticket.gasCharge + 'g') : '—')}
+        ${row('Observações Adicionais', ticket.additionalNotes)}
       </div>
     `;
   }
@@ -6169,10 +6254,111 @@ App.showTicketDetails = function(id) {
     ${row('Mecânico', ticket.mechanic || (UI.getUserName ? UI.getUserName(ticket.userId) : ''))}
     ${row('Situação após atendimento', ticket.eqStatusAfter)}
     ${photosHtml}
+    ${techDetailsHtml}
     <div style="padding-top:12px; color:var(--text-muted); font-size:.9rem;">Clique fora ou em Fechar para voltar à lista.</div>
   `;
   modal.style.display = 'flex';
   modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+};
+
+App.generateTicketPdf = function(id) {
+  const tickets = (Store.getTickets && Store.getTickets()) || [];
+  const ticket = tickets.find(t => String(t.id) === String(id));
+  if (!ticket) return alert('Chamado não encontrado.');
+
+  const esc = (v) => String(v ?? '—').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  
+  const partsStr = Array.isArray(ticket.parts) ? ticket.parts.join(', ') : (ticket.parts || '—');
+  const servicesStr = Array.isArray(ticket.services) ? ticket.services.join(', ') : (ticket.services || '—');
+
+  const addPhoto = (url, label) => {
+    const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
+    const isValid = finalUrl && finalUrl !== 'null' && finalUrl !== 'undefined' && finalUrl !== '/uploads/null' && finalUrl !== '/uploads/undefined' && finalUrl !== '/uploads/';
+    if (!isValid) return `<div class="photo"><b>${esc(label)}</b><div class="empty">Imagem não enviada</div></div>`;
+    return `<div class="photo"><b>${esc(label)}</b><img src="${esc(finalUrl)}"></div>`;
+  };
+
+  const html = `<!doctype html><html><head><title>Ficha Técnica de Manutenção - OS #${esc(ticket.id)}</title><style>
+    body{font-family:Arial,sans-serif;background:#fff;color:#111;margin:24px;font-size:12px}
+    h1{color:#2563eb;font-size:18px;margin:0 0 4px}
+    h3{color:#2563eb;font-size:13px;border-bottom:1px solid #bbb;padding-bottom:4px;margin-top:12px;margin-bottom:8px}
+    .header{display:flex;justify-content:space-between;border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}
+    p{margin:4px 0}
+    .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .photo{border:1px solid #bbb;border-radius:8px;padding:6px;text-align:center;break-inside:avoid}
+    .photo img{max-width:100%;height:100px;object-fit:cover;margin-top:4px}
+    .empty{height:60px;display:flex;align-items:center;justify-content:center;color:#777;border:1px dashed #bbb;margin-top:4px;font-size:11px}
+    .footer{margin-top:24px;font-size:10px;color:#555;border-top:1px solid #bbb;padding-top:8px}
+    .signature{margin-top:30px;border-top:1px dashed #bbb;padding-top:10px;display:flex;justify-content:space-between}
+    .sig-box{width:45%;border-top:1px solid #777;text-align:center;margin-top:40px;padding-top:5px;font-size:11px}
+    @media print{button{display:none}.grid{grid-template-columns:1fr 1fr}}
+  </style></head><body>
+    <h1>Ficha Técnica de Manutenção - Ordem de Serviço</h1>
+    <div class="header">
+      <div><b>OS:</b> #${esc(ticket.id)}</div>
+      <div><b>Data:</b> ${esc(ticket.date)}</div>
+      <div><b>Status:</b> ${esc(ticket.status)}</div>
+    </div>
+    
+    <div class="grid">
+      <div class="box">
+        <h3>1. Identificação do Atendimento</h3>
+        <p><b>Mecânico Responsável:</b> ${esc(ticket.mechanic || (UI.getUserName ? UI.getUserName(ticket.userId) : ''))}</p>
+        <p><b>Data:</b> ${esc(ticket.date)}</p>
+        <p><b>Hora de Conclusão:</b> ${esc(ticket.endTime)}</p>
+      </div>
+      <div class="box">
+        <h3>2. Identificação do Equipamento</h3>
+        <p><b>Nº Patrimônio / Serial:</b> ${esc(ticket.equipmentSerial)}</p>
+        <p><b>Cliente Vinculado:</b> ${esc(ticket.client)}</p>
+        <p><b>Situação após Atendimento:</b> ${esc(ticket.eqStatusAfter)}</p>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>3. Laudo Técnico e Descrições</h3>
+      <p><b>Chamado original:</b> ${esc(ticket.title)}</p>
+      <p><b>Prioridade:</b> ${esc(ticket.priority)}</p>
+      <p><b>Problema Encontrado:</b> ${esc(ticket.faultDescription)}</p>
+      <p><b>Solução Aplicada:</b> ${esc(ticket.solutionDescription)}</p>
+      <p><b>Carga de Gás (gramas):</b> ${esc(ticket.gasCharge)}</p>
+      <p><b>Observações Adicionais:</b> ${esc(ticket.additionalNotes)}</p>
+    </div>
+
+    <div class="box">
+      <h3>4. Peças e Serviços</h3>
+      <p><b>Peças Utilizadas:</b> ${esc(partsStr)}</p>
+      <p><b>Serviços Executados:</b> ${esc(servicesStr)}</p>
+    </div>
+
+    <div class="box">
+      <h3>5. Fotos do Atendimento</h3>
+      <div class="photos">
+        ${addPhoto(ticket.defectPhoto, 'Foto Defeito')}
+        ${addPhoto(ticket.fotoAntes, 'Foto Antes')}
+        ${addPhoto(ticket.fotoDepois, 'Foto Depois')}
+        ${addPhoto(ticket.fotoPlaqueta, 'Foto Plaqueta')}
+      </div>
+    </div>
+
+    <div class="signature">
+      <div class="sig-box">Assinatura do Técnico</div>
+      <div class="sig-box">Assinatura do Cliente / Responsável</div>
+    </div>
+
+    <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} - Controle de Campo</div>
+    <script>setTimeout(()=>window.print(),500)<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+  } else {
+    alert('Por favor, permita popups para gerar o PDF.');
+  }
 };
 
 // -------------------------------------------------------------
