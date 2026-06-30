@@ -3573,6 +3573,12 @@ const App = {
       // Checkbox apenas para admin
       const checkboxCol = adminUser ? `<td onclick="event.stopPropagation()" style="width:34px;text-align:center;"><input type="checkbox" class="cc-sol-check" value="${req.id}" style="width:16px;height:16px;cursor:pointer;"></td>` : '<td></td>';
 
+      const statusLower = String(req.status || '').toLowerCase();
+      const foiAvaliada = statusLower.includes('aprovada') || statusLower.includes('rejeitada');
+      const valorHotelExibicao = foiAvaliada ? Number(req.valor_hotel_alim_aprovado || 0) : Number(req.valor_hotel_alim || 0);
+      const valorAbastecimentoExibicao = foiAvaliada ? Number(req.valor_abastecimento_aprovado || 0) : Number(req.valor_abastecimento || 0);
+      const totalGeralExibicao = foiAvaliada ? Number(req.total_liberado ?? req.totalAprovado ?? 0) : Number(req.totalGeral || 0);
+
       return `
         <tr data-id="${req.id}">
           ${checkboxCol}
@@ -3581,9 +3587,9 @@ const App = {
           <td style="font-weight: 600;">${req.solicitante}</td>
           <td style="font-family: monospace;">${req.placa_veiculo || '-'}</td>
           <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${req.rota_destino}</td>
-          <td style="text-align: right;">${fmt(req.valor_hotel_alim)}</td>
-          <td style="text-align: right;">${fmt(req.valor_abastecimento)}</td>
-          <td style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(req.totalGeral)}</td>
+          <td style="text-align: right;">${fmt(valorHotelExibicao)}</td>
+          <td style="text-align: right;">${fmt(valorAbastecimentoExibicao)}</td>
+          <td style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(totalGeralExibicao)}</td>
           <td><span class="badge-status ${statusClass}">${req.status}</span></td>
           <td>
             <div style="display: flex; gap: 4px; justify-content: center;">

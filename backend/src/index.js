@@ -1645,18 +1645,33 @@ app.get('/api/despesas', async (req, res) => {
       const items = allItems.filter(i => i.solicitacao_id === reqRow.id);
       const totalExtras = extras.reduce((sum, e) => sum + Number(e.valor || 0), 0);
       const totalGeral = Number(reqRow.valor_hotel_alim || 0) + Number(reqRow.valor_abastecimento || 0) + totalExtras;
+
+      const isLiberado = reqRow.status === 'Aprovada' || reqRow.status === 'Aprovada (não valor total)';
+      const itemApprovedValue = (item) => {
+        const status = String(item.status || '').toLowerCase();
+        if (status === 'reprovado' || status === 'correcao' || status === 'correção') return 0;
+        return Number(item.valor_aprovado || 0);
+      };
       const totalAprovado = items.length
-        ? items.reduce((sum, item) => {
-            const status = String(item.status || '').toLowerCase();
-            if (status === 'reprovado') return sum;
-            return sum + Number(item.valor_aprovado || 0);
-          }, 0)
-        : (reqRow.status === 'Aprovada' ? totalGeral : 0);
+        ? items.reduce((sum, item) => sum + itemApprovedValue(item), 0)
+        : (isLiberado ? totalGeral : 0);
+
+      const valorHotelAlimAprovado = items.length
+        ? items.filter(item => /hosped|hotel|aliment/i.test(String(item.categoria || ''))).reduce((sum, item) => sum + itemApprovedValue(item), 0)
+        : (isLiberado ? Number(reqRow.valor_hotel_alim || 0) : 0);
+      const valorAbastecimentoAprovado = items.length
+        ? items.filter(item => /abastec|combust/i.test(String(item.categoria || ''))).reduce((sum, item) => sum + itemApprovedValue(item), 0)
+        : (isLiberado ? Number(reqRow.valor_abastecimento || 0) : 0);
+
       return {
         ...reqRow,
         extras,
+        itens: items,
         totalGeral,
-        totalAprovado
+        totalAprovado,
+        valor_hotel_alim_aprovado: valorHotelAlimAprovado,
+        valor_abastecimento_aprovado: valorAbastecimentoAprovado,
+        total_liberado: totalAprovado
       };
     });
 
@@ -2244,6 +2259,60 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       updated_at: now
     });
 
+    // 4. Notificar o vendedor solicitante sobre a decisão da movimentação
+    try {
+      const recipientIds = new Set();
+
+      if (mov.vendedor_id) {
+        recipientIds.add(String(mov.vendedor_id));
+      }
+
+      // Fallback para registros antigos que possam ter apenas o nome do vendedor.
+      if (!recipientIds.size && mov.vendedor_solicitante) {
+        const seller = await db('usuarios')
+          .where(function() {
+            this.where('nome', mov.vendedor_solicitante)
+              .orWhere('name', mov.vendedor_solicitante)
+              .orWhere('email', mov.vendedor_solicitante);
+          })
+          .first()
+          .catch(() => null);
+        if (seller && seller.id) recipientIds.add(String(seller.id));
+      }
+
+      if (recipientIds.size) {
+        const approved = status === 'Aprovado';
+        const notificationTitle = approved ? 'Movimentação aprovada' : 'Movimentação reprovada';
+        const notificationBody = approved
+          ? 'Sua movimentação de equipamento foi aprovada.'
+          : 'Sua movimentação de equipamento foi reprovada. Verifique o motivo no dossiê.';
+
+        // Evita duplicidade caso o mesmo status seja reenviado acidentalmente.
+        const alreadyNotified = await db('app_notifications')
+          .where({
+            module: 'equipamentos_movimentacoes',
+            record_id: String(id),
+            title: notificationTitle
+          })
+          .whereIn('user_id', Array.from(recipientIds))
+          .first()
+          .catch(() => null);
+
+        if (!alreadyNotified) {
+          await notifyUsers(Array.from(recipientIds), {
+            empresa_id: mov.empresa_id || req.user.empresa_id || '001',
+            module: 'equipamentos_movimentacoes',
+            record_id: String(id),
+            title: notificationTitle,
+            body: notificationBody,
+            target_hash: '#movimentacao'
+          });
+        }
+      }
+    } catch (notifyErr) {
+      console.warn('Falha ao notificar vendedor sobre movimentação:', notifyErr.message);
+    }
+
     // Simulação de Notificação por E-mail
     try {
       const emailConfig = fs.existsSync(configFilePath) ? JSON.parse(fs.readFileSync(configFilePath, 'utf8')) : { emails: 'notificacoes@distribuidorajds.com.br, equipamentos@distribuidorajds.com.br' };
@@ -2401,23 +2470,16 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   const { status, motivo_reprovacao, patrimonio_novo, modelo_novo, voltagem_nova } = req.body;
 
   const movementPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-
-  // Regra obrigatória: vendedor e supervisor não podem aprovar/reprovar movimentação,
-  // mesmo que possuam permissão genérica de Equipamentos.
-  if (req.user.profile === 'Vendedor' || req.user.profile === 'Supervisor') {
-    return res.status(403).json({ error: 'Acesso negado: vendedor e supervisor podem apenas visualizar o dossiê da movimentação.' });
-  }
-
   const canApproveMovement = req.user.profile === 'Administrador'
     || req.user.profile === 'Responsável Equipamentos'
-    || req.user.profile === 'Gestor de Equipamentos'
     || movementPerms.includes('Administrador')
     || movementPerms.includes('Administrador (Acesso Total)')
     || movementPerms.includes('Confirmação de Movimentação')
     || movementPerms.includes('Confirmação de Troca')
-    || movementPerms.includes('Avaliação de Movimentação');
+    || movementPerms.includes('Avaliação de Movimentação')
+    || movementPerms.includes('Equipamentos');
   if (!canApproveMovement) {
-    return res.status(403).json({ error: 'Acesso negado: somente administrador, responsável/gestor de equipamentos ou usuário com permissão específica pode aprovar movimentação.' });
+    return res.status(403).json({ error: 'Acesso negado: somente responsável por equipamentos ou usuário com permissão de confirmação pode aprovar movimentação.' });
   }
 
   if (status === 'Reprovado' && !motivo_reprovacao) {
