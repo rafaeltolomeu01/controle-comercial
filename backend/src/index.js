@@ -213,6 +213,37 @@ async function initDb() {
     console.log('Database: Tabela app_uploads criada com sucesso.');
   }
 
+
+  // 7AA. Notificações internas e inscrições Push/PWA por usuário/dispositivo.
+  if (!await db.schema.hasTable('app_notifications')) {
+    await db.schema.createTable('app_notifications', table => {
+      table.increments('id').primary();
+      table.string('empresa_id').notNullable().defaultTo('001');
+      table.string('user_id').notNullable();
+      table.string('module').notNullable();
+      table.string('record_id').nullable();
+      table.string('title').notNullable();
+      table.text('body').nullable();
+      table.string('target_hash').nullable();
+      table.boolean('read').notNullable().defaultTo(false);
+      table.timestamp('created_at').defaultTo(db.fn.now());
+    });
+    console.log('Database: Tabela app_notifications criada com sucesso.');
+  }
+  if (!await db.schema.hasTable('push_subscriptions')) {
+    await db.schema.createTable('push_subscriptions', table => {
+      table.increments('id').primary();
+      table.string('empresa_id').notNullable().defaultTo('001');
+      table.string('user_id').notNullable();
+      table.text('endpoint').notNullable();
+      table.text('keys_json').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+      table.unique(['user_id', 'endpoint']);
+    });
+    console.log('Database: Tabela push_subscriptions criada com sucesso.');
+  }
+
   // 7B. Tabela real de prospecções/leads.
   const hasProspeccoes = await db.schema.hasTable('prospeccoes');
   if (!hasProspeccoes) {
@@ -784,6 +815,39 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
 });
 
 
+
+// Notificações internas e Push/PWA
+app.get('/api/notificacoes', async (req, res) => {
+  try {
+    const list = await db('app_notifications')
+      .where({ user_id: req.user.id })
+      .orderBy('created_at', 'desc')
+      .limit(50);
+    res.json(list);
+  } catch (err) {
+    console.error('Erro ao listar notificações:', err);
+    res.status(500).json({ error: 'Erro ao listar notificações.' });
+  }
+});
+app.put('/api/notificacoes/:id/read', async (req, res) => {
+  try {
+    await db('app_notifications').where({ id: req.params.id, user_id: req.user.id }).update({ read: true });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Erro ao marcar notificação.' }); }
+});
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const sub = req.body && req.body.subscription;
+    if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Inscrição push inválida.' });
+    const record = { empresa_id: req.user.empresa_id || '001', user_id: req.user.id, endpoint: sub.endpoint, keys_json: JSON.stringify(sub.keys || {}), updated_at: new Date().toISOString() };
+    const existing = await db('push_subscriptions').where({ user_id: req.user.id, endpoint: sub.endpoint }).first();
+    if (existing) await db('push_subscriptions').where({ id: existing.id }).update(record);
+    else await db('push_subscriptions').insert({ ...record, created_at: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err) { console.error('Erro ao salvar push:', err); res.status(500).json({ error: 'Erro ao salvar push.' }); }
+});
+app.get('/api/push/vapid-public-key', async (req, res) => res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' }));
+
 // Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
 app.post('/api/uploads/base64', async (req, res) => {
   try {
@@ -829,6 +893,60 @@ app.get('/api/uploads/:id', async (req, res) => {
   }
 });
 
+
+
+function asArrayPermissions(user) {
+  if (!user) return [];
+  if (Array.isArray(user.permissions)) return user.permissions;
+  try { return JSON.parse(user.permissions || '[]'); } catch (_) { return []; }
+}
+function hasAnyPermission(user, names = []) {
+  const wanted = names.map(normalizeRole);
+  const profile = normalizeRole(user && user.profile);
+  const perms = asArrayPermissions(user).map(normalizeRole);
+  return wanted.includes(profile) || perms.some(p => wanted.includes(p));
+}
+async function getUsersByPermissions(empresaId, names = []) {
+  const rows = await db('usuarios').where({ empresa_id: empresaId }).whereNot({ status: 'INATIVO' });
+  return rows.filter(u => hasAnyPermission(u, ['Administrador', ...names]));
+}
+async function notifyUsers(userIds, payload = {}) {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (!uniqueIds.length) return;
+  const rows = uniqueIds.map(uid => ({
+    empresa_id: payload.empresa_id || '001',
+    user_id: uid,
+    module: payload.module || 'geral',
+    record_id: payload.record_id || null,
+    title: payload.title || 'Nova notificação',
+    body: payload.body || '',
+    target_hash: payload.target_hash || null,
+    read: false,
+    created_at: new Date().toISOString()
+  }));
+  await db('app_notifications').insert(rows).catch(err => console.warn('Falha ao salvar notificação:', err.message));
+  await sendPushToUsers(uniqueIds, payload).catch(err => console.warn('Falha ao enviar push:', err.message));
+}
+async function notifyResponsibleByPermission(empresaId, permissions, payload = {}) {
+  const users = await getUsersByPermissions(empresaId, permissions);
+  await notifyUsers(users.map(u => u.id), { ...payload, empresa_id: empresaId });
+}
+async function sendPushToUsers(userIds, payload) {
+  let webpush;
+  try { webpush = require('web-push'); } catch (_) { return; }
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (!publicKey || !privateKey) return;
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:notificacoes@controlecampo.local', publicKey, privateKey);
+  const subs = await db('push_subscriptions').whereIn('user_id', userIds.map(String));
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: JSON.parse(sub.keys_json || '{}') }, JSON.stringify(payload));
+    } catch (err) {
+      if ([404,410].includes(err.statusCode)) await db('push_subscriptions').where({ id: sub.id }).delete().catch(()=>{});
+    }
+  }
+}
 
 function normalizeRole(value) {
   return String(value || '')
@@ -1126,6 +1244,7 @@ app.post('/api/store/:key', async (req, res) => {
 
     const now = new Date().toISOString();
     const existing = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+    const previousData = existing ? safeParseStoreJson(existing.data_json, []) : [];
     if (existing) {
       await db('app_kv_store').where({ company_id: companyId, store_key: key }).update({
         data_json: dataJson,
@@ -1141,6 +1260,26 @@ app.post('/api/store/:key', async (req, res) => {
         created_at: now,
         updated_at: now
       });
+    }
+
+    // Notificações para fluxo de clientes quando o frontend ainda usa app_kv_store.
+    if (key === 'clients' && Array.isArray(data)) {
+      try {
+        const prevById = new Map((Array.isArray(previousData) ? previousData : []).map(it => [String(it.id || it.cnpj || it.codigo || ''), it]));
+        for (const item of data) {
+          const itemId = String(item.id || item.cnpj || item.codigo || '');
+          if (!itemId) continue;
+          const prev = prevById.get(itemId);
+          const owner = item.userId || item.user_id || item.vendedor_id || item.seller_id;
+          const status = String(item.status || '').trim();
+          if (!prev && normalizeRole(status).includes('pendente')) {
+            await notifyResponsibleByPermission(companyId, ['Aprovação de Clientes','Clientes'], { module:'clientes', record_id:itemId, target_hash:'#clientes', title:'Novo cliente para análise', body:`${req.user.name || 'Usuário'} cadastrou um novo cliente para aprovação.` });
+          } else if (prev && String(prev.status || '') !== status && owner) {
+            const title = normalizeRole(status).includes('reprov') ? 'Cliente reprovado' : (normalizeRole(status).includes('correc') || normalizeRole(status).includes('analise') ? 'Cliente enviado para correção/análise' : 'Cliente aprovado');
+            await notifyUsers([owner], { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.` });
+          }
+        }
+      } catch (notifErr) { console.warn('Falha ao gerar notificações de clientes:', notifErr.message); }
     }
     res.json({ success: true, key });
   } catch (err) {
@@ -1304,6 +1443,12 @@ app.post('/api/despesas', async (req, res) => {
       acao: 'SOLICITOU_SALDO',
       detalhes: `Solicitação de saldo #${id} criada por ${solicitante} no valor total de R$ ${totalSolicitadoVal.toFixed(2)}`,
       empresa_id: targetEmpresaId
+    });
+
+    await notifyResponsibleByPermission(targetEmpresaId, ['Financeiro','Aprovação de Saldo'], {
+      module: 'saldo', record_id: String(id), target_hash: '#despesas',
+      title: 'Nova solicitação de saldo',
+      body: `${solicitante} solicitou saldo no valor total de R$ ${totalSolicitadoVal.toFixed(2)}.`
     });
 
     res.json({ success: true, id });
@@ -1758,6 +1903,13 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
     }).join('\n\n');
     console.log(`[NOTIFICAÇÃO EMAIL VENDEDOR] Sua solicitação de saldo foi analisada.\n\n${formattedItemsLog}`);
 
+    await notifyUsers([request.usuario_id], {
+      empresa_id: request.empresa_id || req.user.empresa_id,
+      module: 'saldo', record_id: String(id), target_hash: '#despesas',
+      title: generalStatus === 'Correção Solicitada' ? 'Solicitação de saldo enviada para correção' : (generalStatus === 'Rejeitada' ? 'Solicitação de saldo reprovada' : 'Solicitação de saldo aprovada'),
+      body: `Sua solicitação de saldo #${id} foi avaliada como ${generalStatus}. Total aprovado: R$ ${totalAprovado.toFixed(2)}.`
+    });
+
     res.json({ success: true, generalStatus, totalAprovado });
   } catch (err) {
     console.error(err);
@@ -1976,6 +2128,12 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       console.error('Erro ao gerar log de notificação por e-mail:', err);
     }
 
+    await notifyResponsibleByPermission(req.user.empresa_id || '001', ['Responsável Equipamentos','Equipamentos','Movimentação'], {
+      module: 'movimentacao', record_id: String(newId), target_hash: '#movimentacao',
+      title: 'Nova movimentação de equipamento',
+      body: `${req.user.name || vendedor_solicitante} registrou ${tipo_solicitacao} para o cliente ${cliente_nome}.`
+    });
+
     res.json({ success: true, id: newId });
   } catch (err) {
     console.error(err);
@@ -1994,7 +2152,7 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     });
 
     if (!isActorAdmin) {
-      query = query.where('equipamentos_movimentacoes.empresa', req.user.empresa_name);
+      query = query.where(function(){ this.where('equipamentos_movimentacoes.empresa', req.user.empresa_name || '').orWhere('equipamentos_movimentacoes.empresa', req.user.empresa_id || '').orWhere('equipamentos_movimentacoes.vendedor_id', req.user.id); });
 
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
@@ -2099,7 +2257,7 @@ app.get('/api/historico-exclusoes', async (req, res) => {
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
+    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
     movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
     const mov = await movQuery.first();
     if (!mov) {
@@ -2134,7 +2292,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id, empresa: req.user.empresa_name });
+    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
     movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
     const mov = await movQuery.first();
     if (!mov) {
@@ -2557,10 +2715,10 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
 // Permissões padrão por perfil
 function getDefaultPermissionsForProfile(profile) {
   const defaults = {
-    'Administrador': ['Dashboard','Clientes','Produtos','Estoque','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Aprovação de Despesas','Relatórios','Usuários','Configurações','Administrador','Chamados','Chamados Mecânicos','Equipamentos'],
-    'Supervisor': ['Dashboard','Clientes','Prospecção','Despesas','Chamados','Chamados Mecânicos','Movimentação','Solicitação de Saldo','Aprovação de Saldo','Aprovação de Despesas','Relatórios','Usuários'],
-    'Vendedor': ['Dashboard','Clientes','Prospecção','Despesas','Chamados','Movimentação','Solicitação de Saldo','Relatórios'],
-    'Financeiro': ['Dashboard','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Aprovação de Despesas','Relatórios'],
+    'Administrador': ['Dashboard','Clientes','Produtos','Estoque','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Despesas de Campo','Aprovação de Despesas','Relatórios','Usuários','Configurações','Administrador','Chamados','Chamados Mecânicos','Equipamentos','Simulador de Troca','Confirmação de Troca'],
+    'Supervisor': ['Dashboard','Clientes','Prospecção','Despesas','Despesas de Campo','Chamados','Chamados Mecânicos','Movimentação','Solicitação de Saldo','Aprovação de Saldo','Aprovação de Despesas','Relatórios','Usuários','Simulador de Troca'],
+    'Vendedor': ['Dashboard','Clientes','Prospecção','Despesas','Despesas de Campo','Movimentação','Solicitação de Saldo','Relatórios','Simulador de Troca'],
+    'Financeiro': ['Dashboard','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Despesas de Campo','Aprovação de Despesas','Relatórios'],
     'Conferente': ['Dashboard','Chamados','Equipamentos','Movimentação'],
     'Responsável Equipamentos': ['Dashboard','Equipamentos','Movimentação','Chamados','Chamados Mecânicos'],
     'Mecânico': ['Dashboard','Chamados','Chamados Mecânicos']
@@ -3075,6 +3233,12 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
       empresa_id
     });
 
+    await notifyResponsibleByPermission(empresa_id, ['Financeiro','Aprovação de Despesas','Despesas de Campo'], {
+      module: 'despesas', record_id: id, target_hash: '#despesas',
+      title: 'Nova despesa para analisar',
+      body: `${req.user.name || 'Usuário'} lançou uma despesa de ${finalidade || 'campo'} no valor de R$ ${(parseFloat(value || 0)).toFixed(2)}.`
+    });
+
     res.json({ success: true, id });
   } catch (err) {
     console.error(err);
@@ -3184,6 +3348,41 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   }
 });
 
+
+// Corrigir despesa devolvida para correção. Apenas o dono do lançamento pode reenviar.
+app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const record = await db('despesas_reembolsos').where({ id }).first();
+    if (!record) return res.status(404).json({ error: 'Despesa não encontrada.' });
+    if (String(record.userId) !== String(req.user.id)) return res.status(403).json({ error: 'Você só pode corrigir despesas lançadas por você.' });
+    if (record.status !== 'Correção Solicitada') return res.status(400).json({ error: 'Esta despesa não está aguardando correção.' });
+    const b = req.body || {};
+    const updates = {
+      finalidade: b.finalidade || record.finalidade,
+      operacao: b.operacao || record.operacao,
+      descreva: b.descreva !== undefined ? b.descreva : record.descreva,
+      veiculo: b.veiculo !== undefined ? b.veiculo : record.veiculo,
+      km: b.km !== undefined && b.km !== '' ? parseInt(b.km, 10) : record.km,
+      foto_odometro: b.foto_odometro || record.foto_odometro,
+      foto_comprovante: b.foto_comprovante || record.foto_comprovante,
+      value: b.value !== undefined && b.value !== '' ? ccNum(b.value) : record.value,
+      observation: b.observation || b.observacao || record.observation,
+      status: 'Pendente',
+      updated_at: new Date().toISOString()
+    };
+    await db('despesas_reembolsos').where({ id }).update(updates);
+    await db('auditoria_logs').insert({ usuario_id: req.user.id, acao: 'CORRIGIU_DESPESA', detalhes: `Despesa #${id} corrigida e reenviada para aprovação.`, empresa_id: req.user.empresa_id }).catch(()=>{});
+    await notifyResponsibleByPermission(record.empresa_id || req.user.empresa_id, ['Financeiro','Aprovação de Despesas','Despesas de Campo'], {
+      module: 'despesas', record_id: id, target_hash: '#despesas', title: 'Despesa corrigida', body: `${req.user.name || 'Usuário'} corrigiu e reenviou a despesa #${id}.`
+    });
+    res.json({ success: true, id, status: 'Pendente' });
+  } catch (err) {
+    console.error('Erro ao corrigir despesa:', err);
+    res.status(500).json({ error: 'Erro ao corrigir despesa.' });
+  }
+});
+
 // Approve/Reject travel expense refund
 app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
   const { id } = req.params;
@@ -3247,6 +3446,13 @@ app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
     } catch (auditErr) {
       console.warn('Falha ao registrar auditoria da despesa, mas a aprovação foi salva:', auditErr.message);
     }
+
+    await notifyUsers([record.userId], {
+      empresa_id: record.empresa_id || req.user.empresa_id,
+      module: 'despesas', record_id: id, target_hash: '#despesas',
+      title: status === 'Aprovado' ? 'Despesa aprovada' : (status === 'Reprovado' ? 'Despesa reprovada' : 'Despesa enviada para correção'),
+      body: status === 'Correção Solicitada' ? `Sua despesa #${id} precisa de correção. Motivo: ${note}` : `Sua despesa #${id} foi atualizada para ${status}. ${note ? 'Observação: ' + note : ''}`
+    });
 
     res.json({ success: true, id, status, observacao: note });
   } catch (err) {
