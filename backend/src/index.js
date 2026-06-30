@@ -724,7 +724,10 @@ app.get('/index.html', (req, res) => {
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
-  if (isFrontendFile || req.path.startsWith('/api/uploads/')) return next();
+  // Permite abrir imagens já salvas sem login, mas protege o POST de upload.
+  // Antes o startsWith('/api/uploads/') liberava também /api/uploads/base64,
+  // deixando req.user indefinido e quebrando o salvamento das fotos.
+  if (isFrontendFile || (req.method === 'GET' && req.path.startsWith('/api/uploads/'))) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -937,10 +940,14 @@ app.post('/api/uploads/base64', async (req, res) => {
     if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Tipo de arquivo não permitido.' });
 
     const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const authUser = req.user || {};
+    const empresaId = authUser.empresa_id || req.header('X-Company-Id') || '001';
+    const userId = authUser.id ? String(authUser.id) : (req.header('X-User-Id') || null);
+
     await db('app_uploads').insert({
       id,
-      empresa_id: req.user.empresa_id,
-      user_id: req.user.id,
+      empresa_id: empresaId,
+      user_id: userId,
       module: module || 'geral',
       filename: filename || id,
       mime_type: mimeType,
@@ -3816,7 +3823,7 @@ async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'em
     const allowedIds = await getPermittedSellerIds(user, db);
     query.whereIn(ownerColumn, allowedIds);
   }
-  return query;
+  // Não retorne o query builder em função async: o Knex é thenable e seria executado antes da hora.
 }
 
 // --- Chamados Mecânicos Endpoints ---
@@ -3885,7 +3892,7 @@ app.post('/api/chamados', async (req, res) => {
 app.get('/api/chamados', async (req, res) => {
   try {
     let query = db('chamados_tecnicos');
-    query = await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
+    await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
     if (req.query.unitId && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
     if (req.query.status) query.where('status', req.query.status);
     if (req.query.patrimonio) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
