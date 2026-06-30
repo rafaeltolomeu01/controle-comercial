@@ -5695,7 +5695,15 @@ const App = {
       }
 
       const user = Store.getLoggedUser();
-      const isManager = user && ['Administrador', 'Supervisor', 'Responsável Equipamentos'].includes(user.profile);
+      const normalizeProfile = (value) => String(value || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim();
+      const userProfile = normalizeProfile(user && user.profile);
+      const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+      const isManager = user && (
+        ['administrador', 'administrador sistema', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos'].includes(userProfile)
+        || userPermissions.some(p => ['administrador', 'administrador acesso total', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos', 'confirmacao de movimentacao', 'confirmacao de troca', 'avaliacao de movimentacao', 'equipamentos'].includes(p))
+      );
       const managerPanel = document.getElementById('dossie-manager-panel');
       
       if (isManager && mov.status === 'Pendente') {
@@ -5852,7 +5860,16 @@ const App = {
 
   async deleteSelectedMovements() {
     const user = Store.getLoggedUser();
-    if (!user || user.profile !== 'Administrador') {
+    const normalizeProfile = (value) => String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+    const userProfile = normalizeProfile(user && user.profile);
+    const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+    const isAdmin = user && (
+      ['administrador', 'administrador sistema'].includes(userProfile)
+      || userPermissions.some(p => ['administrador', 'administrador acesso total'].includes(p))
+    );
+    if (!isAdmin) {
       alert('Somente administrador pode excluir movimentações.');
       return;
     }

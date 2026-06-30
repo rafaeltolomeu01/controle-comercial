@@ -2399,7 +2399,7 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
 // Exclusão lógica de movimentações com histórico de auditoria
 app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
   const { ids, motivo_exclusao } = req.body || {};
-  if (req.user.profile !== 'Administrador') {
+  if (!hasAnyPermission(req.user, ['Administrador', 'Administrador sistema', 'Administrador (Acesso Total)'])) {
     return res.status(403).json({ error: 'Somente administrador pode excluir movimentações.' });
   }
   const cleanIds = Array.isArray(ids) ? ids.map(id => String(id).trim()).filter(Boolean) : [];
@@ -2444,17 +2444,30 @@ app.get('/api/historico-exclusoes', async (req, res) => {
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
-    movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
-    const mov = await movQuery.first();
+    const mov = await db('equipamentos_movimentacoes')
+      .where({ id })
+      .andWhere(function() { this.where('excluido', false).orWhereNull('excluido'); })
+      .first();
+
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
     }
 
-    const permittedIds = await getPermittedSellerIds(req.user, db);
-    const staffProfiles = ['Administrador', 'Responsável Equipamentos', 'Conferente', 'Financeiro'];
-    if (!staffProfiles.includes(req.user.profile) && !permittedIds.includes(mov.vendedor_id)) {
-      return res.status(403).json({ error: 'Acesso negado' });
+    const profileNorm = normalizeRole(req.user && req.user.profile);
+    const movementViewPerms = Array.isArray(req.user.permissions) ? req.user.permissions : asArrayPermissions(req.user);
+    const isAdminOrStaff = ['administrador', 'administrador sistema', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos', 'conferente', 'financeiro']
+      .includes(profileNorm)
+      || hasAnyPermission(req.user, ['Administrador', 'Administrador (Acesso Total)', 'Responsável Equipamentos', 'Gestor Equipamentos', 'Gestor de Equipamentos', 'Equipamentos', 'Avaliação de Movimentação', 'Confirmação de Movimentação']);
+
+    if (!isAdminOrStaff) {
+      const permittedIds = await getPermittedSellerIds(req.user, db);
+      const movSellerId = mov.vendedor_id == null ? null : String(mov.vendedor_id);
+      const userId = req.user && req.user.id == null ? null : String(req.user.id);
+      const canViewByHierarchy = movSellerId && permittedIds.map(String).includes(movSellerId);
+      const canViewOwn = movSellerId && userId && movSellerId === userId;
+      if (!canViewByHierarchy && !canViewOwn) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
     }
 
     res.json(mov);
@@ -2469,15 +2482,19 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   const { id } = req.params;
   const { status, motivo_reprovacao, patrimonio_novo, modelo_novo, voltagem_nova } = req.body;
 
-  const movementPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-  const canApproveMovement = req.user.profile === 'Administrador'
-    || req.user.profile === 'Responsável Equipamentos'
-    || movementPerms.includes('Administrador')
-    || movementPerms.includes('Administrador (Acesso Total)')
-    || movementPerms.includes('Confirmação de Movimentação')
-    || movementPerms.includes('Confirmação de Troca')
-    || movementPerms.includes('Avaliação de Movimentação')
-    || movementPerms.includes('Equipamentos');
+  const profileNorm = normalizeRole(req.user && req.user.profile);
+  const canApproveMovement = ['administrador', 'administrador sistema', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos'].includes(profileNorm)
+    || hasAnyPermission(req.user, [
+      'Administrador',
+      'Administrador (Acesso Total)',
+      'Responsável Equipamentos',
+      'Gestor Equipamentos',
+      'Gestor de Equipamentos',
+      'Confirmação de Movimentação',
+      'Confirmação de Troca',
+      'Avaliação de Movimentação',
+      'Equipamentos'
+    ]);
   if (!canApproveMovement) {
     return res.status(403).json({ error: 'Acesso negado: somente responsável por equipamentos ou usuário com permissão de confirmação pode aprovar movimentação.' });
   }
@@ -2487,17 +2504,12 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    let movQuery = db('equipamentos_movimentacoes').where({ id }).andWhere(function(){ this.where('empresa', req.user.empresa_name || '').orWhere('empresa', req.user.empresa_id || '').orWhere('vendedor_id', req.user.id); });
-    movQuery = movQuery.where(function() { this.where('excluido', false).orWhereNull('excluido'); });
-    const mov = await movQuery.first();
+    const mov = await db('equipamentos_movimentacoes')
+      .where({ id })
+      .andWhere(function() { this.where('excluido', false).orWhereNull('excluido'); })
+      .first();
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
-    }
-    if (req.user.profile === 'Supervisor' || req.user.profile === 'Gerente') {
-      const permittedIds = await getPermittedSellerIds(req.user, db);
-      if (!permittedIds.includes(mov.vendedor_id)) {
-        return res.status(403).json({ error: 'Acesso negado: movimentação fora da sua cadeia.' });
-      }
     }
 
     const now = new Date().toISOString();
@@ -2731,6 +2743,38 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
       }
     } catch (kvErr) {
       console.error('Erro ao sincronizar KV store de equipamentos:', kvErr);
+    }
+
+    // 4. Notificar o vendedor solicitante sobre a decisão da movimentação
+    try {
+      let sellerId = mov.vendedor_id ? String(mov.vendedor_id) : null;
+      if (!sellerId && mov.vendedor_solicitante) {
+        const seller = await db('usuarios')
+          .where(function() {
+            this.where('name', mov.vendedor_solicitante)
+              .orWhere('nome', mov.vendedor_solicitante)
+              .orWhere('email', mov.vendedor_solicitante);
+          })
+          .first()
+          .catch(() => null);
+        if (seller && seller.id) sellerId = String(seller.id);
+      }
+
+      if (sellerId) {
+        const isApproved = status === 'Aprovado';
+        await notifyUsers([sellerId], {
+          empresa_id: mov.empresa_id || req.user.empresa_id || '001',
+          module: 'equipamentos_movimentacoes',
+          record_id: String(id),
+          target_hash: '#movimentacao',
+          title: isApproved ? 'Movimentação aprovada' : 'Movimentação reprovada',
+          body: isApproved
+            ? `Sua movimentação de equipamento #${id} foi aprovada.`
+            : `Sua movimentação de equipamento #${id} foi reprovada. Verifique o motivo no dossiê.`
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('Falha ao notificar vendedor sobre movimentação:', notifyErr.message);
     }
 
     // Simulação de Notificação por E-mail
