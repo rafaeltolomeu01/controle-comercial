@@ -489,10 +489,10 @@ const App = {
    * Fills equipment type select in movement form
    */
   fillMovEquipmentDropdown() {
-    const select = document.getElementById('mov-equipment-type');
+    const select = document.getElementById('mov-modelo-adicao') || document.getElementById('mov-equipment-type');
     if (!select) return;
     const types = Store.getEquipmentTypes();
-    select.innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
+    select.innerHTML = '<option value="" selected disabled>Selecione o modelo...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
 
     // Also populate unit dropdown
     const unitSel = document.getElementById('mov-unit');
@@ -5659,6 +5659,9 @@ const App = {
       alert('Abra um dossiê antes de gerar o PDF.');
       return;
     }
+    const user = Store.getLoggedUser();
+    const isSeller = user && String(user.profile || '').toLowerCase() === 'vendedor';
+
     const mediaHtml = [];
     const addImg = (url, label) => {
       if (!url) return;
@@ -5670,12 +5673,30 @@ const App = {
     addImg(mov.foto_depois_url, 'Depois');
 
     const isTroca = mov.tipo_solicitacao === 'Troca';
-    const equipmentHtml = isTroca ? `
-      <div class="pdf-two">
-        <div class="pdf-box danger"><h4>RETIRADO (Antigo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio || '-'}</p><p><b>Modelo:</b> ${mov.modelo || '-'}</p><p><b>Voltagem:</b> ${mov.voltagem || '-'} V</p></div>
-        <div class="pdf-box success"><h4>INSTALADO (Novo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem_nova || ''}</p></div>
-      </div>` : `
-      <div class="pdf-box"><p><b>Patrimônio:</b> ${mov.patrimonio || mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo || mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem || mov.voltagem_nova || ''} V</p><p><b>Quantidade:</b> ${mov.quantidade || 1}</p></div>`;
+    let equipmentHtml = '';
+    if (isSeller) {
+      if (isTroca) {
+        equipmentHtml = `
+          <div class="pdf-box danger"><h4>RETIRADO (Antigo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio || '-'}</p><p><b>Modelo:</b> ${mov.modelo || '-'}</p><p><b>Voltagem:</b> ${mov.voltagem || '-'} V</p></div>`;
+      } else if (mov.tipo_solicitacao === 'Adição') {
+        equipmentHtml = `
+          <div class="pdf-box"><p><b>Quantidade:</b> ${mov.quantidade || 1}</p></div>`;
+      } else {
+        equipmentHtml = `
+          <div class="pdf-box"><p><b>Patrimônio:</b> ${mov.patrimonio || ''}</p><p><b>Modelo:</b> ${mov.modelo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem || ''} V</p><p><b>Quantidade:</b> ${mov.quantidade || 1}</p></div>`;
+      }
+    } else {
+      equipmentHtml = isTroca ? `
+        <div class="pdf-two">
+          <div class="pdf-box danger"><h4>RETIRADO (Antigo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio || '-'}</p><p><b>Modelo:</b> ${mov.modelo || '-'}</p><p><b>Voltagem:</b> ${mov.voltagem || '-'} V</p></div>
+          <div class="pdf-box success"><h4>INSTALADO (Novo)</h4><p><b>Patrimônio:</b> ${mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem_nova || ''}</p></div>
+        </div>` : `
+        <div class="pdf-box"><p><b>Patrimônio:</b> ${mov.patrimonio || mov.patrimonio_novo || ''}</p><p><b>Modelo:</b> ${mov.modelo || mov.modelo_novo || ''}</p><p><b>Voltagem:</b> ${mov.voltagem || mov.voltagem_nova || ''} V</p><p><b>Quantidade:</b> ${mov.quantidade || 1}</p></div>`;
+    }
+
+    const managerDecisionHtml = isSeller ? '' : `
+      <h3>Decisão do Gestor de Equipamentos</h3>
+      <div class="pdf-box"><b>Número do Patrimônio Novo</b><div class="blank"></div><b>Modelo do Equipamento Novo</b><div class="blank"></div><b>Voltagem do Equipamento Novo</b><div class="blank"></div><b>Parecer / Justificativa</b><div class="parecer"></div></div>`;
 
     const printWin = window.open('', '_blank');
     printWin.document.write(`<!doctype html><html><head><title>Dossiê de Movimentação #${mov.id}</title>
@@ -5690,8 +5711,7 @@ const App = {
       ${mov.detalhe_troca_adicao ? `<div class="pdf-box"><b>Detalhes:</b><br>${mov.detalhe_troca_adicao}</div>` : ''}
       ${mov.motivo_recolhimento ? `<div class="pdf-box"><b>Motivo do Recolhimento:</b><br>${mov.motivo_recolhimento}</div>` : ''}
       <h3>Comprovações de Mídia</h3><div class="photos">${mediaHtml.join('') || '<p>Nenhuma mídia registrada.</p>'}</div>
-      <h3>Decisão do Gestor de Equipamentos</h3>
-      <div class="pdf-box"><b>Número do Patrimônio Novo</b><div class="blank"></div><b>Modelo do Equipamento Novo</b><div class="blank"></div><b>Voltagem do Equipamento Novo</b><div class="blank"></div><b>Parecer / Justificativa</b><div class="parecer"></div></div>
+      ${managerDecisionHtml}
       <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
     printWin.document.close();
   },

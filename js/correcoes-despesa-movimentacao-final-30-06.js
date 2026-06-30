@@ -206,9 +206,52 @@
       App.showMovementDetails = async function(id){
         await oldShowMovementDetails(id);
         const panel = document.getElementById('dossie-manager-panel');
-        if (panel && !canConfirmMovement()) {
-          panel.style.display = 'none';
-          panel.dataset.targetId = '';
+        const mov = App.currentMovementDossier;
+        
+        // 1. Correct display of the manager approval panel
+        if (panel) {
+          if (canConfirmMovement() && mov && mov.status === 'Pendente') {
+            panel.style.display = 'block';
+            panel.dataset.targetId = id;
+            
+            // Populate and show the manager-only fields
+            const subBlock = document.getElementById('dossie-substituicao-block');
+            if (subBlock) {
+              const needsManagerEquipment = ['Troca', 'Adição'].includes(mov.tipo_solicitacao);
+              subBlock.style.display = needsManagerEquipment ? 'block' : 'none';
+              
+              const titleEl = document.getElementById('dossie-sub-title');
+              const helpEl = document.getElementById('dossie-sub-help');
+              if (titleEl) titleEl.textContent = mov.tipo_solicitacao === 'Adição' ? '✅ EQUIPAMENTO CONFIRMADO NA ADIÇÃO' : '🔄 EQUIPAMENTO DE SUBSTITUIÇÃO';
+              if (helpEl) helpEl.textContent = mov.tipo_solicitacao === 'Adição' ? 'Preencha o patrimônio, modelo e voltagem confirmados para instalar no cliente.' : 'Preencha os dados do equipamento que será enviado para substituição. Não use listas pré-definidas — preencha manualmente.';
+            }
+          } else {
+            panel.style.display = 'none';
+            panel.dataset.targetId = '';
+          }
+        }
+
+        // 2. Hide/show details for Vendedor profile
+        const u = currentUser();
+        const profile = norm(u.profile);
+        const isSeller = profile === 'vendedor';
+        
+        // Troca new equipment details
+        const trocaContainer = document.getElementById('dossie-eq-troca-container');
+        if (trocaContainer && trocaContainer.children[1]) {
+          trocaContainer.children[1].style.display = isSeller ? 'none' : '';
+        }
+        
+        // Adição specs block
+        const specsGrid = document.querySelector('#dossie-eq-padrao-container > div');
+        if (specsGrid) {
+          specsGrid.style.display = (isSeller && mov && mov.tipo_solicitacao === 'Adição') ? 'none' : 'grid';
+        }
+        
+        // Timeline link
+        const timelineLink = document.getElementById('btn-show-timeline-dossie');
+        if (timelineLink) {
+          timelineLink.style.display = (isSeller && mov && mov.tipo_solicitacao === 'Adição') ? 'none' : '';
         }
       };
     }

@@ -106,11 +106,12 @@
         const data = isNaN(d) ? '-' : d.toLocaleDateString('pt-BR');
         const hora = isNaN(d) ? '' : d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
         const editBtn = canEditSim(sim) ? `<button class="btn btn-secondary btn-sm" type="button" onclick="event.stopPropagation(); App.editExchangeSimulation('${esc(sim.id)}')">Editar</button>` : '';
+        const deleteBtn = canEditSim(sim) ? `<button class="btn btn-danger btn-sm" type="button" onclick="event.stopPropagation(); App.deleteExchangeSimulation('${esc(sim.id)}')">Excluir</button>` : '';
         return `
           <div class="exchange-history-item" id="exchange-history-item-${esc(sim.id)}">
             <div class="exchange-history-item-header" onclick="App.toggleExchangeHistoryItem('${esc(sim.id)}')" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
               <span>${esc(sim.cliente_codigo)} - ${esc(String(sim.cliente_nome_fantasia).toUpperCase())} | ${money(sim.total)} | ${esc(data)}</span>
-              <div style="display:flex; gap:8px; align-items:center;">${editBtn}<button class="btn btn-primary btn-sm" type="button" onclick="event.stopPropagation(); App.showExchangeSimulationDetails('${esc(sim.id)}')">Detalhes</button></div>
+              <div style="display:flex; gap:8px; align-items:center;">${editBtn}${deleteBtn}<button class="btn btn-primary btn-sm" type="button" onclick="event.stopPropagation(); App.showExchangeSimulationDetails('${esc(sim.id)}')">Detalhes</button></div>
             </div>
             <div class="exchange-history-item-details" id="exchange-history-details-${esc(sim.id)}" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-color);">
               <div class="exchange-thermal-receipt-paper">
@@ -132,6 +133,23 @@
 
   if (window.App && !App.__ccTrocaEdit3006) {
     App.__ccTrocaEdit3006 = true;
+
+    App.deleteExchangeSimulation = async function(id) {
+      if (!confirm('Deseja realmente excluir permanentemente esta simulação de troca?')) return;
+      try {
+        const res = await App.fetchFromApi(`/api/exchange/simulations/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+        if (res && (res.success || res.ok)) {
+          App.showToast && App.showToast('Simulação de troca excluída com sucesso!');
+          App.loadExchangeHistory && App.loadExchangeHistory();
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao excluir simulação: ' + (err.message || err));
+      }
+    };
+
     App.editExchangeSimulation = async function(id){
       try {
         const data = normalizeSimulation(await App.fetchFromApi(`/api/exchange/simulations/${encodeURIComponent(id)}`));

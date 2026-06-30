@@ -1262,11 +1262,52 @@ app.post('/api/store/:key', async (req, res) => {
       });
     }
 
+    const finalData = safeParseStoreJson(dataJson, []);
+
+    // Sincronização física com a tabela clientes
+    if (key === 'clients' && Array.isArray(finalData)) {
+      try {
+        const currentIds = finalData.map(c => String(c.id)).filter(Boolean);
+        await db('clientes').whereNotIn('id', currentIds).delete();
+        for (const client of finalData) {
+          if (!client.id) continue;
+          const existingClient = await db('clientes').where({ id: client.id }).first();
+          const clientData = {
+            name: client.name || null,
+            cnpj: client.cnpj || null,
+            phone: client.phone || null,
+            email: client.email || null,
+            unitId: client.unitId || null,
+            userId: client.userId || null,
+            status: client.status || null,
+            companyName: client.companyName || null,
+            city: client.city || null,
+            address: client.addressFull || client.street || null,
+            status_final: ['Aprovado', 'Reprovado', 'Pendente'].includes(client.status) ? client.status : 'Pendente'
+          };
+          if (existingClient) {
+            if (client.status === 'Aprovado' && existingClient.status !== 'Aprovado') {
+              clientData.data_aprovacao = new Date().toISOString().split('T')[0];
+            }
+            await db('clientes').where({ id: client.id }).update(clientData);
+          } else {
+            await db('clientes').insert({
+              id: client.id,
+              ...clientData,
+              data_cadastro: new Date().toISOString().split('T')[0]
+            });
+          }
+        }
+      } catch (syncErr) {
+        console.error('Erro ao sincronizar tabela clientes:', syncErr);
+      }
+    }
+
     // Notificações para fluxo de clientes quando o frontend ainda usa app_kv_store.
-    if (key === 'clients' && Array.isArray(data)) {
+    if (key === 'clients' && Array.isArray(finalData)) {
       try {
         const prevById = new Map((Array.isArray(previousData) ? previousData : []).map(it => [String(it.id || it.cnpj || it.codigo || ''), it]));
-        for (const item of data) {
+        for (const item of finalData) {
           const itemId = String(item.id || item.cnpj || item.codigo || '');
           if (!itemId) continue;
           const prev = prevById.get(itemId);
@@ -2225,13 +2266,7 @@ app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
         created_at: now
       });
     }
-    await db('equipamentos_movimentacoes').whereIn('id', cleanIds).update({
-      excluido: true,
-      excluido_em: now,
-      excluido_por: req.user.id,
-      motivo_exclusao: motivo_exclusao || 'Sem motivo informado',
-      updated_at: now
-    });
+    await db('equipamentos_movimentacoes').whereIn('id', cleanIds).delete();
     res.json({ success: true, count: rows.length });
   } catch (err) {
     console.error(err);
@@ -3996,6 +4031,45 @@ app.put('/api/exchange/simulations/:id', async (req, res) => {
   } catch (err) {
     console.error('Erro ao editar simulação:', err);
     res.status(500).json({ error: 'Erro ao editar simulação de troca.' });
+  }
+});
+
+// 7. Delete simulation - somente o próprio usuário ou administrador pode excluir
+app.delete('/api/exchange/simulations/:id', async (req, res) => {
+  const { id } = req.params;
+  const companyId = (req.user && req.user.empresa_id) || '001';
+  const userId = (req.user && req.user.id) || 'demo_user';
+
+  try {
+    const sim = await db('exchange_simulations')
+      .where({ id, company_id: companyId })
+      .first();
+
+    if (!sim) return res.status(404).json({ error: 'Simulação não encontrada.' });
+
+    const perfil = String((req.user && (req.user.profile || req.user.perfil || req.user.role)) || '').toLowerCase();
+    const isAdminUser = perfil.includes('admin') || perfil.includes('administrador');
+    if (!isAdminUser && String(sim.seller_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Você só pode excluir trocas cadastradas por você.' });
+    }
+
+    // Deletar os itens associados primeiro
+    await db('exchange_simulation_items').where({ simulation_id: id }).delete();
+
+    // Deletar a simulação principal
+    await db('exchange_simulations').where({ id }).delete();
+
+    await db('auditoria_logs').insert({
+      usuario_id: userId,
+      acao: 'EXCLUIU_SIMULACAO_TROCA',
+      detalhes: `Simulação de troca #${id} do cliente ${sim.cliente_nome_fantasia} excluída por ${req.user.name || req.user.id}.`,
+      empresa_id: companyId
+    }).catch(() => {});
+
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error('Erro ao excluir simulação:', err);
+    res.status(500).json({ error: 'Erro ao excluir simulação de troca.' });
   }
 });
 // Client ficha route
