@@ -1641,6 +1641,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
 
     let allApprovedIntegral = true;
     let allReproved = true;
+    let hasCorrection = false;
     let totalAprovado = 0;
 
     for (const evalItem of items) {
@@ -1650,19 +1651,28 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
 
       if (!dbItem) continue;
 
-      const valAprovado = parseFloat(evalItem.valor_aprovado) || 0;
+      let valAprovado = parseFloat(evalItem.valor_aprovado) || 0;
       const qtyAprovada = evalItem.quantidade_aprovada !== undefined && evalItem.quantidade_aprovada !== null ?
         parseInt(evalItem.quantidade_aprovada, 10) : null;
 
       const isReducedVal = valAprovado < dbItem.valor_solicitado;
       const isReducedQty = dbItem.quantidade_solicitada !== null && qtyAprovada < dbItem.quantidade_solicitada;
 
-      let itemStatus = evalItem.status; // aprovado, aprovado parcialmente, reprovado
+      let itemStatus = evalItem.status; // aprovado, aprovado parcialmente, reprovado, correcao
+      if (itemStatus === 'correcao') {
+        hasCorrection = true;
+        allApprovedIntegral = false;
+        allReproved = false;
+      }
       if (itemStatus === 'aprovado' && (isReducedVal || isReducedQty)) {
         itemStatus = 'aprovado parcialmente';
       }
 
-      if (itemStatus !== 'reprovado') {
+      if (itemStatus === 'correcao') {
+        // Envio para correção não libera saldo e não reprova definitivamente.
+        valAprovado = 0;
+      }
+      if (itemStatus !== 'reprovado' && itemStatus !== 'correcao') {
         allReproved = false;
         if (itemStatus === 'aprovado parcialmente') {
           allApprovedIntegral = false;
@@ -1685,7 +1695,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
         });
 
       // Record audit log for individual item
-      const actionType = itemStatus === 'reprovado' ? 'REPROVOU_ITEM' : (itemStatus === 'aprovado parcialmente' ? 'ALTEROU_VALOR' : 'APROVOU_ITEM');
+      const actionType = itemStatus === 'correcao' ? 'ENVIOU_ITEM_CORRECAO' : (itemStatus === 'reprovado' ? 'REPROVOU_ITEM' : (itemStatus === 'aprovado parcialmente' ? 'ALTEROU_VALOR' : 'APROVOU_ITEM'));
       await db('auditoria_logs').insert({
         usuario_id: req.user.id,
         acao: actionType,
@@ -1696,7 +1706,9 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
 
     // Determine general status
     let generalStatus = 'Pendente';
-    if (allReproved) {
+    if (hasCorrection) {
+      generalStatus = 'Correção Solicitada';
+    } else if (allReproved) {
       generalStatus = 'Rejeitada';
     } else if (allApprovedIntegral) {
       generalStatus = 'Aprovada';
