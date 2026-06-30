@@ -339,8 +339,9 @@ const UI = {
       dashExpenses.textContent = UI.formatCurrency(pendingExpenses);
     }
 
-    const dashBalances = document.getElementById('dash-pending-balances');
-    if (dashBalances) dashBalances.textContent = pendingBalances;
+    // Saldo disponível aprovado é atualizado via updateBalanceCards(), não substituir pela quantidade de pendentes
+    // const dashBalances = document.getElementById('dash-pending-balances');
+    // if (dashBalances) dashBalances.textContent = pendingBalances;
 
     const renderMiniBars = (elementId, rows, valueFormatter = (v) => v) => {
       const el = document.getElementById(elementId);

@@ -91,7 +91,20 @@
   async function setupNotifications(){
     if (!('serviceWorker' in navigator)) return;
     try {
+      // Auto-reload current clients when new Service Worker takes control (updates PWA automatically)
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+
       const reg = await navigator.serviceWorker.register('/sw.js');
+      
+      // Force checking for updates immediately on load
+      reg.update().catch(()=>{});
+
       const keyResp = await api('/api/push/vapid-public-key').catch(()=>({publicKey:''}));
       if (keyResp && keyResp.publicKey && 'PushManager' in window) {
         const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
@@ -233,6 +246,7 @@
       const allowSim = admin || pp.includes('simulador de troca');
       const clean = routes.filter(r => allowSim || r !== '#simulador-troca');
       if (allowSim && !clean.includes('#simulador-troca')) clean.push('#simulador-troca');
+      if (!clean.includes('#notificacoes')) clean.push('#notificacoes');
       return clean;
     };
   }
