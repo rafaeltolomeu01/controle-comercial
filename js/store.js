@@ -267,8 +267,35 @@ const Store = {
   getProspects() { return this.getList('prospects', DEFAULT_PROSPECTS); },
   saveProspects(data) { return this.saveList('prospects', data); },
 
-  getClients() { return this.getList('clients', DEFAULT_CLIENTS); },
+  // Seller filter utilities
+  setCurrentSellerId(id) { localStorage.setItem('selectedSellerId', id); },
+  getCurrentSellerId() { return localStorage.getItem('selectedSellerId') || ''; },
+
+  // Client getters/setters (filtered by selected seller)
+  getClients() {
+    const all = this.getList('clients', DEFAULT_CLIENTS);
+    const sellerId = this.getCurrentSellerId();
+    if (!sellerId) return all;
+    return all.filter(c => String(c.vendedor_id || '') === String(sellerId));
+  },
   saveClients(data) { return this.saveList('clients', data); },
+
+  // Delete a client locally and sync to backend
+  async deleteClient(id) {
+    const clients = this.getClients().filter(c => c.id !== id);
+    this.saveClients(clients);
+    try {
+      await this.backendRequest(`/api/clientes/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Erro ao excluir cliente no backend:', e);
+    }
+  },
+
+  // Seller filter utilities
+  setCurrentSellerId(id) { localStorage.setItem('selectedSellerId', id); },
+  getCurrentSellerId() { return localStorage.getItem('selectedSellerId') || ''; },
+
+
 
   getEquipments() { return this.getList('equipments', DEFAULT_EQUIPMENTS); },
   saveEquipments(data) { return this.saveList('equipments', data); },
