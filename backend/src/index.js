@@ -3088,22 +3088,26 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
 
-    let query = db('despesas_reembolsos');
+    let query = db('despesas_reembolsos as dr');
 
     if (!isActorAdmin) {
-      query = query.where('empresa_id', req.user.empresa_id);
+      query = query.where('dr.empresa_id', req.user.empresa_id);
 
       if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('unitId', req.user.unitId);
+        query = query.where('dr.unitId', req.user.unitId);
       }
 
       const permittedIds = await getPermittedSellerIds(req.user, db);
-      query = query.whereIn('userId', permittedIds);
+      query = query.whereIn('dr.userId', permittedIds);
     } else if (req.query.unitId && req.query.unitId !== 'all') {
-      query = query.where('unitId', req.query.unitId);
+      query = query.where('dr.unitId', req.query.unitId);
     }
 
-    const list = await query.orderBy('created_at', 'desc').orderBy('id', 'desc');
+    const list = await query
+      .leftJoin('usuarios as u', 'dr.userId', 'u.id')
+      .select('dr.*', 'u.name as userName')
+      .orderBy('dr.created_at', 'desc')
+      .orderBy('dr.id', 'desc');
     res.json(list);
   } catch (err) {
     console.error(err);
@@ -3131,7 +3135,8 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(403).json({ error: 'Acesso negado: esta despesa está fora da sua cadeia de atendimento' });
     }
 
-    res.json(record);
+    const userRecord = record.userId ? await db('usuarios').where({ id: record.userId }).first() : null;
+    res.json({ ...record, userName: userRecord?.name || record.userName || null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao detalhar despesa de campo' });

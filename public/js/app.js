@@ -2036,6 +2036,7 @@ const App = {
             observation,
             unitId,
             userId,
+            userName: loggedUser.name || loggedUser.username || '',
             status: 'Pendente',
             syncing: true,
             created_at: new Date().toISOString()
@@ -2063,7 +2064,8 @@ const App = {
               value: Number(value) || 0,
               observation,
               unitId,
-              userId
+              userId,
+              userName: loggedUser.name || loggedUser.username || ''
             })
           }).then(() => this.loadExpenses()).catch(err => {
             optimisticExpense.syncError = err.message;
@@ -4736,7 +4738,7 @@ const App = {
  
       doc.text(`Comprovante ID: #${exp.id}`, 15, 33);
       doc.text(`Data / Hora: ${formattedDate} ${exp.time ? ' às ' + exp.time : ''}`, 110, 33);
-      doc.text(`Vendedor: ${UI.getUserName(exp.userId)}`, 15, 39);
+      doc.text(`Vendedor: ${UI.getExpenseUserName(exp)}`, 15, 39);
       doc.text(`Unidade: ${UI.getUnitName(exp.unitId)}`, 110, 39);
       doc.text(`Finalidade: ${exp.finalidade}`, 15, 45);
       doc.text(`Tipo de Operação: ${exp.operacao}`, 110, 45);

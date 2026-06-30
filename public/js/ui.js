@@ -70,7 +70,26 @@ const UI = {
   getUserName(userId) {
     const users = Store.getUsers();
     const user = users.find(u => u.id === userId);
-    return user ? user.name : 'Outro Vendedor';
+    return user ? user.name : 'Usuário não localizado';
+  },
+
+  /**
+   * Resolve o nome real do responsável por uma despesa.
+   * Prioriza o nome vindo do backend e, depois, busca pelo userId na lista de usuários.
+   */
+  getExpenseUserName(exp) {
+    if (!exp) return 'Usuário não localizado';
+    const directName = exp.userName || exp.usuario_nome || exp.nome_usuario || exp.nomeUsuario || exp.vendedor_nome || exp.vendedor || exp.seller_name || exp.responsavel_nome;
+    if (directName && String(directName).trim() && String(directName).trim() !== 'Outro Vendedor') {
+      return String(directName).trim();
+    }
+
+    const possibleIds = [exp.userId, exp.usuario_id, exp.user_id, exp.seller_id, exp.created_by].filter(Boolean).map(String);
+    const users = Store.getUsers ? Store.getUsers() : [];
+    const found = users.find(u => possibleIds.includes(String(u.id)) || possibleIds.includes(String(u.username)) || possibleIds.includes(String(u.email)));
+    if (found && found.name) return found.name;
+
+    return 'Usuário não localizado';
   },
 
   /**
@@ -803,7 +822,7 @@ const UI = {
           <td class="normal-wrap">${finalidadeDisplay}</td>
           <td>${exp.operacao || ''}</td>
           <td><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(exp.unitId)}</span></td>
-          <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(exp.userId)}</span></td>
+          <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getExpenseUserName(exp)}</span></td>
           <td style="font-weight: 600;">${valorStr}</td>
           <td><span class="badge-status ${statusClass}">${exp.status}</span></td>
           <td>

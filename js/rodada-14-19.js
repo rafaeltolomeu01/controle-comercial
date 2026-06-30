@@ -197,7 +197,7 @@
       doc.setFont('Helvetica','bold'); doc.setFontSize(12); doc.setTextColor(255,255,255); doc.text('COMPROVANTE DE DESPESA DE VIAGEM',10,17);
       doc.setTextColor(0,0,0); doc.setFontSize(9); doc.setFont('Helvetica','normal');
       doc.text(`Comprovante ID: #${exp.id}`,15,33); doc.text(`Data / Hora: ${safeDate(exp.date)}${exp.time ? ' às '+exp.time : ''}`,110,33);
-      doc.text(`Vendedor: ${UI.getUserName(exp.userId)}`,15,39); doc.text(`Unidade: ${UI.getUnitName(exp.unitId)}`,110,39);
+      doc.text(`Vendedor: ${UI.getExpenseUserName(exp)}`,15,39); doc.text(`Unidade: ${UI.getUnitName(exp.unitId)}`,110,39);
       doc.text(`Finalidade: ${exp.finalidade || '-'}`,15,45); doc.text(`Tipo de Operação: ${exp.operacao || '-'}`,110,45); doc.text(`Status: ${exp.status || '-'}`,15,51);
       doc.setDrawColor(220,220,220); doc.line(10,56,200,56); let y=63;
       doc.setFont('Helvetica','bold'); doc.text('DETALHES DA DESPESA',15,y); doc.setFont('Helvetica','normal'); y+=7;
