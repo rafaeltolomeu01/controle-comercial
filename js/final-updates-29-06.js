@@ -112,7 +112,7 @@
         return allowed;
       }
       if (user.profile === 'Financeiro') add(allowed,'#despesas','#solicitacao-despesas','#despesas-dashboard');
-      if (user.profile === 'Vendedor') add(allowed,'#prospeccao','#clientes','#movimentacao','#despesas','#solicitacao-despesas','#simulador-troca');
+      if (user.profile === 'Vendedor') add(allowed,'#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#simulador-troca');
       if (user.profile === 'Supervisor' || user.profile === 'Gerente') add(allowed,'#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#usuarios','#simulador-troca');
       if (user.profile === 'Mecânico') add(allowed,'#chamados');
       if (user.profile === 'Responsável Equipamentos') add(allowed,'#equipamentos','#movimentacao','#chamados');

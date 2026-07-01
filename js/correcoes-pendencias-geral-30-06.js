@@ -12,7 +12,9 @@
     if (isAdmin()) return true;
     const p = perms().map(norm);
     const role = norm(user().profile);
-    return names.some(n => role === norm(n) || p.includes(norm(n)) || p.some(x => x.includes(norm(n))));
+    const requested = names.map(norm);
+    if (role === 'vendedor' && requested.some(n => ['chamados', 'chamados mecanicos'].includes(n))) return true;
+    return requested.some(n => role === n || p.includes(n) || p.some(x => x.includes(n)));
   };
   const api = (url, options={}) => (window.App && App.fetchFromApi) ? App.fetchFromApi(url, options) : fetch(url, {headers:{'Content-Type':'application/json', Authorization:'Bearer '+localStorage.getItem('authToken')}, ...options}).then(r=>r.json());
 
