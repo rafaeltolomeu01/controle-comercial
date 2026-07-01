@@ -170,9 +170,12 @@
       .clientes-importador-page-btn.active { background:var(--primary-color); border-color:var(--primary-color); color:#fff; }
       .clientes-importador-page-btn:disabled { opacity:.45; cursor:not-allowed; }
       .clientes-importador-row-hint { color:var(--primary-color); font-weight:600; }
+      html.clientes-importador-modal-active, body.clientes-importador-modal-active { overflow:hidden !important; }
       .clientes-importador-modal-overlay { display:none; position:fixed; inset:0; z-index:2600; background:rgba(0,0,0,.68); align-items:center; justify-content:center; padding:18px 10px; }
       .clientes-importador-modal-overlay.open { display:flex; }
       .clientes-importador-modal { width:min(1120px, 96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.45); padding:18px; color:var(--text-main); }
+      #modal-clientes-importador-detail.clientes-importador-modal-overlay { align-items:flex-start; justify-content:center; padding:12px 10px; overflow-y:auto; overscroll-behavior:contain; }
+      #modal-clientes-importador-detail .clientes-importador-detail-modal { margin:0 auto 18px; }
       .clientes-importador-modal-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; border-bottom:1px solid var(--border-color); padding-bottom:12px; margin-bottom:14px; }
       .clientes-importador-modal-title { margin:0; font-family:var(--font-title); font-size:1.05rem; color:var(--text-main); }
       .clientes-importador-modal-subtitle { margin:4px 0 0; color:var(--text-muted); font-size:.78rem; line-height:1.35; }
@@ -187,7 +190,7 @@
       .clientes-importador-errors { display:none; border:1px solid rgba(239,68,68,.45); background:rgba(239,68,68,.08); border-radius:8px; padding:10px; color:#fecaca; font-size:.78rem; max-height:180px; overflow:auto; }
       .clientes-importador-errors.open { display:block; }
       .clientes-importador-modal-footer { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border-color); padding-top:14px; margin-top:14px; }
-      .clientes-importador-detail-modal { width:min(980px, 96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.45); padding:18px; color:var(--text-main); }
+      .clientes-importador-detail-modal { width:min(980px, 96vw); max-height:calc(100dvh - 24px); overflow:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.45); padding:18px; color:var(--text-main); }
       .clientes-importador-detail-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; border-bottom:1px solid var(--border-color); padding-bottom:12px; margin-bottom:14px; }
       .clientes-importador-detail-title { margin:0; font-family:var(--font-title); font-size:1.08rem; color:var(--text-main); }
       .clientes-importador-detail-subtitle { margin:4px 0 0; color:var(--text-muted); font-size:.8rem; line-height:1.35; }
@@ -205,6 +208,8 @@
         .clientes-importador-filter-group.search { min-width:100%; }
         .clientes-importador-map-grid { grid-template-columns:1fr; }
         .clientes-importador-modal { padding:14px; }
+        #modal-clientes-importador-detail.clientes-importador-modal-overlay { align-items:flex-start; padding:8px; }
+        #modal-clientes-importador-detail .clientes-importador-detail-modal { width:100%; max-height:calc(100dvh - 16px); margin:0; }
         .clientes-importador-pagination { align-items:flex-start; }
         .clientes-importador-pagination-controls { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:4px; }
         .clientes-importador-detail-modal { padding:14px; }
@@ -419,9 +424,8 @@
     });
 
     panel.querySelector('#btn-clientes-importador-detail-close')?.addEventListener('click', closeClientDetail);
-    panel.querySelector('#modal-clientes-importador-detail')?.addEventListener('click', event => {
-      if (event.target && event.target.id === 'modal-clientes-importador-detail') closeClientDetail();
-    });
+    // O card de detalhes fica estático na tela e fecha somente pelo botão X,
+    // para não fechar sem querer ao tocar fora no celular.
 
     panel.querySelector('#btn-clientes-importador-close')?.addEventListener('click', closeImportModal);
     panel.querySelector('#btn-clientes-importador-cancel')?.addEventListener('click', closeImportModal);
@@ -724,11 +728,18 @@
     `;
 
     modal.classList.add('open');
+    modal.scrollTop = 0;
+    const detailModal = modal.querySelector('.clientes-importador-detail-modal');
+    if (detailModal) detailModal.scrollTop = 0;
+    document.documentElement.classList.add('clientes-importador-modal-active');
+    document.body.classList.add('clientes-importador-modal-active');
   }
 
   function closeClientDetail() {
     const modal = document.getElementById('modal-clientes-importador-detail');
     modal?.classList.remove('open');
+    document.documentElement.classList.remove('clientes-importador-modal-active');
+    document.body.classList.remove('clientes-importador-modal-active');
   }
 
   function openImportModal() {
