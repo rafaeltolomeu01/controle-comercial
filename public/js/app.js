@@ -1130,26 +1130,52 @@ const App = {
         // CNPJ without punctuation for folder naming in URL
         const cnpjVal = cnpj.replace(/\D/g, '') || '00000000000000';
 
-        // Photos URLs reais: nunca usar link/placeholder fixo. Se não enviar, fica vazio.
+        // Photos URLs reais: salva TODAS no PostgreSQL/app_uploads em PARALELO.
+        // Upload paralelo é muito mais rápido e evita timeouts do servidor.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
         const failedPhotos = [];
-        for (const suffix of suffixes) {
-          const fileInput = document.getElementById(`client-photo-${suffix}`);
-          photoUrls[suffix] = '';
-          if (fileInput && fileInput.files && fileInput.files[0]) {
-            const file = fileInput.files[0];
-            try {
+
+        // Primeiro comprime TODAS as fotos em paralelo
+        const compressResults = await Promise.allSettled(
+          suffixes.map(async (suffix) => {
+            const fileInput = document.getElementById(`client-photo-${suffix}`);
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+              const file = fileInput.files[0];
               const base64 = await this.compressImageAndGetBase64(file);
-              const savedUrl = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
-              if (savedUrl) photoUrls[suffix] = savedUrl;
-              else failedPhotos.push(suffix);
-            } catch (uploadErr) {
-              console.error(`Erro ao salvar foto do cliente (${suffix}):`, uploadErr);
+              return { suffix, base64, filename: file.name || 'foto' };
+            }
+            return { suffix, base64: null, filename: null };
+          })
+        );
+
+        // Depois faz upload de todas em paralelo
+        const uploadResults = await Promise.allSettled(
+          compressResults.map(async (result) => {
+            if (result.status !== 'fulfilled' || !result.value.base64) {
+              return { suffix: result.value?.suffix || '?', url: '' };
+            }
+            const { suffix, base64, filename } = result.value;
+            const savedUrl = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${filename}`, 'clientes');
+            return { suffix, url: savedUrl || '' };
+          })
+        );
+
+        // Coleta os resultados
+        uploadResults.forEach((result, i) => {
+          const suffix = suffixes[i];
+          if (result.status === 'fulfilled' && result.value.url) {
+            photoUrls[suffix] = result.value.url;
+          } else {
+            photoUrls[suffix] = '';
+            // Só conta como falha se o usuário escolheu um arquivo
+            const fileInput = document.getElementById(`client-photo-${suffix}`);
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+              console.error(`Erro ao salvar foto do cliente (${suffix}):`, result.reason || 'url vazia');
               failedPhotos.push(suffix);
             }
           }
-        }
+        });
 
         const clients = Store.getClients();
         const cnpjLimpo = (cnpj || '').replace(/\D/g, '');
