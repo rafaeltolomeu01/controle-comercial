@@ -1106,3 +1106,175 @@ select { text-overflow: ellipsis; }
   #movements-table-body tr.movement-mobile-compact td[data-label="Operação"] { grid-column: 2; }
   #movements-table-body tr.movement-mobile-compact td[data-label="Data"] { grid-column: 3; text-align: right; color: var(--text-muted); font-size: 0.8rem; }
 }
+
+/* ==========================================
+   CSS Mobile adjustments (max-width: 768px)
+   ========================================== */
+@media (max-width: 768px) {
+  /* Cards */
+  .card, .settings-hub-card {
+    width: 100% !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Responsive Table as Cards */
+  .table-responsive {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+  .table-responsive table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border: 0 !important;
+  }
+  .table-responsive thead {
+    display: none !important;
+  }
+  .table-responsive tbody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+  .table-responsive tr {
+    display: block !important;
+    width: 100% !important;
+    background: rgba(17, 24, 39, 0.92) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 16px !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12) !important;
+  }
+  .table-responsive td {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    width: 100% !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    padding: 8px 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+  }
+  .table-responsive td:last-child {
+    border-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Labels (Generics using data-label) */
+  .table-responsive td::before {
+    content: attr(data-label) !important;
+    font-size: 13px !important;
+    color: #9ca3af !important;
+    font-weight: 600 !important;
+    display: block !important;
+    text-align: left !important;
+    margin-bottom: 2px !important;
+  }
+
+  /* Hide label for checkbox and empty cells */
+  .table-responsive td:first-child::before,
+  .table-responsive td.admin-only-movement-delete::before,
+  .table-responsive td.cc-bulk-row::before {
+    content: "" !important;
+    display: none !important;
+  }
+  
+  /* Text and Values */
+  .table-responsive td,
+  .table-responsive td span,
+  .table-responsive td strong {
+    font-size: 15px !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+  }
+
+  /* Status Badge Styling override in cards */
+  .table-responsive td .badge-status {
+    display: inline-block !important;
+    padding: 4px 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* Action Buttons inside cards */
+  .table-responsive td .btn,
+  .table-responsive td button,
+  .actions button,
+  .buttons button {
+    width: auto !important;
+    min-width: 80px !important;
+    max-width: 100% !important;
+    min-height: 38px !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    margin: 2px !important;
+  }
+
+  /* Buttons Wrap Container */
+  .table-responsive td:last-child,
+  .table-responsive td[data-label="Ação"],
+  .table-responsive td[data-label="Ações"],
+  .table-responsive td[data-label="Info"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    flex-direction: row !important;
+  }
+
+  /* Header adjustments */
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .header-section-left {
+    width: 100% !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .header-title-section h1 {
+    font-size: 1.25rem !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  .global-unit-container, .unit-selector-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  #global-unit-selector {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 38px !important;
+    font-size: 0.85rem !important;
+  }
+  .company-badge {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    padding: 8px 12px !important;
+    box-sizing: border-box !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px !important;
+  }
+}

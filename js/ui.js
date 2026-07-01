@@ -516,21 +516,21 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.showClientDetails('${client.id}')">
-          <td style="font-weight: 600;">
+          <td data-label="Cliente" style="font-weight: 600;">
             ${client.name}
             <div class="mobile-only-subtext" style="font-size:0.75rem; color:var(--text-muted); font-weight:normal; margin-top:4px;">
               ${client.city || ''} ${client.date ? '• ' + client.date : ''}
             </div>
           </td>
-          <td>${client.cnpj || '-'}</td>
-          <td>${client.category || 'Não definida'}</td>
-          <td>${client.phone || '-'}</td>
-          <td>${client.email || '-'}</td>
-          <td><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(client.unitId)}</span></td>
-          <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId)}</span></td>
-          <td>${UI.formatClientScore(client)}</td>
-          <td><span class="badge-status ${statusClass}">${statusText}</span></td>
-          <td><button class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 0.75rem; border-radius: 4px;" onclick="App.showClientDetails('${client.id}')">Ver Ficha</button></td>
+          <td data-label="CNPJ">${client.cnpj || '-'}</td>
+          <td data-label="Categoria">${client.category || 'Não definida'}</td>
+          <td data-label="Telefone">${client.phone || '-'}</td>
+          <td data-label="E-mail">${client.email || '-'}</td>
+          <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(client.unitId)}</span></td>
+          <td data-label="Responsável"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId)}</span></td>
+          <td data-label="Score">${UI.formatClientScore(client)}</td>
+          <td data-label="Status"><span class="badge-status ${statusClass}">${statusText}</span></td>
+          <td data-label="Ação"><button class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 0.75rem; border-radius: 4px;" onclick="App.showClientDetails('${client.id}')">Ver Ficha</button></td>
         </tr>
       `;
     }).join('');
@@ -581,15 +581,15 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.showClientDetails('${client.id}')">
-          <td style="font-weight: 600;">${client.name}</td>
-          <td>${client.cnpj}</td>
-          <td>${client.phone}</td>
-          <td>${client.email}</td>
-           <td><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(client.unitId)}</span></td>
-           <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId)}</span></td>
-           <td>${UI.formatClientScore(client)}</td>
-           <td>${statusBadge}</td>
-           <td>${actionsHTML}</td>
+          <td data-label="Cliente" style="font-weight: 600;">${client.name}</td>
+          <td data-label="CNPJ">${client.cnpj}</td>
+          <td data-label="Telefone">${client.phone}</td>
+          <td data-label="E-mail">${client.email}</td>
+          <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(client.unitId)}</span></td>
+          <td data-label="Vendedor"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId)}</span></td>
+          <td data-label="Score">${UI.formatClientScore(client)}</td>
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Ações">${actionsHTML}</td>
         </tr>
       `;
     }).join('');
@@ -754,18 +754,18 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.showTicketDetails('${ticket.id}')">
-          <td style="font-family: monospace; font-weight:700;">${ticket.id}</td>
-          <td style="font-size:0.78rem; white-space:nowrap;">${ticket.date || '—'}</td>
-          <td style="font-size:0.78rem; color:var(--text-muted);">${ticket.mechanic || UI.getUserName(ticket.userId) || '—'}</td>
-          <td style="font-family: monospace; font-size:0.8rem;">${ticket.equipmentSerial || '—'}</td>
-          <td style="font-size:0.8rem;">${ticket.client || '—'}</td>
-          <td class="normal-wrap" style="font-weight: 600; max-width:160px; font-size:0.8rem;">${ticket.title}</td>
-          <td class="normal-wrap" style="max-width:180px;">${partsDisplay}</td>
-          <td class="normal-wrap" style="max-width:180px;">${servicesDisplay}</td>
-          <td style="font-size:0.78rem; ${statusAfterClass}">${ticket.eqStatusAfter || '—'}</td>
-          <td><span class="badge-status ${priorityClass}">${ticket.priority || '—'}</span></td>
-          <td><span class="badge-status ${statusClass}">${ticket.status}</span></td>
-          <td>${actionBtn}</td>
+          <td data-label="Chamado" style="font-family: monospace; font-weight:700;">${ticket.id}</td>
+          <td data-label="Data" style="font-size:0.78rem; white-space:nowrap;">${ticket.date || '—'}</td>
+          <td data-label="Mecânico" style="font-size:0.78rem; color:var(--text-muted);">${ticket.mechanic || UI.getUserName(ticket.userId) || '—'}</td>
+          <td data-label="Equipamento" style="font-family: monospace; font-size:0.8rem;">${ticket.equipmentSerial || '—'}</td>
+          <td data-label="Cliente" style="font-size:0.8rem;">${ticket.client || '—'}</td>
+          <td data-label="Chamado" class="normal-wrap" style="font-weight: 600; max-width:160px; font-size:0.8rem;">${ticket.title}</td>
+          <td data-label="Peças" class="normal-wrap" style="max-width:180px;">${partsDisplay}</td>
+          <td data-label="Serviços" class="normal-wrap" style="max-width:180px;">${servicesDisplay}</td>
+          <td data-label="Situação" style="font-size:0.78rem; ${statusAfterClass}">${ticket.eqStatusAfter || '—'}</td>
+          <td data-label="Prioridade"><span class="badge-status ${priorityClass}">${ticket.priority || '—'}</span></td>
+          <td data-label="Status"><span class="badge-status ${statusClass}">${ticket.status}</span></td>
+          <td data-label="Ação">${actionBtn}</td>
         </tr>
       `;
     }).join('');
@@ -827,14 +827,14 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
-          <td style="white-space: nowrap;">${dateTimeStr}</td>
-          <td class="normal-wrap">${finalidadeDisplay}</td>
-          <td>${exp.operacao || ''}</td>
-          <td><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(exp.unitId)}</span></td>
-          <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getExpenseUserName(exp)}</span></td>
-          <td style="font-weight: 600;">${valorStr}</td>
-          <td><span class="badge-status ${statusClass}">${exp.status}</span></td>
-          <td>
+          <td data-label="Data" style="white-space: nowrap;">${dateTimeStr}</td>
+          <td data-label="Finalidade" class="normal-wrap">${finalidadeDisplay}</td>
+          <td data-label="Operação">${exp.operacao || ''}</td>
+          <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(exp.unitId)}</span></td>
+          <td data-label="Responsável"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getExpenseUserName(exp)}</span></td>
+          <td data-label="Valor" style="font-weight: 600;">${valorStr}</td>
+          <td data-label="Status"><span class="badge-status ${statusClass}">${exp.status}</span></td>
+          <td data-label="Info">
             <button class="btn btn-secondary btn-sm" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
               PDF
             </button>
@@ -901,16 +901,16 @@ const UI = {
 
         return `
           <tr class="mobile-summary-row" onclick="App.showDespesaDetails('${req.id}')">
-            <td style="font-family: monospace;">${req.id}</td>
-            <td>${dateStr}</td>
-            <td>${req.solicitante}</td>
-            <td>${req.placa_veiculo || '-'}</td>
-            <td>${req.rota_destino || '-'}</td>
-            <td style="text-align: right;">${fmt(req.valor_hotel_alim)}</td>
-            <td style="text-align: right;">${fmt(req.valor_abastecimento)}</td>
-            <td style="text-align: right; font-weight: 600;">${fmt(req.totalGeral)}</td>
-            <td><span class="badge-status ${statusClass}">${req.status}</span></td>
-            <td>${actionsHTML}</td>
+            <td data-label="ID" style="font-family: monospace;">${req.id}</td>
+            <td data-label="Data">${dateStr}</td>
+            <td data-label="Responsável">${req.solicitante}</td>
+            <td data-label="Placa">${req.placa_veiculo || '-'}</td>
+            <td data-label="Rota">${req.rota_destino || '-'}</td>
+            <td data-label="Hotel/Alimentação" style="text-align: right;">${fmt(req.valor_hotel_alim)}</td>
+            <td data-label="Abastecimento" style="text-align: right;">${fmt(req.valor_abastecimento)}</td>
+            <td data-label="Total" style="text-align: right; font-weight: 600;">${fmt(req.totalGeral)}</td>
+            <td data-label="Status"><span class="badge-status ${statusClass}">${req.status}</span></td>
+            <td data-label="Ações">${actionsHTML}</td>
           </tr>
         `;
       }).join('');
