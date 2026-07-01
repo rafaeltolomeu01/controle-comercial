@@ -384,11 +384,19 @@
     panel.querySelector('#btn-clientes-importador-export-filtered')?.addEventListener('click', () => exportRows(true));
     panel.querySelector('#btn-clientes-importador-export-all')?.addEventListener('click', () => exportRows(false));
 
+    const filterKeyById = {
+      'clientes-importador-empresa': 'empresaResponsavel',
+      'clientes-importador-cidade': 'cidade',
+      'clientes-importador-vendedor': 'vendedor',
+      'clientes-importador-supervisor': 'supervisor'
+    };
+
     ['clientes-importador-search', 'clientes-importador-empresa', 'clientes-importador-cidade', 'clientes-importador-vendedor', 'clientes-importador-supervisor'].forEach(id => {
       const el = panel.querySelector('#' + id);
       if (!el) return;
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
         state.currentPage = 1;
+        refreshFilterOptions(filterKeyById[id] || null);
         renderTable();
       });
     });
@@ -460,6 +468,7 @@
       if (el) el.value = '';
     });
     state.currentPage = 1;
+    refreshFilterOptions();
     renderTable();
   }
 
@@ -475,23 +484,29 @@
     };
   }
 
-  function filterRows(rows) {
-    const filters = getFilterValues();
-    return rows.filter(row => {
-      if (filters.search) {
-        const haystack = normalize(IMPORT_FIELDS.map(field => row[field.key]).join(' '));
-        if (!haystack.includes(filters.search)) return false;
-      }
-      for (const key of ['empresaResponsavel', 'cidade', 'vendedor', 'supervisor']) {
-        if (filters[key] && String(row[key] || '') !== filters[key]) return false;
-      }
-      return true;
-    });
+  function rowMatchesFilters(row, filters, ignoreKey) {
+    if (filters.search) {
+      const haystack = normalize(IMPORT_FIELDS.map(field => row[field.key]).join(' '));
+      if (!haystack.includes(filters.search)) return false;
+    }
+
+    for (const key of ['empresaResponsavel', 'cidade', 'vendedor', 'supervisor']) {
+      if (key === ignoreKey) continue;
+      if (filters[key] && String(row[key] || '') !== filters[key]) return false;
+    }
+
+    return true;
   }
 
-  function refreshFilterOptions() {
+  function filterRows(rows) {
+    const filters = getFilterValues();
+    return rows.filter(row => rowMatchesFilters(row, filters));
+  }
+
+  function refreshFilterOptions(preserveKey = null) {
     const panel = findClientesPanel();
     if (!panel) return;
+
     const rows = getRows();
     const configs = [
       ['clientes-importador-empresa', 'empresaResponsavel'],
@@ -499,13 +514,56 @@
       ['clientes-importador-vendedor', 'vendedor'],
       ['clientes-importador-supervisor', 'supervisor']
     ];
-    configs.forEach(([id, key]) => {
-      const select = panel.querySelector('#' + id);
-      if (!select) return;
-      const current = select.value;
-      const values = Array.from(new Set(rows.map(row => String(row[key] || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      select.innerHTML = '<option value="">Todos</option>' + values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`).join('');
-      if (values.includes(current)) select.value = current;
+
+    // Filtros encadeados: cada lista mostra apenas opções compatíveis
+    // com os demais filtros já selecionados. Ex.: ao escolher a empresa,
+    // o campo Vendedor exibe somente vendedores que possuem clientes nela.
+    const selects = configs
+      .map(([id, key]) => ({ id, key, el: panel.querySelector('#' + id) }))
+      .filter(item => item.el);
+
+    const filters = getFilterValues();
+
+    const getValuesForKey = key => Array.from(new Set(
+      rows
+        .filter(row => rowMatchesFilters(row, filters, key))
+        .map(row => String(row[key] || '').trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    // Primeiro limpa seleções que não existem mais dentro do filtro atual.
+    // O filtro que acabou de ser alterado é preservado para não voltar para "Todos"
+    // quando outro filtro antigo ficar incompatível com a nova escolha.
+    selects.forEach(({ key, el }) => {
+      const current = el.value;
+      filters[key] = current;
+      if (!current) return;
+
+      const values = getValuesForKey(key);
+      if (!values.includes(current) && key !== preserveKey) {
+        el.value = '';
+        filters[key] = '';
+      }
+    });
+
+    // Depois remonta as opções já considerando as seleções incompatíveis limpas.
+    selects.forEach(({ key, el }) => {
+      const current = el.value;
+      let values = getValuesForKey(key);
+
+      if (current && !values.includes(current) && key === preserveKey) {
+        values = [...values, current].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      }
+
+      el.innerHTML = '<option value="">Todos</option>' + values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`).join('');
+
+      if (current && values.includes(current)) {
+        el.value = current;
+        filters[key] = current;
+      } else {
+        el.value = '';
+        filters[key] = '';
+      }
     });
   }
 
