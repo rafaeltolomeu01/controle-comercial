@@ -1519,8 +1519,10 @@ const App = {
         const supSection = document.getElementById('new-user-supervisor-section');
         if (profileSel && supSection && !profileSel.dataset.supervisorListenerBound) {
           profileSel.addEventListener('change', async () => {
+            const sellerSection = document.getElementById('new-user-seller-section');
             if (profileSel.value === 'Supervisor') {
               supSection.style.display = 'block';
+              if (sellerSection) sellerSection.style.display = 'none';
               const checklist = document.getElementById('new-user-vendedores-checklist');
               if (checklist) {
                 checklist.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem;">Carregando vendedores...</span>';
@@ -1539,8 +1541,28 @@ const App = {
                   checklist.innerHTML = '<span style="color:#e55;">Erro ao carregar vendedores.</span>';
                 }
               }
+            } else if (profileSel.value === 'Vendedor') {
+              supSection.style.display = 'none';
+              if (sellerSection) {
+                sellerSection.style.display = 'block';
+                const selectSup = document.getElementById('new-user-supervisor-id');
+                if (selectSup) {
+                  selectSup.innerHTML = '<option value="">Carregando supervisores...</option>';
+                  try {
+                    const supervisors = await App.fetchFromApi('/api/usuarios/supervisores');
+                    if (!supervisors || supervisors.length === 0) {
+                      selectSup.innerHTML = '<option value="">Nenhum supervisor cadastrado nesta empresa</option>';
+                    } else {
+                      selectSup.innerHTML = '<option value="">Selecione um Supervisor...</option>' + supervisors.map(s => `<option value="${s.id}">${s.name} (${s.username})</option>`).join('');
+                    }
+                  } catch (err) {
+                    selectSup.innerHTML = '<option value="">Erro ao carregar supervisores</option>';
+                  }
+                }
+              }
             } else {
               supSection.style.display = 'none';
+              if (sellerSection) sellerSection.style.display = 'none';
             }
           });
           profileSel.dataset.supervisorListenerBound = 'true';
@@ -2249,6 +2271,16 @@ const App = {
           document.querySelectorAll('.new-user-vendedor-check:checked').forEach(cb => linked_users.push(cb.value));
         }
 
+        let supervisor_id = null;
+        if (profile === 'Vendedor') {
+          const selectSup = document.getElementById('new-user-supervisor-id');
+          supervisor_id = selectSup ? selectSup.value : null;
+          if (!supervisor_id) {
+            alert('Por favor, selecione um Supervisor Responsável para o vendedor.');
+            return;
+          }
+        }
+
         try {
           const result = await this.fetchFromApi('/api/usuarios', {
             method: 'POST',
@@ -2258,7 +2290,8 @@ const App = {
               password: pass,
               profile,
               unitId,
-              linked_users
+              linked_users,
+              supervisor_id
             })
           });
 
@@ -2269,6 +2302,8 @@ const App = {
             if (formContainer) formContainer.classList.add('hidden');
             const supSection = document.getElementById('new-user-supervisor-section');
             if (supSection) supSection.style.display = 'none';
+            const sellerSection = document.getElementById('new-user-seller-section');
+            if (sellerSection) sellerSection.style.display = 'none';
             const statusMsg = result.user && result.user.status === 'LIBERADO' ? 'Usuário cadastrado e liberado com sucesso!' : 'Usuário cadastrado! Acesso aguarda liberação gerencial.';
             this.showToast(statusMsg);
           }
@@ -4160,19 +4195,28 @@ const App = {
         const vendContainer = document.getElementById('perm-user-links-vendedores-container');
         const supContainer = document.getElementById('perm-user-links-supervisores-container');
         const gerVendContainer = document.getElementById('perm-user-links-gerente-vendedores-container');
+        const supervisorSelectContainer = document.getElementById('perm-user-supervisor-container');
         
         if (val === 'Supervisor') {
           vendContainer?.classList.remove('hidden');
           supContainer?.classList.add('hidden');
           gerVendContainer?.classList.add('hidden');
+          supervisorSelectContainer?.classList.add('hidden');
         } else if (val === 'Gerente') {
           vendContainer?.classList.add('hidden');
           supContainer?.classList.remove('hidden');
           gerVendContainer?.classList.remove('hidden');
+          supervisorSelectContainer?.classList.add('hidden');
+        } else if (val === 'Vendedor') {
+          vendContainer?.classList.add('hidden');
+          supContainer?.classList.add('hidden');
+          gerVendContainer?.classList.add('hidden');
+          supervisorSelectContainer?.classList.remove('hidden');
         } else {
           vendContainer?.classList.add('hidden');
           supContainer?.classList.add('hidden');
           gerVendContainer?.classList.add('hidden');
+          supervisorSelectContainer?.classList.add('hidden');
         }
       };
 
@@ -4256,6 +4300,17 @@ const App = {
             }).join('');
           }
         }
+
+        const supervisorSelect = document.getElementById('perm-user-supervisor-id');
+        if (supervisorSelect) {
+          if (supervisors.length === 0) {
+            supervisorSelect.innerHTML = '<option value="">Nenhum supervisor encontrado nesta empresa/unidade</option>';
+          } else {
+            const currentSupId = user.supervisor_id || '';
+            supervisorSelect.innerHTML = '<option value="">Selecione um Supervisor...</option>' + 
+              supervisors.map(sup => `<option value="${sup.id}" ${String(sup.id) === String(currentSupId) ? 'selected' : ''}>${sup.name} (${sup.username})</option>`).join('');
+          }
+        }
       };
 
       const unitSelect = document.getElementById('perm-user-unit');
@@ -4333,6 +4388,16 @@ const App = {
       });
     }
 
+    let supervisor_id = null;
+    if (safeProfile === 'Vendedor') {
+      const selectSup = document.getElementById('perm-user-supervisor-id');
+      supervisor_id = selectSup ? selectSup.value : null;
+      if (!supervisor_id) {
+        alert('Por favor, selecione um Supervisor Responsável para o vendedor.');
+        return;
+      }
+    }
+
     try {
       const result = await this.fetchFromApi(`/api/usuarios/${userId}/permissions`, {
         method: 'PUT',
@@ -4348,7 +4413,8 @@ const App = {
           empresa_id: safeEmpresa,
           unitId: safeUnit,
           photo,
-          linked_users
+          linked_users,
+          supervisor_id
         })
       });
 

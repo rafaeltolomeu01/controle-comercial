@@ -128,6 +128,13 @@ async function initDb() {
     });
     console.log('Database: Colunas email, phone e photo adicionadas à tabela usuarios.');
   }
+  const hasSupervisorId = await db.schema.hasColumn('usuarios', 'supervisor_id');
+  if (!hasSupervisorId) {
+    await db.schema.table('usuarios', table => {
+      table.string('supervisor_id').nullable();
+    });
+    console.log('Database: Coluna supervisor_id adicionada à tabela usuarios.');
+  }
 
   // 2. Create despesas_reembolsos table
   const hasReembolsos = await db.schema.hasTable('despesas_reembolsos');
@@ -1011,6 +1018,121 @@ async function notifyResponsibleByPermission(empresaId, permissions, payload = {
   const users = await getUsersByPermissions(empresaId, permissions);
   await notifyUsers(users.map(u => u.id), { ...payload, empresa_id: empresaId });
 }
+async function obterDestinatarios(tipoEvento, usuarioCriador, empresaId = '001') {
+  let creator = null;
+  if (usuarioCriador) {
+    if (typeof usuarioCriador === 'string' || typeof usuarioCriador === 'number') {
+      creator = await db('usuarios').where({ id: String(usuarioCriador) }).first().catch(() => null);
+    } else if (typeof usuarioCriador === 'object' && usuarioCriador.id) {
+      creator = usuarioCriador;
+    }
+  }
+
+  const recipients = new Set();
+
+  // 1. Administradores da empresa recebem tudo
+  const admins = await db('usuarios')
+    .where({ empresa_id: empresaId })
+    .whereNot({ status: 'INATIVO' })
+    .where(function() {
+      this.where('profile', 'Administrador')
+          .orWhere('profile', 'Admin')
+          .orWhere('profile', 'Administrador Geral');
+    }).catch(() => []);
+  admins.forEach(u => recipients.add(String(u.id)));
+
+  // Obter supervisor vinculado se o criador for Vendedor
+  let supervisorId = null;
+  if (creator && String(creator.profile).toLowerCase().trim() === 'vendedor') {
+    const link = await db('user_hierarchy_links')
+      .where({
+        child_user_id: String(creator.id),
+        relation_type: 'supervisor_seller'
+      })
+      .first()
+      .catch(() => null);
+    if (link) {
+      supervisorId = String(link.parent_user_id);
+    }
+  }
+
+  // 2. Gerente: recebe notificações da sua empresa/unidade
+  const gerentes = await db('usuarios')
+    .where({ empresa_id: empresaId })
+    .whereNot({ status: 'INATIVO' })
+    .where('profile', 'Gerente')
+    .catch(() => []);
+
+  gerentes.forEach(g => {
+    if (!creator || !creator.unitId || creator.unitId === 'all' || g.unitId === 'all' || String(g.unitId) === String(creator.unitId)) {
+      recipients.add(String(g.id));
+    }
+  });
+
+  switch (tipoEvento) {
+    case 'NOVO_CLIENTE':
+      if (supervisorId) recipients.add(supervisorId);
+      break;
+
+    case 'CLIENTE_STATUS_ALTERADO':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      break;
+
+    case 'NOVA_SOLICITACAO_SALDO':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      const finUsers1 = await db('usuarios')
+        .where({ empresa_id: empresaId })
+        .whereNot({ status: 'INATIVO' })
+        .where('profile', 'Financeiro')
+        .catch(() => []);
+      finUsers1.forEach(u => recipients.add(String(u.id)));
+      break;
+
+    case 'PARECER_SALDO':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      break;
+
+    case 'NOVA_MOVIMENTACAO_EQUIPAMENTO':
+      const eqUsers = await db('usuarios')
+        .where({ empresa_id: empresaId })
+        .whereNot({ status: 'INATIVO' })
+        .where('profile', 'Responsável Equipamentos')
+        .catch(() => []);
+      eqUsers.forEach(u => recipients.add(String(u.id)));
+      break;
+
+    case 'APROVACAO_MOVIMENTACAO':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      break;
+
+    case 'NOVA_DESPESA_CAMPO':
+    case 'DESPESA_CORRIGIDA':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      const finUsers2 = await db('usuarios')
+        .where({ empresa_id: empresaId })
+        .whereNot({ status: 'INATIVO' })
+        .where('profile', 'Financeiro')
+        .catch(() => []);
+      finUsers2.forEach(u => recipients.add(String(u.id)));
+      break;
+
+    case 'APROVACAO_DESPESA':
+      if (creator) recipients.add(String(creator.id));
+      if (supervisorId) recipients.add(supervisorId);
+      break;
+
+    default:
+      break;
+  }
+
+  return Array.from(recipients);
+}
+
 async function sendPushToUsers(userIds, payload) {
   let webpush;
   try { webpush = require('web-push'); } catch (_) { return; }
@@ -1421,10 +1543,12 @@ app.post('/api/store/:key', async (req, res) => {
           const owner = item.userId || item.user_id || item.vendedor_id || item.seller_id;
           const status = String(item.status || '').trim();
           if (!prev && normalizeRole(status).includes('pendente')) {
-            await notifyResponsibleByPermission(companyId, ['Aprovação de Clientes','Clientes'], { module:'clientes', record_id:itemId, target_hash:'#clientes', title:'Novo cliente para análise', body:`${req.user.name || 'Usuário'} cadastrou um novo cliente para aprovação.` });
+            const targets = await obterDestinatarios('NOVO_CLIENTE', req.user, companyId);
+            await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title:'Novo cliente para análise', body:`${req.user.name || 'Usuário'} cadastrou um novo cliente para aprovação.` });
           } else if (prev && String(prev.status || '') !== status && owner) {
             const title = normalizeRole(status).includes('reprov') ? 'Cliente reprovado' : (normalizeRole(status).includes('correc') || normalizeRole(status).includes('analise') ? 'Cliente enviado para correção/análise' : 'Cliente aprovado');
-            await notifyUsers([owner], { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.` });
+            const targets = await obterDestinatarios('CLIENTE_STATUS_ALTERADO', owner, companyId);
+            await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.` });
           }
         }
       } catch (notifErr) { console.warn('Falha ao gerar notificações de clientes:', notifErr.message); }
@@ -1593,7 +1717,9 @@ app.post('/api/despesas', async (req, res) => {
       empresa_id: targetEmpresaId
     });
 
-    await notifyResponsibleByPermission(targetEmpresaId, ['Financeiro','Aprovação de Saldo'], {
+    const targets = await obterDestinatarios('NOVA_SOLICITACAO_SALDO', req.user, targetEmpresaId);
+    await notifyUsers(targets, {
+      empresa_id: targetEmpresaId,
       module: 'saldo', record_id: String(id), target_hash: '#despesas',
       title: 'Nova solicitação de saldo',
       body: `${solicitante} solicitou saldo no valor total de R$ ${totalSolicitadoVal.toFixed(2)}.`
@@ -2066,7 +2192,8 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
     }).join('\n\n');
     console.log(`[NOTIFICAÇÃO EMAIL VENDEDOR] Sua solicitação de saldo foi analisada.\n\n${formattedItemsLog}`);
 
-    await notifyUsers([request.usuario_id], {
+    const targets = await obterDestinatarios('PARECER_SALDO', request.usuario_id, request.empresa_id || req.user.empresa_id);
+    await notifyUsers(targets, {
       empresa_id: request.empresa_id || req.user.empresa_id,
       module: 'saldo', record_id: String(id), target_hash: '#despesas',
       title: generalStatus === 'Correção Solicitada' ? 'Solicitação de saldo enviada para correção' : (generalStatus === 'Rejeitada' ? 'Solicitação de saldo reprovada' : 'Solicitação de saldo aprovada'),
@@ -2281,60 +2408,6 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       updated_at: now
     });
 
-    // 4. Notificar o vendedor solicitante sobre a decisão da movimentação
-    try {
-      const recipientIds = new Set();
-
-      if (mov.vendedor_id) {
-        recipientIds.add(String(mov.vendedor_id));
-      }
-
-      // Fallback para registros antigos que possam ter apenas o nome do vendedor.
-      if (!recipientIds.size && mov.vendedor_solicitante) {
-        const seller = await db('usuarios')
-          .where(function() {
-            this.where('nome', mov.vendedor_solicitante)
-              .orWhere('name', mov.vendedor_solicitante)
-              .orWhere('email', mov.vendedor_solicitante);
-          })
-          .first()
-          .catch(() => null);
-        if (seller && seller.id) recipientIds.add(String(seller.id));
-      }
-
-      if (recipientIds.size) {
-        const approved = status === 'Aprovado';
-        const notificationTitle = approved ? 'Movimentação aprovada' : 'Movimentação reprovada';
-        const notificationBody = approved
-          ? 'Sua movimentação de equipamento foi aprovada.'
-          : 'Sua movimentação de equipamento foi reprovada. Verifique o motivo no dossiê.';
-
-        // Evita duplicidade caso o mesmo status seja reenviado acidentalmente.
-        const alreadyNotified = await db('app_notifications')
-          .where({
-            module: 'equipamentos_movimentacoes',
-            record_id: String(id),
-            title: notificationTitle
-          })
-          .whereIn('user_id', Array.from(recipientIds))
-          .first()
-          .catch(() => null);
-
-        if (!alreadyNotified) {
-          await notifyUsers(Array.from(recipientIds), {
-            empresa_id: mov.empresa_id || req.user.empresa_id || '001',
-            module: 'equipamentos_movimentacoes',
-            record_id: String(id),
-            title: notificationTitle,
-            body: notificationBody,
-            target_hash: '#movimentacao'
-          });
-        }
-      }
-    } catch (notifyErr) {
-      console.warn('Falha ao notificar vendedor sobre movimentação:', notifyErr.message);
-    }
-
     // Simulação de Notificação por E-mail
     try {
       const emailConfig = fs.existsSync(configFilePath) ? JSON.parse(fs.readFileSync(configFilePath, 'utf8')) : { emails: 'notificacoes@distribuidorajds.com.br, equipamentos@distribuidorajds.com.br' };
@@ -2343,7 +2416,10 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       console.error('Erro ao gerar log de notificação por e-mail:', err);
     }
 
-    await notifyResponsibleByPermission(req.user.empresa_id || '001', ['Responsável Equipamentos','Equipamentos','Movimentação'], {
+    const companyId = req.user.empresa_id || '001';
+    const targets = await obterDestinatarios('NOVA_MOVIMENTACAO_EQUIPAMENTO', req.user, companyId);
+    await notifyUsers(targets, {
+      empresa_id: companyId,
       module: 'movimentacao', record_id: String(newId), target_hash: '#movimentacao',
       title: 'Nova movimentação de equipamento',
       body: `${req.user.name || vendedor_solicitante} registrou ${tipo_solicitacao} para o cliente ${cliente_nome}.`
@@ -2782,19 +2858,19 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
         if (seller && seller.id) sellerId = String(seller.id);
       }
 
-      if (sellerId) {
-        const isApproved = status === 'Aprovado';
-        await notifyUsers([sellerId], {
-          empresa_id: mov.empresa_id || req.user.empresa_id || '001',
-          module: 'equipamentos_movimentacoes',
-          record_id: String(id),
-          target_hash: '#movimentacao',
-          title: isApproved ? 'Movimentação aprovada' : 'Movimentação reprovada',
-          body: isApproved
-            ? `Sua movimentação de equipamento #${id} foi aprovada.`
-            : `Sua movimentação de equipamento #${id} foi reprovada. Verifique o motivo no dossiê.`
-        });
-      }
+      const companyId = mov.empresa_id || req.user.empresa_id || '001';
+      const targets = await obterDestinatarios('APROVACAO_MOVIMENTACAO', sellerId, companyId);
+      const isApproved = status === 'Aprovado';
+      await notifyUsers(targets, {
+        empresa_id: companyId,
+        module: 'equipamentos_movimentacoes',
+        record_id: String(id),
+        target_hash: '#movimentacao',
+        title: isApproved ? 'Movimentação aprovada' : 'Movimentação reprovada',
+        body: isApproved
+          ? `Sua movimentação de equipamento #${id} foi aprovada.`
+          : `Sua movimentação de equipamento #${id} foi reprovada. Verifique o motivo no dossiê.`
+      });
     } catch (notifyErr) {
       console.warn('Falha ao notificar vendedor sobre movimentação:', notifyErr.message);
     }
@@ -2989,7 +3065,7 @@ function getDefaultPermissionsForProfile(profile) {
 
 // Register / Create User
 app.post('/api/usuarios', async (req, res) => {
-  const { id, name, username, password, profile, unitId, email, phone, photo, linked_users } = req.body;
+  const { id, name, username, password, profile, unitId, email, phone, photo, linked_users, supervisor_id } = req.body;
   
   const actor = req.user || {};
   const actorPerms = actor.permissions || [];
@@ -3025,6 +3101,7 @@ app.post('/api/usuarios', async (req, res) => {
       email: email || '',
       phone: phone || '',
       photo: photo || '',
+      supervisor_id: profile === 'Vendedor' ? (supervisor_id || null) : null,
       status: canManageUsers ? 'LIBERADO' : 'AGUARDANDO LIBERAÇÃO',
       empresa_id: companyId,
       permissions: JSON.stringify(getDefaultPermissionsForProfile(profile)),
@@ -3033,6 +3110,19 @@ app.post('/api/usuarios', async (req, res) => {
     };
 
     await db('usuarios').insert(newUser);
+
+    // Se for Vendedor com supervisor vinculado, criar link hierárquico
+    if (profile === 'Vendedor' && supervisor_id) {
+      const now = new Date().toISOString();
+      await db('user_hierarchy_links').insert({
+        company_id: companyId,
+        parent_user_id: supervisor_id,
+        child_user_id: userId,
+        relation_type: 'supervisor_seller',
+        created_at: now,
+        updated_at: now
+      }).catch(() => {});
+    }
 
     // Se for Supervisor com vendedores vinculados, criar links hierárquicos
     if (profile === 'Supervisor' && Array.isArray(linked_users) && linked_users.length > 0) {
@@ -3128,6 +3218,21 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
   }
 });
 
+// Lista apenas Supervisores ativos/aguardando para vínculo com Vendedor
+app.get('/api/usuarios/supervisores', async (req, res) => {
+  try {
+    const companyId = req.user.empresa_id;
+    const list = await db('usuarios')
+      .where({ empresa_id: companyId, profile: 'Supervisor' })
+      .whereIn('status', ['LIBERADO', 'AGUARDANDO LIBERAÇÃO'])
+      .orderBy('name', 'asc');
+    res.json(list.map(u => ({ id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar supervisores' });
+  }
+});
+
 app.get('/api/usuarios/:id', async (req, res) => {
 
   const { id } = req.params;
@@ -3180,6 +3285,7 @@ app.get('/api/usuarios/:id', async (req, res) => {
       email: user.email || '',
       phone: user.phone || '',
       photo: user.photo || '',
+      supervisor_id: user.supervisor_id || null,
       empresa_id: user.empresa_id,
       company_id: user.empresa_id, // alias
       linked_users
@@ -3193,7 +3299,7 @@ app.get('/api/usuarios/:id', async (req, res) => {
 // Update permissions & status
 app.put('/api/usuarios/:id/permissions', async (req, res) => {
   const { id } = req.params;
-  let { permissions, status, profile, unitId, name, username, email, phone, password, photo, empresa_id, linked_users } = req.body;
+  let { permissions, status, profile, unitId, name, username, email, phone, password, photo, empresa_id, linked_users, supervisor_id } = req.body;
 
   try {
     let userToEdit = await db('usuarios').where({ id, empresa_id: req.user.empresa_id }).first();
@@ -3218,6 +3324,7 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
       unitId = undefined;
       empresa_id = undefined;
       linked_users = undefined;
+      supervisor_id = undefined;
     }
 
     const originalEmpresaId = userToEdit.empresa_id;
@@ -3272,11 +3379,40 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
       updatedData.empresa_id = empresa_id;
     }
 
-    await db('usuarios').where({ id }).update(updatedData);
-
-    // Update hierarchy links if linked_users is provided and profile is Supervisor or Gerente
     const targetProfile = profile !== undefined ? profile : userToEdit.profile;
     const targetEmpresa = empresa_id !== undefined ? empresa_id : originalEmpresaId;
+
+    if (targetProfile !== 'Vendedor') {
+      updatedData.supervisor_id = null;
+    } else if (supervisor_id !== undefined) {
+      updatedData.supervisor_id = supervisor_id || null;
+    }
+
+    await db('usuarios').where({ id }).update(updatedData);
+
+    // Update supervisor link for Vendedor child
+    if (targetProfile !== 'Vendedor') {
+      await db('user_hierarchy_links')
+        .where({ child_user_id: id, relation_type: 'supervisor_seller' })
+        .del()
+        .catch(() => {});
+    } else if (supervisor_id !== undefined) {
+      await db('user_hierarchy_links')
+        .where({ child_user_id: id, relation_type: 'supervisor_seller' })
+        .del()
+        .catch(() => {});
+      
+      if (supervisor_id) {
+        await db('user_hierarchy_links').insert({
+          company_id: targetEmpresa,
+          parent_user_id: supervisor_id,
+          child_user_id: id,
+          relation_type: 'supervisor_seller',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }).catch(() => {});
+      }
+    }
 
     if (profile !== undefined && profile !== userToEdit.profile) {
       // Clean up all parent links for this user to avoid orphan links when profile changes
@@ -3495,7 +3631,9 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
       empresa_id
     });
 
-    await notifyResponsibleByPermission(empresa_id, ['Financeiro','Aprovação de Despesas','Despesas de Campo'], {
+    const targets = await obterDestinatarios('NOVA_DESPESA_CAMPO', req.user, empresa_id);
+    await notifyUsers(targets, {
+      empresa_id,
       module: 'despesas', record_id: id, target_hash: '#despesas',
       title: 'Nova despesa para analisar',
       body: `${req.user.name || 'Usuário'} lançou uma despesa de ${finalidade || 'campo'} no valor de R$ ${(parseFloat(value || 0)).toFixed(2)}.`
@@ -3636,7 +3774,9 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
     };
     await db('despesas_reembolsos').where({ id }).update(updates);
     await db('auditoria_logs').insert({ usuario_id: req.user.id, acao: 'CORRIGIU_DESPESA', detalhes: `Despesa #${id} corrigida e reenviada para aprovação.`, empresa_id: req.user.empresa_id }).catch(()=>{});
-    await notifyResponsibleByPermission(record.empresa_id || req.user.empresa_id, ['Financeiro','Aprovação de Despesas','Despesas de Campo'], {
+    const targets = await obterDestinatarios('DESPESA_CORRIGIDA', record.userId, record.empresa_id || req.user.empresa_id);
+    await notifyUsers(targets, {
+      empresa_id: record.empresa_id || req.user.empresa_id,
       module: 'despesas', record_id: id, target_hash: '#despesas', title: 'Despesa corrigida', body: `${req.user.name || 'Usuário'} corrigiu e reenviou a despesa #${id}.`
     });
     res.json({ success: true, id, status: 'Pendente' });
@@ -3710,7 +3850,8 @@ app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
       console.warn('Falha ao registrar auditoria da despesa, mas a aprovação foi salva:', auditErr.message);
     }
 
-    await notifyUsers([record.userId], {
+    const targets = await obterDestinatarios('APROVACAO_DESPESA', record.userId, record.empresa_id || req.user.empresa_id);
+    await notifyUsers(targets, {
       empresa_id: record.empresa_id || req.user.empresa_id,
       module: 'despesas', record_id: id, target_hash: '#despesas',
       title: status === 'Aprovado' ? 'Despesa aprovada' : (status === 'Reprovado' ? 'Despesa reprovada' : 'Despesa enviada para correção'),
