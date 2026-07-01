@@ -434,3 +434,82 @@
   setInterval(initUIInterceptors, 1200);
   window.FiltersManager = FiltersManager;
 })();
+
+
+/* Correção adicional 01/07 - Despesas: finalidade "Outro" deve liberar valor, data, comprovante e observação */
+(function(){
+  'use strict';
+
+  if (window.__fixDespesaOutroCampos0107) return;
+  window.__fixDespesaOutroCampos0107 = true;
+
+  function showGroupByInput(id, visible){
+    const input = document.getElementById(id);
+    if (!input) return;
+    const group = input.closest('.form-group') || input.parentElement;
+    if (group) group.style.display = visible ? 'block' : 'none';
+  }
+
+  function setRequired(id, required){
+    const el = document.getElementById(id);
+    if (el) el.required = !!required;
+  }
+
+  function fixExpenseFields(){
+    const finalidadeEl = document.getElementById('exp-finalidade');
+    const finalidade = finalidadeEl ? String(finalidadeEl.value || '').trim() : '';
+
+    const comuns = document.getElementById('group-exp-comuns');
+    const outro = document.getElementById('group-exp-descreva');
+    const abastecimento = document.getElementById('group-exp-abastecimento');
+
+    /*
+      Regra correta:
+      - Todo tipo de despesa precisa liberar Valor, Data, Comprovante e Observação.
+      - "Outro" também precisa liberar o campo Descreva.
+      - "Abastecimento" libera também Veículo, KM e Odômetro.
+    */
+    if (comuns) comuns.style.display = 'block';
+    if (outro) outro.style.display = finalidade === 'Outro' ? 'block' : 'none';
+    if (abastecimento) abastecimento.style.display = finalidade === 'Abastecimento' ? 'block' : 'none';
+
+    ['exp-val','exp-date','exp-comprovante-img','exp-obs'].forEach(id => showGroupByInput(id, true));
+
+    setRequired('exp-descreva', finalidade === 'Outro');
+    setRequired('exp-veiculo', finalidade === 'Abastecimento');
+    setRequired('exp-km', finalidade === 'Abastecimento');
+    setRequired('exp-odometro-img', finalidade === 'Abastecimento');
+
+    // Comprovante deve ser obrigatório para todos os tipos, inclusive "Outro".
+    setRequired('exp-comprovante-img', true);
+    setRequired('exp-val', true);
+    setRequired('exp-date', true);
+  }
+
+  function install(){
+    const finalidadeEl = document.getElementById('exp-finalidade');
+    if (finalidadeEl && finalidadeEl.dataset.fixOutroCampos !== '1') {
+      finalidadeEl.dataset.fixOutroCampos = '1';
+      finalidadeEl.addEventListener('change', function(){
+        setTimeout(fixExpenseFields, 0);
+        setTimeout(fixExpenseFields, 100);
+      }, true);
+    }
+
+    const btnOpen = document.querySelector('#btn-open-expense-form, [onclick*="openExpenseForm"], [onclick*="Registrar Despesa"]');
+    if (btnOpen && btnOpen.dataset.fixOutroCampos !== '1') {
+      btnOpen.dataset.fixOutroCampos = '1';
+      btnOpen.addEventListener('click', () => {
+        setTimeout(fixExpenseFields, 100);
+        setTimeout(fixExpenseFields, 400);
+      }, true);
+    }
+
+    fixExpenseFields();
+  }
+
+  document.addEventListener('DOMContentLoaded', install);
+  window.addEventListener('hashchange', () => setTimeout(install, 200));
+  document.addEventListener('click', () => setTimeout(install, 80), true);
+  setInterval(install, 800);
+})();
