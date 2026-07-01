@@ -356,7 +356,8 @@
 
         // 2. Exact matches for dropdowns
         for (const [key, value] of Object.entries(filters)) {
-          if (!value || key === 'search' || key === 'period' || key === 'startDate' || key === 'endDate') continue;
+          const lowerVal = String(value || '').trim().toLowerCase();
+          if (!value || ['todos', 'todas', 'all', 'null', 'undefined', ''].includes(lowerVal) || key === 'search' || key === 'period' || key === 'startDate' || key === 'endDate') continue;
 
           let itemVal = '';
           if (key === 'empresa') {

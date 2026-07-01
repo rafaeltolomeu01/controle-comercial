@@ -5196,7 +5196,10 @@ const App = {
       };
 
       Object.keys(filters).forEach(key => {
-        if (!filters[key]) delete filters[key];
+        const val = String(filters[key] || '').trim();
+        if (!val || ['todos', 'todas', 'all', 'null', 'undefined'].includes(val.toLowerCase())) {
+          delete filters[key];
+        }
       });
 
       try {
@@ -5241,7 +5244,10 @@ const App = {
     };
 
     Object.keys(filters).forEach(key => {
-      if (!filters[key]) delete filters[key];
+      const val = String(filters[key] || '').trim();
+      if (!val || ['todos', 'todas', 'all', 'null', 'undefined'].includes(val.toLowerCase())) {
+        delete filters[key];
+      }
     });
 
     try {
@@ -6078,7 +6084,10 @@ const App = {
       };
 
       Object.keys(filters).forEach(key => {
-        if (!filters[key]) delete filters[key];
+        const val = String(filters[key] || '').trim();
+        if (!val || ['todos', 'todas', 'all', 'null', 'undefined'].includes(val.toLowerCase())) {
+          delete filters[key];
+        }
       });
 
       const query = '?' + new URLSearchParams(filters).toString();
@@ -6159,7 +6168,10 @@ const App = {
       };
 
       Object.keys(filters).forEach(key => {
-        if (!filters[key]) delete filters[key];
+        const val = String(filters[key] || '').trim();
+        if (!val || ['todos', 'todas', 'all', 'null', 'undefined'].includes(val.toLowerCase())) {
+          delete filters[key];
+        }
       });
 
       const query = '?' + new URLSearchParams(filters).toString();

@@ -15,6 +15,14 @@ function getBrasiliaDateTime() {
   const timeStr = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
   return { date: dateStr, time: timeStr, iso: now.toISOString() };
 }
+function isFilterValValid(val) {
+  if (val === undefined || val === null) return false;
+  const s = String(val).trim();
+  if (s === '' || s.toLowerCase() === 'todos' || s.toLowerCase() === 'todas' || s.toLowerCase() === 'all' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') {
+    return false;
+  }
+  return true;
+}
 
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -1194,13 +1202,13 @@ app.get('/api/prospeccoes', async (req, res) => {
     // Usuários comuns ficam limitados à empresa e, no caso de vendedor, ao próprio cadastro.
     if (!isAdmin) {
       q = q.where({ empresa_id: req.user.empresa_id });
-      if (req.query.unitId && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
+      if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') q = q.andWhere({ unitId: req.query.unitId });
       if (isSeller) {
         q = q.andWhere(function () {
           this.where('userId', req.user.id).orWhere('user_id', req.user.id);
         });
       }
-    } else if (req.query.unitId && req.query.unitId !== 'all') {
+    } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
       q = q.where({ unitId: req.query.unitId });
     }
 
@@ -1748,11 +1756,11 @@ app.get('/api/despesas', async (req, res) => {
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.user.unitId);
-      } else if (req.query.unitId && req.query.unitId !== 'all') {
+      } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.query.unitId);
       }
     } else {
-      if (req.query.unitId && req.query.unitId !== 'all') {
+      if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.query.unitId);
       }
     }
@@ -1764,16 +1772,16 @@ app.get('/api/despesas', async (req, res) => {
     }
 
     // Apply filters
-    if (req.query.status && String(req.query.status || '').trim() !== '') {
+    if (isFilterValValid(req.query.status)) {
       query = query.where('despesas_solicitacoes.status', req.query.status);
     }
-    if (req.query.solicitante && String(req.query.solicitante || '').trim() !== '') {
+    if (isFilterValValid(req.query.solicitante)) {
       query = query.where('despesas_solicitacoes.solicitante', 'like', `%${req.query.solicitante}%`);
     }
-    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_inicio)) {
       query = query.where('despesas_solicitacoes.data_solicitacao', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_fim)) {
       query = query.where('despesas_solicitacoes.data_solicitacao', '<=', req.query.data_fim);
     }
 
@@ -1846,11 +1854,11 @@ app.get('/api/despesas/summary', async (req, res) => {
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.user.unitId);
-      } else if (req.query.unitId && req.query.unitId !== 'all') {
+      } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.query.unitId);
       }
     } else {
-      if (req.query.unitId && req.query.unitId !== 'all') {
+      if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.query.unitId);
       }
     }
@@ -1860,16 +1868,16 @@ app.get('/api/despesas/summary', async (req, res) => {
     }
 
     // Apply the same filters used by /api/despesas so dashboard metrics can follow the visible list.
-    if (req.query.status && String(req.query.status || '').trim() !== '') {
+    if (isFilterValValid(req.query.status)) {
       query = query.where('despesas_solicitacoes.status', req.query.status);
     }
-    if (req.query.solicitante && String(req.query.solicitante || '').trim() !== '') {
+    if (isFilterValValid(req.query.solicitante)) {
       query = query.where('despesas_solicitacoes.solicitante', 'like', `%${req.query.solicitante}%`);
     }
-    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_inicio)) {
       query = query.where('despesas_solicitacoes.data_solicitacao', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_fim)) {
       query = query.where('despesas_solicitacoes.data_solicitacao', '<=', req.query.data_fim);
     }
 
@@ -2087,103 +2095,111 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
     let hasCorrection = false;
     let totalAprovado = 0;
 
-    for (const evalItem of items) {
-      const dbItem = await db('despesas_solicitacoes_itens')
-        .where({ id: evalItem.id, solicitacao_id: id })
-        .first();
+    const result = await db.transaction(async (trx) => {
+      for (const evalItem of items) {
+        const dbItem = await trx('despesas_solicitacoes_itens')
+          .where({ id: evalItem.id, solicitacao_id: id })
+          .first();
 
-      if (!dbItem) continue;
+        if (!dbItem) continue;
 
-      let valAprovado = parseFloat(evalItem.valor_aprovado) || 0;
-      const qtyAprovada = evalItem.quantidade_aprovada !== undefined && evalItem.quantidade_aprovada !== null ?
-        parseInt(evalItem.quantidade_aprovada, 10) : null;
+        let valAprovado = parseFloat(evalItem.valor_aprovado) || 0;
+        const qtyAprovada = evalItem.quantidade_aprovada !== undefined && evalItem.quantidade_aprovada !== null ?
+          parseInt(evalItem.quantidade_aprovada, 10) : null;
 
-      const isReducedVal = valAprovado < dbItem.valor_solicitado;
-      const isReducedQty = dbItem.quantidade_solicitada !== null && qtyAprovada < dbItem.quantidade_solicitada;
+        const isReducedVal = valAprovado < dbItem.valor_solicitado;
+        const isReducedQty = dbItem.quantidade_solicitada !== null && qtyAprovada < dbItem.quantidade_solicitada;
 
-      let itemStatus = evalItem.status; // aprovado, aprovado parcialmente, reprovado, correcao
-      if (itemStatus === 'correcao') {
-        hasCorrection = true;
-        allApprovedIntegral = false;
-        allReproved = false;
-      }
-      if (itemStatus === 'aprovado' && (isReducedVal || isReducedQty)) {
-        itemStatus = 'aprovado parcialmente';
-      }
+        let itemStatus = evalItem.status; // aprovado, aprovado parcialmente, reprovado, correcao
+        if (itemStatus === 'correcao') {
+          hasCorrection = true;
+          allApprovedIntegral = false;
+          allReproved = false;
+        }
+        if (itemStatus === 'aprovado' && (isReducedVal || isReducedQty)) {
+          itemStatus = 'aprovado parcialmente';
+        }
 
-      if (itemStatus === 'correcao') {
-        // Envio para correção não libera saldo e não reprova definitivamente.
-        valAprovado = 0;
-      }
-      if (itemStatus !== 'reprovado' && itemStatus !== 'correcao') {
-        allReproved = false;
-        if (itemStatus === 'aprovado parcialmente') {
+        if (itemStatus === 'correcao') {
+          // Envio para correção não libera saldo e não reprova definitivamente.
+          valAprovado = 0;
+        }
+        if (itemStatus !== 'reprovado' && itemStatus !== 'correcao') {
+          allReproved = false;
+          if (itemStatus === 'aprovado parcialmente') {
+            allApprovedIntegral = false;
+          }
+          totalAprovado += valAprovado;
+        } else {
           allApprovedIntegral = false;
         }
-        totalAprovado += valAprovado;
-      } else {
-        allApprovedIntegral = false;
+
+        // Update item in database
+        await trx('despesas_solicitacoes_itens')
+          .where({ id: evalItem.id })
+          .update({
+            valor_aprovado: valAprovado,
+            quantidade_aprovada: qtyAprovada,
+            status: itemStatus,
+            justificativa: evalItem.justificativa || '',
+            data_aprovacao,
+            usuario_aprovador: req.user.name || req.user.id
+          });
+
+        // Record audit log for individual item
+        const actionType = itemStatus === 'correcao' ? 'ENVIOU_ITEM_CORRECAO' : (itemStatus === 'reprovado' ? 'REPROVOU_ITEM' : (itemStatus === 'aprovado parcialmente' ? 'ALTEROU_VALOR' : 'APROVOU_ITEM'));
+        await trx('auditoria_logs').insert({
+          usuario_id: req.user.id,
+          acao: actionType,
+          detalhes: `Item ${dbItem.categoria} da solicitação #${id} avaliado como ${itemStatus.toUpperCase()} (Solicitado: R$ ${ccNum(dbItem.valor_solicitado).toFixed(2)}, Aprovado: R$ ${valAprovado.toFixed(2)}${dbItem.quantidade_solicitada ? ', Solicitado Qtd: ' + dbItem.quantidade_solicitada + ', Aprovado Qtd: ' + qtyAprovada : ''}). Justificativa: "${evalItem.justificativa || '-'}"`,
+          empresa_id: req.user.empresa_id
+        });
       }
 
-      // Update item in database
-      await db('despesas_solicitacoes_itens')
-        .where({ id: evalItem.id })
-        .update({
-          valor_aprovado: valAprovado,
-          quantidade_aprovada: qtyAprovada,
-          status: itemStatus,
-          justificativa: evalItem.justificativa || '',
-          data_aprovacao,
-          usuario_aprovador: req.user.name || req.user.id
-        });
+      // Determine general status
+      let generalStatus = 'Pendente';
+      if (hasCorrection) {
+        generalStatus = 'Correção Solicitada';
+      } else if (allReproved) {
+        generalStatus = 'Rejeitada';
+      } else if (allApprovedIntegral) {
+        generalStatus = 'Aprovada';
+      } else {
+        generalStatus = 'Aprovada (não valor total)';
+      }
 
-      // Record audit log for individual item
-      const actionType = itemStatus === 'correcao' ? 'ENVIOU_ITEM_CORRECAO' : (itemStatus === 'reprovado' ? 'REPROVOU_ITEM' : (itemStatus === 'aprovado parcialmente' ? 'ALTEROU_VALOR' : 'APROVOU_ITEM'));
-      await db('auditoria_logs').insert({
+      const now = new Date();
+
+      // Update main request status
+      await trx('despesas_solicitacoes').where({ id }).update({
+        status: generalStatus,
+        updated_at: now.toISOString()
+      });
+
+      // Insert legacy approval log for backwards compatibility
+      await trx('despesas_aprovacoes').insert({
+        solicitacao_id: id,
+        gerente_id: req.user.id,
+        data_aprovacao,
+        hora_aprovacao,
+        observacao: observacao || `Avaliação detalhada concluída. Total Aprovado: R$ ${totalAprovado.toFixed(2)}`,
+        status: generalStatus,
+        created_at: now.toISOString(),
+        updated_at: now.toISOString()
+      });
+
+      // Auditoria Geral
+      await trx('auditoria_logs').insert({
         usuario_id: req.user.id,
-        acao: actionType,
-        detalhes: `Item ${dbItem.categoria} da solicitação #${id} avaliado como ${itemStatus.toUpperCase()} (Solicitado: R$ ${ccNum(dbItem.valor_solicitado).toFixed(2)}, Aprovado: R$ ${valAprovado.toFixed(2)}${dbItem.quantidade_solicitada ? ', Solicitado Qtd: ' + dbItem.quantidade_solicitada + ', Aprovado Qtd: ' + qtyAprovada : ''}). Justificativa: "${evalItem.justificativa || '-'}"`,
+        acao: generalStatus === 'Rejeitada' ? 'REPROVOU_ITEM' : 'APROVOU_ITEM',
+        detalhes: `Solicitação #${id} finalizada com status geral ${generalStatus.toUpperCase()} por ${req.user.name || req.user.id}. Total Aprovado Geral: R$ ${totalAprovado.toFixed(2)}`,
         empresa_id: req.user.empresa_id
       });
-    }
 
-    // Determine general status
-    let generalStatus = 'Pendente';
-    if (hasCorrection) {
-      generalStatus = 'Correção Solicitada';
-    } else if (allReproved) {
-      generalStatus = 'Rejeitada';
-    } else if (allApprovedIntegral) {
-      generalStatus = 'Aprovada';
-    } else {
-      generalStatus = 'Aprovada (não valor total)';
-    }
-
-    // Update main request status
-    await db('despesas_solicitacoes').where({ id }).update({
-      status: generalStatus,
-      updated_at: now.toISOString()
+      return { generalStatus, totalAprovado };
     });
 
-    // Insert legacy approval log for backwards compatibility
-    await db('despesas_aprovacoes').insert({
-      solicitacao_id: id,
-      gerente_id: req.user.id,
-      data_aprovacao,
-      hora_aprovacao,
-      observacao: observacao || `Avaliação detalhada concluída. Total Aprovado: R$ ${totalAprovado.toFixed(2)}`,
-      status: generalStatus,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString()
-    });
-
-    // Auditoria Geral
-    await db('auditoria_logs').insert({
-      usuario_id: req.user.id,
-      acao: generalStatus === 'Rejeitada' ? 'REPROVOU_ITEM' : 'APROVOU_ITEM',
-      detalhes: `Solicitação #${id} finalizada com status geral ${generalStatus.toUpperCase()} por ${req.user.name || req.user.id}. Total Aprovado Geral: R$ ${totalAprovado.toFixed(2)}`,
-      empresa_id: req.user.empresa_id
-    });
+    const { generalStatus, totalAprovado } = result;
 
     // Log notification details
     const formattedItemsLog = items.map(evalItem => {
@@ -2435,8 +2451,17 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
 // Listagem de Movimentações (com filtros de pesquisa e restrições de perfil)
 app.get('/api/equipamentos/movimentacoes', async (req, res) => {
   try {
-    const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const profileNorm = normalizeRole(req.user && req.user.profile);
+    const isActorAdmin = [
+      'administrador', 'administrador sistema', 
+      'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos', 
+      'conferente', 'financeiro'
+    ].includes(profileNorm) 
+    || hasAnyPermission(req.user, [
+      'Administrador', 'Administrador (Acesso Total)', 
+      'Responsável Equipamentos', 'Gestor Equipamentos', 'Gestor de Equipamentos', 
+      'Equipamentos', 'Avaliação de Movimentação', 'Confirmação de Movimentação'
+    ]);
 
     let query = db('equipamentos_movimentacoes').where(function() {
       this.where('equipamentos_movimentacoes.excluido', false).orWhereNull('equipamentos_movimentacoes.excluido');
@@ -2460,29 +2485,32 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     }
 
     // Filtros dinâmicos
-    if (req.query.cidade && String(req.query.cidade || '').trim() !== '') {
+    if (isFilterValValid(req.query.empresa)) {
+      query = query.where('equipamentos_movimentacoes.empresa', req.query.empresa);
+    }
+    if (isFilterValValid(req.query.cidade)) {
       query = query.where('equipamentos_movimentacoes.cliente_cidade', 'like', `%${req.query.cidade}%`);
     }
-    if (req.query.vendedor && String(req.query.vendedor || '').trim() !== '') {
+    if (isFilterValValid(req.query.vendedor)) {
       query = query.where('equipamentos_movimentacoes.vendedor_solicitante', 'like', `%${req.query.vendedor}%`);
     }
-    if (req.query.patrimonio && String(req.query.patrimonio || '').trim() !== '') {
+    if (isFilterValValid(req.query.patrimonio)) {
       const p = req.query.patrimonio;
       query = query.andWhere(function() {
         this.where('equipamentos_movimentacoes.patrimonio', 'like', `%${p}%`)
             .orWhere('equipamentos_movimentacoes.patrimonio_novo', 'like', `%${p}%`);
       });
     }
-    if (req.query.tipo_solicitacao && String(req.query.tipo_solicitacao || '').trim() !== '') {
+    if (isFilterValValid(req.query.tipo_solicitacao)) {
       query = query.where('equipamentos_movimentacoes.tipo_solicitacao', req.query.tipo_solicitacao);
     }
-    if (req.query.status && String(req.query.status || '').trim() !== '') {
+    if (isFilterValValid(req.query.status)) {
       query = query.where('equipamentos_movimentacoes.status', req.query.status);
     }
-    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_inicio)) {
       query = query.where('equipamentos_movimentacoes.created_at', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
+    if (isFilterValValid(req.query.data_fim)) {
       query = query.where('equipamentos_movimentacoes.created_at', '<=', req.query.data_fim + 'T23:59:59');
     }
 
@@ -3663,7 +3691,7 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
 
       const permittedIds = await getPermittedSellerIds(req.user, db);
       query = query.whereIn('dr.userId', permittedIds);
-    } else if (req.query.unitId && req.query.unitId !== 'all') {
+    } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
       query = query.where('dr.unitId', req.query.unitId);
     }
 
@@ -4034,9 +4062,9 @@ app.get('/api/chamados', async (req, res) => {
   try {
     let query = db('chamados_tecnicos');
     await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
-    if (req.query.unitId && String(req.query.unitId || '').trim() !== '' && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
-    if (req.query.status && String(req.query.status || '').trim() !== '') query.where('status', req.query.status);
-    if (req.query.patrimonio && String(req.query.patrimonio || '').trim() !== '') query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
+    if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
+    if (isFilterValValid(req.query.status)) query.where('status', req.query.status);
+    if (isFilterValValid(req.query.patrimonio)) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
     const list = await query.orderBy('created_at', 'desc');
     res.json(list.map(normalizeChamado));
   } catch (err) {
