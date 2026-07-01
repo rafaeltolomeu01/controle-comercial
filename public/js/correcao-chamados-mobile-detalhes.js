@@ -32,25 +32,33 @@
     const style = document.createElement('style');
     style.id = 'cc-chamados-compact-style';
     style.textContent = `
+      #modal-ticket-details-mobile .login-card { text-align: left !important; }
+      #modal-ticket-details-mobile .cc-detail-card { background: rgba(255,255,255,.025); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-top: 10px; }
+      #modal-ticket-details-mobile .cc-detail-title { margin: 0 0 10px; color: var(--primary-color); font-size: .9rem; font-weight: 800; text-align: left; }
+      #modal-ticket-details-mobile .cc-detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+      #modal-ticket-details-mobile .cc-detail-item { min-width: 0; text-align: left; }
+      #modal-ticket-details-mobile .cc-detail-item small { display:block; color: var(--text-muted); font-weight: 700; font-size: .68rem; line-height: 1.1; margin-bottom: 3px; text-transform: uppercase; letter-spacing: .02em; }
+      #modal-ticket-details-mobile .cc-detail-item b { display:block; color: var(--text-main); font-size: .84rem; line-height: 1.25; word-break: break-word; font-weight: 650; }
+      #modal-ticket-details-mobile .cc-detail-full { grid-column: span 2; }
+      #modal-ticket-details-mobile .cc-detail-wide { grid-column: 1 / -1; }
       @media (max-width: 768px) {
         #tickets-table-body tr.cc-ticket-compact-row { display: block !important; margin: 8px 0 !important; border: 1px solid var(--border-color) !important; border-radius: 12px !important; background: rgba(17,24,39,.96) !important; overflow: hidden !important; }
         #tickets-table-body tr.cc-ticket-compact-row td { display: block !important; padding: 9px 10px !important; border: 0 !important; min-height: 0 !important; }
         #tickets-table-body tr.cc-ticket-compact-row td:before { display: none !important; content: none !important; }
         #tickets-table-body tr.cc-ticket-compact-row .cc-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #tickets-table-body tr.cc-ticket-compact-row .badge-status { font-size: .62rem !important; padding: 3px 7px !important; }
-        #modal-ticket-details-mobile .cc-detail-card { background: rgba(255,255,255,.025); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-top: 8px; }
-        #modal-ticket-details-mobile .cc-detail-title { margin: 0 0 8px; color: var(--primary-color); font-size: .82rem; font-weight: 800; }
-        #modal-ticket-details-mobile .cc-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; }
-        #modal-ticket-details-mobile .cc-detail-item { min-width: 0; }
-        #modal-ticket-details-mobile .cc-detail-item small { display:block; color: var(--text-muted); font-weight: 700; font-size: .66rem; line-height: 1.1; margin-bottom: 2px; }
-        #modal-ticket-details-mobile .cc-detail-item b { display:block; color: var(--text-main); font-size: .78rem; line-height: 1.22; word-break: break-word; }
-        #modal-ticket-details-mobile .cc-detail-full { grid-column: 1 / -1; }
+        #modal-ticket-details-mobile .cc-detail-card { padding: 10px; margin-top: 8px; }
+        #modal-ticket-details-mobile .cc-detail-title { font-size: .82rem; margin-bottom: 8px; }
+        #modal-ticket-details-mobile .cc-detail-grid { grid-template-columns: 1fr 1fr; gap: 7px 10px; }
+        #modal-ticket-details-mobile .cc-detail-item small { font-size: .66rem; text-transform: none; letter-spacing: 0; }
+        #modal-ticket-details-mobile .cc-detail-item b { font-size: .78rem; }
+        #modal-ticket-details-mobile .cc-detail-full, #modal-ticket-details-mobile .cc-detail-wide { grid-column: 1 / -1; }
       }`;
     document.head.appendChild(style);
   }
   function item(label, value, full) {
     const has = value !== undefined && value !== null && String(value).trim() !== '';
-    return '<div class=\"cc-detail-item' + (full ? ' cc-detail-full' : '') + '\"><small>' + esc(label) + '</small><b>' + (has ? esc(value) : '—') + '</b></div>';
+    return '<div class=\"cc-detail-item' + (full ? ' cc-detail-wide' : '') + '\"><small>' + esc(label) + '</small><b>' + (has ? esc(value) : '—') + '</b></div>';
   }
   function card(title, html) { return '<section class=\"cc-detail-card\"><h4 class=\"cc-detail-title\">' + esc(title) + '</h4><div class=\"cc-detail-grid\">' + html + '</div></section>'; }
   function actionButton(ticket, isStaff) {
@@ -104,7 +112,7 @@
         modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:8px;';
         document.body.appendChild(modal);
       }
-      modal.innerHTML = '<div class=\"login-card\" style=\"max-width:700px;width:100%;max-height:92vh;overflow:auto;padding:12px!important;border-radius:12px!important;\"><div style=\"display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;\"><div style=\"min-width:0;\"><h3 style=\"margin:0;color:var(--primary-color);font-size:1rem;line-height:1.1;\">Detalhes do Chamado</h3><div style=\"font-size:.72rem;color:var(--text-muted);margin-top:2px;\">' + esc(ticket.id || '') + '</div></div><div style=\"display:flex;gap:6px;flex-shrink:0;\"><button class=\"btn btn-primary\" onclick=\"App.generateTicketPdf(\'' + esc(ticket.id) + '\')\" style=\"width:auto;font-size:.72rem;padding:6px 9px;\">PDF</button><button class=\"btn btn-secondary\" onclick=\"document.getElementById(\'modal-ticket-details-mobile\').style.display=\'none\'\" style=\"width:auto;font-size:.72rem;padding:6px 9px;\">Fechar</button></div></div><div id=\"modal-ticket-details-mobile-content\"></div></div>';
+      modal.innerHTML = '<div class=\"login-card\" style=\"max-width:860px;width:100%;max-height:92vh;overflow:auto;padding:14px!important;border-radius:12px!important;text-align:left!important;\"><div style=\"display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;\"><div style=\"min-width:0;\"><h3 style=\"margin:0;color:var(--primary-color);font-size:1rem;line-height:1.1;\">Detalhes do Chamado</h3><div style=\"font-size:.72rem;color:var(--text-muted);margin-top:2px;\">' + esc(ticket.id || '') + '</div></div><div style=\"display:flex;gap:6px;flex-shrink:0;\"><button class=\"btn btn-primary\" onclick=\"App.generateTicketPdf(\'' + esc(ticket.id) + '\')\" style=\"width:auto;font-size:.72rem;padding:6px 9px;\">PDF</button><button class=\"btn btn-secondary\" onclick=\"document.getElementById(\'modal-ticket-details-mobile\').style.display=\'none\'\" style=\"width:auto;font-size:.72rem;padding:6px 9px;\">Fechar</button></div></div><div id=\"modal-ticket-details-mobile-content\"></div></div>';
       const mediaHtml = (function(){
         const items = mediaItems(ticket);
         if (!items.length) return '';
