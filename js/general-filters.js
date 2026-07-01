@@ -397,7 +397,21 @@
 
   function pick(obj, keys) { for (const k of keys) { if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k]; } return ''; }
   function value(v) { return (v === undefined || v === null || v === '') ? '—' : v; }
-  function money(v) { const n = Number(String(v ?? '').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.')); return Number.isFinite(n) && n !== 0 ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : (v ? String(v) : '—'); }
+  function money(v) {
+  if (v === undefined || v === null || v === '') return '—';
+  if (typeof v === 'number') {
+    return Number.isFinite(v) ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
+  }
+  let raw = String(v).trim().replace(/[^0-9,.-]/g, '');
+  if (!raw) return '—';
+  // Formato brasileiro: 1.234,56 -> 1234.56
+  if (raw.includes(',')) {
+    raw = raw.replace(/\./g, '').replace(',', '.');
+  }
+  // Formato do banco/API: 140.00 deve continuar 140.00, não 14000
+  const n = Number(raw);
+  return Number.isFinite(n) ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : String(v);
+}
   function normalize(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
   function unitName(id) { if (!id) return ''; return (window.UI && UI.getUnitName && UI.getUnitName(id)) || id; }
   function userName(id) { if (!id) return ''; return (window.UI && UI.getUserName && UI.getUserName(id)) || id; }
