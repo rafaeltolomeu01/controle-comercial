@@ -215,6 +215,198 @@
         .clientes-importador-detail-modal { padding:14px; }
         .clientes-importador-detail-grid { grid-template-columns:1fr; }
       }
+
+
+      /* Ajuste fino do importador no celular: menos poluição visual, sem perder a ação de abrir detalhes. */
+      @media (max-width: 768px) {
+        #view-clientes .view-tabs {
+          gap:6px !important;
+          margin-bottom:10px !important;
+          padding-bottom:8px !important;
+          overflow-x:auto !important;
+          flex-wrap:nowrap !important;
+        }
+        #view-clientes .view-tabs .view-tab-btn {
+          min-height:34px !important;
+          padding:6px 10px !important;
+          font-size:.78rem !important;
+          line-height:1.15 !important;
+          flex:0 0 auto !important;
+          width:auto !important;
+          border-radius:8px !important;
+        }
+        #clientes-importador-card {
+          padding:12px !important;
+          border-radius:14px !important;
+        }
+        #clientes-importador-card .card-header {
+          display:grid !important;
+          grid-template-columns:minmax(0, 1fr) auto !important;
+          align-items:center !important;
+          gap:8px !important;
+          margin-bottom:10px !important;
+          padding-bottom:10px !important;
+        }
+        #clientes-importador-card .card-title {
+          font-size:1rem !important;
+          line-height:1.2 !important;
+        }
+        #btn-clientes-importador-open {
+          width:auto !important;
+          min-height:36px !important;
+          height:36px !important;
+          padding:0 12px !important;
+          font-size:.78rem !important;
+          white-space:nowrap !important;
+        }
+        #clientes-importador-card .general-filter-bar {
+          padding:10px !important;
+          gap:8px !important;
+          border-radius:10px !important;
+          margin-bottom:10px !important;
+        }
+        .clientes-importador-filter-row {
+          gap:8px !important;
+        }
+        .clientes-importador-filter-group,
+        .clientes-importador-filter-group.search {
+          min-width:0 !important;
+          width:100% !important;
+          gap:3px !important;
+        }
+        .clientes-importador-filter-group label {
+          font-size:.68rem !important;
+          line-height:1.1 !important;
+        }
+        .clientes-importador-filter-group input,
+        .clientes-importador-filter-group select {
+          height:34px !important;
+          min-height:34px !important;
+          padding:0 9px !important;
+          font-size:.78rem !important;
+          border-radius:8px !important;
+        }
+        .clientes-importador-actions {
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+          gap:6px !important;
+          margin-top:2px !important;
+          padding-top:8px !important;
+        }
+        .clientes-importador-actions .btn,
+        .clientes-importador-actions button {
+          width:100% !important;
+          min-height:34px !important;
+          height:34px !important;
+          padding:0 8px !important;
+          font-size:.72rem !important;
+          line-height:1.1 !important;
+          white-space:nowrap !important;
+        }
+        #btn-clientes-importador-export-all {
+          grid-column:1 / -1 !important;
+        }
+        .clientes-importador-table-wrap {
+          overflow:visible !important;
+        }
+        .clientes-importador-table-wrap table {
+          min-width:0 !important;
+        }
+        #clientes-importador-table-body {
+          gap:8px !important;
+        }
+        #clientes-importador-table-body tr {
+          padding:10px !important;
+          border-radius:12px !important;
+        }
+        #clientes-importador-table-body td {
+          padding:5px 0 !important;
+          font-size:.82rem !important;
+          line-height:1.2 !important;
+        }
+        #clientes-importador-table-body td::before {
+          font-size:.68rem !important;
+          margin-bottom:1px !important;
+        }
+        /* Na listagem mobile deixa só os dados essenciais. O restante abre no card completo ao tocar na linha. */
+        #clientes-importador-table-body td:nth-child(4),
+        #clientes-importador-table-body td:nth-child(5),
+        #clientes-importador-table-body td:nth-child(6),
+        #clientes-importador-table-body td:nth-child(8),
+        #clientes-importador-table-body td:nth-child(10) {
+          display:none !important;
+        }
+        .clientes-importador-pagination {
+          gap:8px !important;
+          padding:8px 0 0 !important;
+          font-size:.72rem !important;
+        }
+        .clientes-importador-pagination-info {
+          line-height:1.25 !important;
+        }
+        .clientes-importador-page-btn {
+          min-width:30px !important;
+          height:30px !important;
+          min-height:30px !important;
+          padding:0 8px !important;
+          font-size:.72rem !important;
+        }
+        #modal-clientes-importador-detail.clientes-importador-modal-overlay {
+          padding:6px !important;
+          align-items:flex-start !important;
+        }
+        #modal-clientes-importador-detail .clientes-importador-detail-modal {
+          width:100% !important;
+          max-height:calc(100dvh - 12px) !important;
+          padding:12px !important;
+          border-radius:12px !important;
+        }
+        .clientes-importador-detail-head {
+          gap:8px !important;
+          padding-bottom:10px !important;
+          margin-bottom:10px !important;
+        }
+        .clientes-importador-detail-title {
+          font-size:1rem !important;
+          line-height:1.15 !important;
+        }
+        .clientes-importador-detail-subtitle {
+          font-size:.74rem !important;
+        }
+        .clientes-importador-detail-section {
+          padding:10px !important;
+          margin-bottom:10px !important;
+        }
+        .clientes-importador-detail-section h4 {
+          font-size:.82rem !important;
+          margin-bottom:8px !important;
+        }
+        .clientes-importador-detail-item {
+          padding:8px 9px !important;
+          border-radius:8px !important;
+        }
+        .clientes-importador-detail-label {
+          font-size:.64rem !important;
+        }
+        .clientes-importador-detail-value {
+          font-size:.82rem !important;
+        }
+      }
+
+      @media (max-width: 420px) {
+        #clientes-importador-card .card-header {
+          grid-template-columns:1fr !important;
+        }
+        #btn-clientes-importador-open {
+          width:100% !important;
+        }
+        .clientes-importador-actions {
+          grid-template-columns:1fr !important;
+        }
+        #btn-clientes-importador-export-all {
+          grid-column:auto !important;
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -238,7 +430,7 @@
             <div class="clientes-importador-filter-row">
               <div class="clientes-importador-filter-group search">
                 <label for="clientes-importador-search">Buscar Texto</label>
-                <input type="text" id="clientes-importador-search" placeholder="Pesquisar por código, fantasia, CNPJ, CPF, endereço, cidade, vendedor...">
+                <input type="text" id="clientes-importador-search" placeholder="Pesquisar cliente...">
               </div>
               ${filterSelect('clientes-importador-empresa', 'Empresa Responsável')}
               ${filterSelect('clientes-importador-cidade', 'Cidade')}
