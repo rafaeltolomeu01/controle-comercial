@@ -16,7 +16,7 @@
     style.id='cc-chamado-pro-style';
     style.textContent=[
       '#modal-ticket-details-mobile{padding:18px!important;align-items:center!important;justify-content:center!important;}',
-      '#modal-ticket-details-mobile .cc-pro-modal{width:min(1060px,calc(100vw - 44px))!important;max-height:90vh!important;overflow:auto!important;padding:0!important;border-radius:14px!important;border:1px solid var(--border-color)!important;background:#101827!important;box-shadow:0 24px 80px rgba(0,0,0,.48)!important;text-align:left!important;}',
+      '#modal-ticket-details-mobile .cc-pro-modal{width:min(1400px,95vw)!important;max-height:92vh!important;overflow:auto!important;padding:0!important;border-radius:14px!important;border:1px solid var(--border-color)!important;background:#101827!important;box-shadow:0 24px 80px rgba(0,0,0,.48)!important;text-align:left!important;}',
       '#modal-ticket-details-mobile .cc-pro-header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px 12px;background:linear-gradient(180deg,rgba(16,24,39,.98),rgba(16,24,39,.94));border-bottom:1px solid var(--border-color);}',
       '#modal-ticket-details-mobile .cc-pro-title{min-width:0;}',
       '#modal-ticket-details-mobile .cc-pro-title h3{margin:0;color:var(--primary-color);font-size:1.16rem;line-height:1.1;font-weight:850;}',
@@ -75,3 +75,31 @@
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install); else install();
   window.addEventListener('hashchange',function(){setTimeout(install,100);});
 })();
+
+; 
+if(!document.getElementById('cc-chamado-desktop-fix')){
+  var style2=document.createElement('style');
+  style2.id='cc-chamado-desktop-fix';
+  style2.textContent=`
+@media (min-width: 1024px){
+  #modal-ticket-details-mobile .cc-pro-modal{
+    width:min(1400px,95vw)!important;
+  }
+  #modal-ticket-details-mobile .cc-pro-body{
+    display:grid!important;
+    grid-template-columns: 1.2fr 1fr!important;
+    gap:16px!important;
+  }
+  .cc-card-actions{
+    display:flex!important;
+    justify-content:flex-end!important;
+    gap:8px!important;
+    order:-1!important;
+  }
+  .cc-ticket-card{
+    position:relative!important;
+  }
+}
+`;
+  document.head.appendChild(style2);
+}
