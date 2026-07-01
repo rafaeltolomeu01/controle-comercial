@@ -397,21 +397,7 @@
 
   function pick(obj, keys) { for (const k of keys) { if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k]; } return ''; }
   function value(v) { return (v === undefined || v === null || v === '') ? '—' : v; }
-  function money(v) {
-  if (v === undefined || v === null || v === '') return '—';
-  if (typeof v === 'number') {
-    return Number.isFinite(v) ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v) : '—';
-  }
-  let raw = String(v).trim().replace(/[^0-9,.-]/g, '');
-  if (!raw) return '—';
-  // Formato brasileiro: 1.234,56 -> 1234.56
-  if (raw.includes(',')) {
-    raw = raw.replace(/\./g, '').replace(',', '.');
-  }
-  // Formato do banco/API: 140.00 deve continuar 140.00, não 14000
-  const n = Number(raw);
-  return Number.isFinite(n) ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : String(v);
-}
+  function money(v) { const n = Number(String(v ?? '').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.')); return Number.isFinite(n) && n !== 0 ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : (v ? String(v) : '—'); }
   function normalize(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
   function unitName(id) { if (!id) return ''; return (window.UI && UI.getUnitName && UI.getUnitName(id)) || id; }
   function userName(id) { if (!id) return ''; return (window.UI && UI.getUserName && UI.getUserName(id)) || id; }
@@ -436,187 +422,18 @@
 })();
 
 
-/* Correção adicional 01/07 - Despesas: finalidade "Outro" deve liberar valor, data, comprovante e observação */
+
+/* Correção adicional 01/07 - PDFs completos via jsPDF, download direto e sem aba about:blank */
 (function(){
   'use strict';
+  if (window.__ccPdfJsPdfCompleto0107) return;
+  window.__ccPdfJsPdfCompleto0107 = true;
 
-  if (window.__fixDespesaOutroCampos0107) return;
-  window.__fixDespesaOutroCampos0107 = true;
-
-  function showGroupByInput(id, visible){
-    const input = document.getElementById(id);
-    if (!input) return;
-    const group = input.closest('.form-group') || input.parentElement;
-    if (group) group.style.display = visible ? 'block' : 'none';
-  }
-
-  function setRequired(id, required){
-    const el = document.getElementById(id);
-    if (el) el.required = !!required;
-  }
-
-  function fixExpenseFields(){
-    const finalidadeEl = document.getElementById('exp-finalidade');
-    const finalidade = finalidadeEl ? String(finalidadeEl.value || '').trim() : '';
-
-    const comuns = document.getElementById('group-exp-comuns');
-    const outro = document.getElementById('group-exp-descreva');
-    const abastecimento = document.getElementById('group-exp-abastecimento');
-
-    /*
-      Regra correta:
-      - Todo tipo de despesa precisa liberar Valor, Data, Comprovante e Observação.
-      - "Outro" também precisa liberar o campo Descreva.
-      - "Abastecimento" libera também Veículo, KM e Odômetro.
-    */
-    if (comuns) comuns.style.display = 'block';
-    if (outro) outro.style.display = finalidade === 'Outro' ? 'block' : 'none';
-    if (abastecimento) abastecimento.style.display = finalidade === 'Abastecimento' ? 'block' : 'none';
-
-    ['exp-val','exp-date','exp-comprovante-img','exp-obs'].forEach(id => showGroupByInput(id, true));
-
-    setRequired('exp-descreva', finalidade === 'Outro');
-    setRequired('exp-veiculo', finalidade === 'Abastecimento');
-    setRequired('exp-km', finalidade === 'Abastecimento');
-    setRequired('exp-odometro-img', finalidade === 'Abastecimento');
-
-    // Comprovante deve ser obrigatório para todos os tipos, inclusive "Outro".
-    setRequired('exp-comprovante-img', true);
-    setRequired('exp-val', true);
-    setRequired('exp-date', true);
-  }
-
-  function install(){
-    const finalidadeEl = document.getElementById('exp-finalidade');
-    if (finalidadeEl && finalidadeEl.dataset.fixOutroCampos !== '1') {
-      finalidadeEl.dataset.fixOutroCampos = '1';
-      finalidadeEl.addEventListener('change', function(){
-        setTimeout(fixExpenseFields, 0);
-        setTimeout(fixExpenseFields, 100);
-      }, true);
-    }
-
-    const btnOpen = document.querySelector('#btn-open-expense-form, [onclick*="openExpenseForm"], [onclick*="Registrar Despesa"]');
-    if (btnOpen && btnOpen.dataset.fixOutroCampos !== '1') {
-      btnOpen.dataset.fixOutroCampos = '1';
-      btnOpen.addEventListener('click', () => {
-        setTimeout(fixExpenseFields, 100);
-        setTimeout(fixExpenseFields, 400);
-      }, true);
-    }
-
-    fixExpenseFields();
-  }
-
-  document.addEventListener('DOMContentLoaded', install);
-  window.addEventListener('hashchange', () => setTimeout(install, 200));
-  document.addEventListener('click', () => setTimeout(install, 80), true);
-  setInterval(install, 800);
-})();
-
-
-
-/* Correção adicional 01/07 - PDFs completos e download direto, sem abrir about:blank/print automático */
-(function(){
-  'use strict';
-  if (window.__ccPdfDownloadCompleto0107) return;
-  window.__ccPdfDownloadCompleto0107 = true;
-
-  const HTML2PDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-
-  function esc(v){
-    return String(v ?? '—').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  }
-  function clean(v){
-    if (v === undefined || v === null || v === '' || v === 'null' || v === 'undefined') return '—';
-    return String(v);
-  }
-  function norm(v){
-    return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  }
-  function money(v){
-    if (v === undefined || v === null || v === '') return '—';
-    if (typeof v === 'number') return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
-    let raw = String(v).replace(/[^0-9,.-]/g,'').trim();
-    if (!raw) return '—';
-    if (raw.includes(',')) raw = raw.replace(/\./g,'').replace(',','.');
-    const n = Number(raw);
-    return Number.isFinite(n) ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n) : String(v);
-  }
-  function unitName(id){ return (window.UI && UI.getUnitName && id) ? UI.getUnitName(id) : (id || '—'); }
-  function userName(id){ return (window.UI && UI.getUserName && id) ? UI.getUserName(id) : (id || '—'); }
-  function expenseUserName(exp){
-    return (window.UI && UI.getExpenseUserName) ? UI.getExpenseUserName(exp) : (exp?.vendedor || exp?.vendedor_nome || userName(exp?.userId || exp?.usuario_id || exp?.user_id));
-  }
-  function parseArray(v){
-    if (!v) return [];
-    if (Array.isArray(v)) return v;
-    try { const parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : [parsed]; } catch(_) {}
-    return String(v).split(',').map(x => x.trim()).filter(Boolean);
-  }
-  function mediaUrl(url){
-    let raw = url;
-    if (Array.isArray(raw)) raw = raw[0];
-    if (raw && typeof raw === 'object') raw = raw.url || raw.path || raw.src || '';
-    raw = String(raw || '').trim();
-    if (!raw || ['null','undefined','/uploads/null','/uploads/undefined','/uploads/'].includes(raw)) return '';
-    if (window.TempPhotosCache && window.TempPhotosCache[raw]) raw = window.TempPhotosCache[raw];
-    if (raw.startsWith('data:')) return raw;
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    if (raw.startsWith('/')) return window.location.origin + raw;
-    return window.location.origin + '/' + raw.replace(/^\/+/, '');
-  }
-  function photoBox(url, label){
-    const src = mediaUrl(url);
-    if (!src) return `<div class="photo-card"><div class="photo-label">${esc(label)}</div><div class="photo-empty">Imagem não enviada</div></div>`;
-    return `<div class="photo-card"><div class="photo-label">${esc(label)}</div><img src="${esc(src)}" crossorigin="anonymous"><div class="photo-link">${esc(src)}</div></div>`;
-  }
-  function linkLine(url, label){
-    const src = mediaUrl(url);
-    return src ? `<div class="link-line"><b>${esc(label)}:</b> <a href="${esc(src)}">${esc(src)}</a></div>` : '';
-  }
-  function field(label, value){
-    return `<div class="field"><span>${esc(label)}</span><strong>${esc(clean(value))}</strong></div>`;
-  }
-  function slug(v){
-    return norm(v).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'arquivo';
-  }
-
-  function baseStyle(){
-    return `
-      <style>
-        *{box-sizing:border-box}
-        body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#fff;color:#111;font-size:12px;line-height:1.35}
-        .pdf-page{width:794px;min-height:1123px;background:#fff;padding:22px 24px;margin:0 auto}
-        .header{background:#2563eb;color:#fff;padding:18px 20px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;gap:12px}
-        .header h1{font-size:19px;margin:0;text-transform:uppercase;letter-spacing:.2px}
-        .header .small{font-size:11px;opacity:.95;text-align:right}
-        .subhead{border:2px solid #2563eb;border-top:0;padding:14px 18px;margin-bottom:14px}
-        .section{border:1px solid #d1d5db;border-radius:8px;margin:12px 0;padding:12px;break-inside:avoid;page-break-inside:avoid}
-        .section h2{font-size:13px;margin:0 0 9px;color:#1d4ed8;text-transform:uppercase;border-bottom:1px solid #d1d5db;padding-bottom:6px}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
-        .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 12px}
-        .field{border-bottom:1px solid #eef2f7;padding:4px 0;min-height:25px}
-        .field span{display:block;color:#4b5563;font-size:10px;text-transform:uppercase;font-weight:700}
-        .field strong{display:block;font-size:12px;white-space:pre-wrap;word-break:break-word}
-        .badges{display:flex;flex-wrap:wrap;gap:6px}
-        .badge{border:1px solid #1d4ed8;color:#1d4ed8;border-radius:999px;padding:4px 8px;font-weight:700;font-size:10px;background:#eff6ff}
-        .photos{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-        .photos.four{grid-template-columns:1fr 1fr}
-        .photo-card{border:1px solid #cbd5e1;border-radius:8px;padding:8px;break-inside:avoid;page-break-inside:avoid}
-        .photo-label{font-weight:700;margin-bottom:6px;color:#111}
-        .photo-card img{width:100%;height:260px;object-fit:contain;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px}
-        .photo-empty{height:160px;border:1px dashed #cbd5e1;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#64748b;background:#f8fafc}
-        .photo-link,.link-line{font-size:9px;color:#475569;word-break:break-all;margin-top:5px}
-        .footer{margin-top:14px;border-top:1px solid #cbd5e1;padding-top:8px;color:#64748b;font-size:10px;text-align:center}
-        .no-break{break-inside:avoid;page-break-inside:avoid}
-        @media(max-width:800px){.pdf-page{width:100%;padding:16px}.grid,.grid3,.photos{grid-template-columns:1fr}.photo-card img{height:220px}}
-      </style>`;
-  }
+  const JSPDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
   function loadScript(src){
     return new Promise((resolve,reject)=>{
-      if (window.html2pdf) return resolve();
+      if (window.jspdf && window.jspdf.jsPDF) return resolve();
       const existing = document.querySelector(`script[src="${src}"]`);
       if (existing) {
         existing.addEventListener('load', resolve, {once:true});
@@ -631,201 +448,279 @@
     });
   }
 
-  async function downloadPdfHtml(html, filename){
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:fixed;left:-99999px;top:0;background:#fff;z-index:-1;';
-    wrapper.innerHTML = html;
-    document.body.appendChild(wrapper);
+  function val(v){
+    if (v === undefined || v === null || v === '' || v === 'null' || v === 'undefined') return '—';
+    return String(v);
+  }
+
+  function money(v){
+    if (v === undefined || v === null || v === '') return '—';
+    if (typeof v === 'number') return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
+    let raw = String(v).replace(/[^0-9,.-]/g,'').trim();
+    if (!raw) return '—';
+    if (raw.includes(',')) raw = raw.replace(/\./g,'').replace(',', '.');
+    const n = Number(raw);
+    return Number.isFinite(n) ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n) : String(v);
+  }
+
+  function unitName(id){ return (window.UI && UI.getUnitName && id) ? UI.getUnitName(id) : val(id); }
+  function userName(id){ return (window.UI && UI.getUserName && id) ? UI.getUserName(id) : val(id); }
+  function expenseUser(exp){
+    return (window.UI && UI.getExpenseUserName) ? UI.getExpenseUserName(exp) : (exp && (exp.vendedor || exp.vendedor_nome || userName(exp.userId || exp.usuario_id || exp.user_id)));
+  }
+
+  function list(v){
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    try { const parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : [parsed]; } catch(_) {}
+    return String(v).split(',').map(x=>x.trim()).filter(Boolean);
+  }
+
+  function mediaUrl(url){
+    let raw = url;
+    if (Array.isArray(raw)) raw = raw[0];
+    if (raw && typeof raw === 'object') raw = raw.url || raw.path || raw.src || '';
+    raw = String(raw || '').trim();
+    if (!raw || ['null','undefined','/uploads/null','/uploads/undefined','/uploads/'].includes(raw)) return '';
+    if (window.TempPhotosCache && window.TempPhotosCache[raw]) raw = window.TempPhotosCache[raw];
+    if (raw.startsWith('data:')) return raw;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/')) return window.location.origin + raw;
+    return window.location.origin + '/' + raw.replace(/^\/+/, '');
+  }
+
+  function slug(v){
+    return String(v || 'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'arquivo';
+  }
+
+  async function imageToDataUrl(url){
+    const src = mediaUrl(url);
+    if (!src) return '';
+    if (src.startsWith('data:image/')) return src;
     try {
-      await loadScript(HTML2PDF_CDN);
-      const opt = {
-        margin: 0,
-        filename,
-        image: { type: 'jpeg', quality: 0.96 },
-        html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false },
-        jsPDF: { unit: 'px', format: [794,1123], orientation: 'portrait' },
-        pagebreak: { mode: ['css','legacy'], avoid: ['.section','.photo-card','.no-break'] }
-      };
-      await window.html2pdf().set(opt).from(wrapper.firstElementChild || wrapper).save();
-      if (window.App && App.showToast) App.showToast('PDF gerado para download.');
-    } catch(err) {
-      console.error('Falha ao gerar PDF direto:', err);
-      const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename.replace(/\.pdf$/i,'.html');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 1000);
-      alert('Não foi possível carregar a biblioteca de PDF. Baixei o HTML do relatório como alternativa.');
-    } finally {
-      wrapper.remove();
+      const res = await fetch(src, {mode:'cors', credentials:'same-origin'});
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      return await new Promise((resolve,reject)=>{
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.warn('Não foi possível carregar imagem no PDF:', src, err);
+      return '';
     }
   }
 
-  function expenseHtml(exp){
-    const finalidade = exp.finalidade === 'Outro'
-      ? `Outro${exp.descreva ? ' - ' + exp.descreva : ''}`
-      : (exp.finalidade || exp.category || '—');
+  function setupDoc(title){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'p', unit:'mm', format:'a4'});
+    doc.setProperties({ title });
+    return doc;
+  }
 
-    const dataHora = [exp.date || exp.data || exp.created_at || exp.createdAt, exp.time || exp.hora].filter(Boolean).join(' às ');
-    const comp = exp.foto_comprovante || exp.photo || exp.photoComprovante || exp.receiptPhoto;
-    const odo = exp.foto_odometro || exp.photoOdometro || exp.odometerPhoto;
+  function pageBorder(doc, title){
+    doc.setDrawColor(37,99,235);
+    doc.setLineWidth(0.8);
+    doc.rect(7,7,196,283);
+    doc.setFillColor(37,99,235);
+    doc.rect(7,7,196,17,'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(12);
+    doc.setTextColor(255,255,255);
+    doc.text(title, 12, 18);
+    doc.setTextColor(0,0,0);
+  }
 
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Despesa ${esc(exp.id)}</title>${baseStyle()}</head><body>
-      <div class="pdf-page">
-        <div class="header"><h1>Comprovante de Despesa de Viagem</h1><div class="small">Documento gerado automaticamente<br>${esc(new Date().toLocaleString('pt-BR'))}</div></div>
-        <div class="subhead">
-          <div class="grid">
-            ${field('ID da Despesa', exp.id)}
-            ${field('Status', exp.status)}
-            ${field('Data / Hora', dataHora)}
-            ${field('Vendedor Solicitante', exp.vendedor || exp.vendedor_nome || expenseUserName(exp))}
-            ${field('Unidade Vinculada', unitName(exp.unitId || exp.unit_id || exp.unidade))}
-            ${field('Empresa', exp.empresa_id || exp.company_id || exp.empresa)}
-          </div>
-        </div>
+  function ensurePage(doc, y, needed, title){
+    if (y + needed <= 280) return y;
+    doc.addPage();
+    pageBorder(doc, title);
+    return 32;
+  }
 
-        <div class="section">
-          <h2>1. Dados da Despesa</h2>
-          <div class="grid">
-            ${field('Finalidade', finalidade)}
-            ${field('Tipo de Operação', exp.operacao || exp.operation || exp.tipo_operacao)}
-            ${field('Valor', money(exp.value ?? exp.valor ?? exp.amount))}
-            ${field('Veículo', exp.veiculo || exp.vehicle)}
-            ${field('Quilometragem (KM)', exp.km || exp.quilometragem)}
-            ${field('Usuário Responsável', expenseUserName(exp))}
-          </div>
-          ${field('Observação', exp.observation || exp.observacao || exp.description || exp.descreva)}
-        </div>
+  function section(doc, y, title, reportTitle){
+    y = ensurePage(doc, y, 12, reportTitle);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.setTextColor(37,99,235);
+    doc.text(title, 12, y);
+    doc.setDrawColor(210,210,210);
+    doc.line(12, y + 2, 198, y + 2);
+    doc.setTextColor(0,0,0);
+    return y + 8;
+  }
 
-        <div class="section">
-          <h2>2. Aprovação / Histórico</h2>
-          <div class="grid">
-            ${field('Status Atual', exp.status)}
-            ${field('Última Atualização', exp.updated_at || exp.updatedAt || '—')}
-          </div>
-          ${field('Parecer / Motivo / Observação da Aprovação', exp.approval_note || exp.motivo || exp.justificativa || exp.observation || exp.observacao)}
-        </div>
+  function field(doc, x, y, label, value, w){
+    w = w || 85;
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(80,80,80);
+    doc.text(String(label).toUpperCase(), x, y);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(0,0,0);
+    const lines = doc.splitTextToSize(val(value), w);
+    doc.text(lines, x, y + 5);
+    return y + 5 + (lines.length * 4);
+  }
 
-        <div class="section">
-          <h2>3. Anexos e Comprovantes Fotográficos</h2>
-          <div class="photos">
-            ${photoBox(comp, 'Imagem do Comprovante')}
-            ${photoBox(odo, 'Imagem do Odômetro / KM')}
-          </div>
-          <div style="margin-top:8px">
-            ${linkLine(comp, 'Link do Comprovante')}
-            ${linkLine(odo, 'Link do Odômetro')}
-          </div>
-        </div>
+  function fieldBox(doc, x, y, label, value, w, h){
+    w = w || 85;
+    h = h || 16;
+    doc.setDrawColor(220,220,220);
+    doc.roundedRect(x-2, y-4, w+4, h, 1.5, 1.5);
+    return field(doc, x, y, label, value, w);
+  }
 
-        <div class="footer">Controle de Campo • Gerado por ${(Store.getLoggedUser && Store.getLoggedUser()?.name) || 'Sistema'} em ${new Date().toLocaleString('pt-BR')}</div>
-      </div>
-    </body></html>`;
+  function textBlock(doc, y, label, value, reportTitle){
+    const lines = doc.splitTextToSize(val(value), 180);
+    const h = 13 + lines.length * 4;
+    y = ensurePage(doc, y, h, reportTitle);
+    doc.setDrawColor(220,220,220);
+    doc.roundedRect(12, y-4, 186, h, 1.5, 1.5);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(80,80,80);
+    doc.text(String(label).toUpperCase(), 15, y);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(0,0,0);
+    doc.text(lines, 15, y+5);
+    return y + h + 3;
+  }
+
+  async function addImageBox(doc, x, y, w, h, label, url){
+    doc.setDrawColor(210,210,210);
+    doc.roundedRect(x, y, w, h, 2, 2);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8);
+    doc.text(label, x+3, y+5);
+    const data = await imageToDataUrl(url);
+    if (data) {
+      try {
+        const type = data.includes('image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(data, type, x+3, y+8, w-6, h-14, undefined, 'FAST');
+      } catch (err) {
+        console.warn('Erro ao inserir imagem:', err);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(8);
+        doc.text('Imagem anexada, mas não foi possível inserir no PDF.', x+3, y+18);
+      }
+    } else {
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120,120,120);
+      doc.text('Imagem não enviada ou indisponível.', x+3, y+18);
+      doc.setTextColor(0,0,0);
+    }
+    const link = mediaUrl(url);
+    if (link && !link.startsWith('data:')) {
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(6);
+      doc.setTextColor(37,99,235);
+      const lines = doc.splitTextToSize(link, w-6);
+      doc.text(lines.slice(0,2), x+3, y+h-5);
+      try { doc.link(x+3, y+h-11, w-6, 8, {url: link}); } catch(_) {}
+      doc.setTextColor(0,0,0);
+    }
+  }
+
+  function footer(doc){
+    const pages = doc.internal.getNumberOfPages();
+    for (let i=1;i<=pages;i++){
+      doc.setPage(i);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100,100,100);
+      doc.text(`Controle de Campo • Gerado em ${new Date().toLocaleString('pt-BR')} • Página ${i} de ${pages}`, 105, 287, {align:'center'});
+      doc.setTextColor(0,0,0);
+    }
   }
 
   async function getExpenseById(id){
-    let list = [];
-    try { if (Array.isArray(window.AppExpensesCache)) list = window.AppExpensesCache; } catch(_){}
-    if (!list.length && window.Store && Store.getExpenses) list = Store.getExpenses() || [];
-    let exp = list.find(e => String(e.id) === String(id));
+    let arr = [];
+    if (Array.isArray(window.AppExpensesCache)) arr = window.AppExpensesCache;
+    if (!arr.length && window.Store && Store.getExpenses) arr = Store.getExpenses() || [];
+    let exp = arr.find(e => String(e.id) === String(id));
     if (!exp && window.App && App.fetchFromApi) {
       try { exp = await App.fetchFromApi('/api/despesas-reembolsos/' + encodeURIComponent(id)); } catch(_){}
     }
     return exp;
   }
 
-  async function generateExpenseComprovantePdfFixed(id){
-    const exp = await getExpenseById(id);
-    if (!exp) return alert('Despesa não encontrada para gerar PDF.');
-    return downloadPdfHtml(expenseHtml(exp), `Despesa-${slug(exp.id)}.pdf`);
+  async function generateExpensePdf(id){
+    try {
+      await loadScript(JSPDF_CDN);
+      const exp = await getExpenseById(id);
+      if (!exp) return alert('Despesa não encontrada para gerar PDF.');
+
+      const title = 'COMPROVANTE DE DESPESA DE VIAGEM';
+      const doc = setupDoc(`Despesa ${exp.id}`);
+      pageBorder(doc, title);
+
+      let y = 34;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(11);
+      doc.text(`Despesa ID: #${val(exp.id)}`, 12, y);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(9);
+      doc.text(`Emissão: ${new Date().toLocaleString('pt-BR')}`, 120, y);
+      y += 8;
+
+      fieldBox(doc, 14, y, 'Data / Hora', [exp.date || exp.data || exp.created_at || exp.createdAt, exp.time || exp.hora].filter(Boolean).join(' às '), 80);
+      fieldBox(doc, 108, y, 'Status', exp.status, 80);
+      y += 20;
+
+      y = section(doc, y, '1. Dados da Despesa', title);
+      fieldBox(doc, 14, y, 'Vendedor Solicitante', exp.vendedor || exp.vendedor_nome || expenseUser(exp), 80);
+      fieldBox(doc, 108, y, 'Unidade Vinculada', unitName(exp.unitId || exp.unit_id || exp.unidade), 80);
+      y += 20;
+      const finalidade = exp.finalidade === 'Outro' ? `Outro${exp.descreva ? ' - ' + exp.descreva : ''}` : (exp.finalidade || exp.category || exp.categoria);
+      fieldBox(doc, 14, y, 'Finalidade', finalidade, 80);
+      fieldBox(doc, 108, y, 'Tipo de Operação', exp.operacao || exp.operation || exp.tipo_operacao, 80);
+      y += 20;
+      fieldBox(doc, 14, y, 'Valor', money(exp.value ?? exp.valor ?? exp.amount), 80);
+      fieldBox(doc, 108, y, 'Empresa', exp.empresa_id || exp.company_id || exp.empresa, 80);
+      y += 20;
+
+      if ((String(exp.finalidade || '').toLowerCase() === 'abastecimento') || exp.veiculo || exp.km) {
+        y = section(doc, y, '2. Dados do Abastecimento / Veículo', title);
+        fieldBox(doc, 14, y, 'Veículo', exp.veiculo || exp.vehicle, 80);
+        fieldBox(doc, 108, y, 'Quilometragem (KM)', exp.km || exp.quilometragem, 80);
+        y += 20;
+      }
+
+      y = section(doc, y, '3. Observações e Aprovação', title);
+      y = textBlock(doc, y, 'Observação', exp.observation || exp.observacao || exp.description || exp.descreva, title);
+      y = textBlock(doc, y, 'Histórico / Parecer', exp.approval_note || exp.motivo || exp.justificativa || `Status atual: ${val(exp.status)}`, title);
+
+      y = section(doc, y, '4. Anexos / Comprovantes Fotográficos', title);
+      y = ensurePage(doc, y, 88, title);
+      await addImageBox(doc, 12, y, 88, 82, 'Comprovante', exp.foto_comprovante || exp.photo || exp.photoComprovante || exp.receiptPhoto);
+      await addImageBox(doc, 110, y, 88, 82, 'Odômetro / KM', exp.foto_odometro || exp.photoOdometro || exp.odometerPhoto);
+      y += 88;
+
+      footer(doc);
+      doc.save(`Despesa-${slug(exp.id)}.pdf`);
+      if (window.App && App.showToast) App.showToast('PDF da despesa baixado com sucesso.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar PDF da despesa: ' + (err.message || err));
+    }
   }
 
-  function ticketHtml(ticket){
-    const parts = parseArray(ticket.parts);
-    const services = parseArray(ticket.services);
-    const partBadges = parts.length ? parts.map(p => `<span class="badge">${esc(p)}</span>`).join('') : '—';
-    const serviceBadges = services.length ? services.map(s => `<span class="badge">${esc(s)}</span>`).join('') : '—';
+  function ticketFromFormOrStore(id){
+    const tickets = (window.Store && Store.getTickets && Store.getTickets()) || [];
+    const saved = tickets.find(t => String(t.id) === String(id)) || {};
 
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Ficha Técnica ${esc(ticket.id)}</title>${baseStyle()}</head><body>
-      <div class="pdf-page">
-        <div class="header"><h1>Ficha Técnica de Manutenção</h1><div class="small">Ordem de Serviço #${esc(ticket.id)}<br>${esc(new Date().toLocaleString('pt-BR'))}</div></div>
-        <div class="subhead">
-          <div class="grid">
-            ${field('OS', ticket.id)}
-            ${field('Status', ticket.status)}
-            ${field('Mecânico Responsável', ticket.mechanic)}
-            ${field('Data / Hora', [ticket.date, ticket.startTime].filter(Boolean).join(' às '))}
-            ${field('Hora de Conclusão', ticket.endTime || '—')}
-            ${field('Unidade Vinculada', ticket.unit || unitName(ticket.unitId))}
-          </div>
-        </div>
+    const form = document.getElementById('ticket-form');
+    const hasForm = form && String(form.dataset.ticketId || '') === String(id);
+    if (!hasForm) {
+      return { ...saved, seller: userName(saved.userId), unit: unitName(saved.unitId) };
+    }
 
-        <div class="section">
-          <h2>1. Identificação do Equipamento</h2>
-          <div class="grid3">
-            ${field('Tipo de Equipamento', ticket.equipmentType)}
-            ${field('Nº Patrimônio / Serial', ticket.equipmentSerial)}
-            ${field('Cliente Vinculado', ticket.client)}
-            ${field('Vendedor Responsável', ticket.seller || userName(ticket.userId))}
-            ${field('Prioridade da OS', ticket.priority)}
-            ${field('Situação Após Atendimento', ticket.eqStatusAfter)}
-          </div>
-          ${field('Descrição Simplificada da Falha', ticket.title)}
-        </div>
-
-        <div class="section">
-          <h2>2. Peças Utilizadas</h2>
-          <div class="badges">${partBadges}</div>
-        </div>
-
-        <div class="section">
-          <h2>3. Serviços Executados</h2>
-          <div class="badges">${serviceBadges}</div>
-        </div>
-
-        <div class="section">
-          <h2>4. Laudo e Diagnóstico Técnico</h2>
-          ${field('Descrição Detalhada do Problema Encontrado', ticket.faultDescription)}
-          ${field('Solução Aplicada / Laudo Técnico', ticket.solutionDescription)}
-          <div class="grid">
-            ${field('Estado do Equipamento Após Atendimento', ticket.eqStatusAfter)}
-            ${field('Carga de Gás (gramas)', ticket.gasCharge ? ticket.gasCharge + 'g' : '—')}
-          </div>
-          ${field('Observações Adicionais', ticket.additionalNotes)}
-        </div>
-
-        <div class="section">
-          <h2>5. Fotos e Vídeo da Visita</h2>
-          <div class="photos four">
-            ${photoBox(ticket.defectPhoto, 'Foto do Defeito')}
-            ${photoBox(ticket.fotoAntes, 'Foto Antes do Reparo')}
-            ${photoBox(ticket.fotoDepois, 'Foto Depois do Reparo')}
-            ${photoBox(ticket.fotoPlaqueta, 'Foto da Plaqueta')}
-          </div>
-          <div style="margin-top:8px">
-            ${linkLine(ticket.defectVideo, 'Link do Vídeo do Defeito')}
-            ${linkLine(ticket.videoAtendimento, 'Link do Vídeo do Atendimento')}
-          </div>
-        </div>
-
-        <div class="section no-break">
-          <h2>6. Assinaturas</h2>
-          <div class="grid" style="gap:40px;margin-top:35px">
-            <div style="border-top:1px solid #111;text-align:center;padding-top:6px">Assinatura do Técnico</div>
-            <div style="border-top:1px solid #111;text-align:center;padding-top:6px">Assinatura do Cliente / Responsável</div>
-          </div>
-        </div>
-
-        <div class="footer">Controle de Campo • Gerado por ${(Store.getLoggedUser && Store.getLoggedUser()?.name) || 'Sistema'} em ${new Date().toLocaleString('pt-BR')}</div>
-      </div>
-    </body></html>`;
-  }
-
-  function buildTicketFromForm(id, saved){
     const startDateVal = document.getElementById('ticket-start-date')?.value || '';
     const dateFormatted = startDateVal ? startDateVal.split('-').reverse().join('/') : (saved.date || '');
     const parts = [];
@@ -854,8 +749,8 @@
       equipmentType: document.getElementById('ticket-eq-type-text')?.value || saved.equipmentType || '',
       equipmentSerial: document.getElementById('ticket-eq-serial')?.value || saved.equipmentSerial || '',
       client: document.getElementById('ticket-client-name')?.value || saved.client || '',
-      seller: document.getElementById('ticket-seller-text')?.value || saved.seller || userName(saved.userId),
-      unit: document.getElementById('ticket-unit-text')?.value || saved.unit || unitName(saved.unitId),
+      seller: document.getElementById('ticket-seller-text')?.value || userName(saved.userId),
+      unit: document.getElementById('ticket-unit-text')?.value || unitName(saved.unitId),
       title: document.getElementById('ticket-title')?.value || saved.title || '',
       priority: document.getElementById('ticket-priority-text')?.value || saved.priority || '',
       faultDescription: document.getElementById('ticket-fault-description')?.value || saved.faultDescription || '',
@@ -863,8 +758,8 @@
       eqStatusAfter: document.getElementById('ticket-eq-status-after')?.value || saved.eqStatusAfter || '',
       gasCharge: document.getElementById('ticket-gas-charge')?.value || saved.gasCharge || '',
       additionalNotes: document.getElementById('ticket-additional-notes')?.value || saved.additionalNotes || '',
-      parts: parts.length ? parts : (saved.parts || []),
-      services: services.length ? services : (saved.services || []),
+      parts: parts.length ? parts : saved.parts,
+      services: services.length ? services : saved.services,
       fotoAntes: imgUrl('preview-img-ticket-foto-antes', saved.fotoAntes),
       fotoDepois: imgUrl('preview-img-ticket-foto-depois', saved.fotoDepois),
       fotoPlaqueta: imgUrl('preview-img-ticket-foto-plaqueta', saved.fotoPlaqueta),
@@ -874,48 +769,157 @@
     };
   }
 
-  function installPdfOverrides(){
-    if (!window.App || !window.Store) return false;
+  async function generateTicketPdfById(id){
+    try {
+      await loadScript(JSPDF_CDN);
+      const ticket = ticketFromFormOrStore(id);
+      if (!ticket || !ticket.id) return alert('Chamado não encontrado.');
 
-    App.generateExpenseComprovantePdf = generateExpenseComprovantePdfFixed;
-    App.generateRegisteredExpensePdf = generateExpenseComprovantePdfFixed;
-    App.generateRegisteredExpensePDF = generateExpenseComprovantePdfFixed;
-    App.generateExpenseReceiptPdf = generateExpenseComprovantePdfFixed;
-    App.generateExpenseProofPdf = generateExpenseComprovantePdfFixed;
+      const title = 'FICHA TÉCNICA DE MANUTENÇÃO - ORDEM DE SERVIÇO';
+      const doc = setupDoc(`Ficha Técnica ${ticket.id}`);
+      pageBorder(doc, title);
 
-    App.printTicketData = function(ticket){
-      return downloadPdfHtml(ticketHtml(ticket || {}), `Ficha-Tecnica-${slug(ticket?.id || 'OS')}.pdf`);
-    };
+      let y = 34;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(11);
+      doc.text(`OS: #${val(ticket.id)}`, 12, y);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(9);
+      doc.text(`Status: ${val(ticket.status)}`, 120, y);
+      y += 10;
 
-    App.generateTicketPdf = function(id){
-      const tickets = (Store.getTickets && Store.getTickets()) || [];
-      const saved = tickets.find(t => String(t.id) === String(id));
-      if (!saved) return alert('Chamado não encontrado.');
-      const ticket = {
-        ...saved,
-        seller: userName(saved.userId),
-        unit: unitName(saved.unitId)
-      };
-      return App.printTicketData(ticket);
-    };
+      y = section(doc, y, '1. Identificação do Atendimento', title);
+      fieldBox(doc, 14, y, 'Mecânico Responsável', ticket.mechanic, 80);
+      fieldBox(doc, 108, y, 'Data de Realização', ticket.date, 80);
+      y += 20;
+      fieldBox(doc, 14, y, 'Hora de Início / Conclusão', `${val(ticket.startTime)} / ${val(ticket.endTime)}`, 80);
+      fieldBox(doc, 108, y, 'Unidade Vinculada', ticket.unit || unitName(ticket.unitId), 80);
+      y += 22;
 
+      y = section(doc, y, '2. Identificação do Equipamento', title);
+      fieldBox(doc, 14, y, 'Tipo de Equipamento', ticket.equipmentType, 54);
+      fieldBox(doc, 75, y, 'Nº Patrimônio / Serial', ticket.equipmentSerial, 54);
+      fieldBox(doc, 136, y, 'Cliente Vinculado', ticket.client, 54);
+      y += 20;
+      fieldBox(doc, 14, y, 'Vendedor Responsável', ticket.seller || userName(ticket.userId), 54);
+      fieldBox(doc, 75, y, 'Prioridade', ticket.priority, 54);
+      fieldBox(doc, 136, y, 'Estado Pós Atendimento', ticket.eqStatusAfter, 54);
+      y += 20;
+      y = textBlock(doc, y, 'Descrição Simplificada da Falha', ticket.title, title);
+
+      y = section(doc, y, '3. Peças Utilizadas', title);
+      const parts = list(ticket.parts);
+      y = ensurePage(doc, y, 14 + Math.ceil((parts.length || 1)/4)*8, title);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(8);
+      if (parts.length) {
+        let x = 14;
+        parts.forEach(p => {
+          const w = Math.min(55, Math.max(25, doc.getTextWidth(String(p)) + 8));
+          if (x + w > 195) { x = 14; y += 8; }
+          doc.roundedRect(x, y-5, w, 7, 1.5, 1.5);
+          doc.text(String(p).toUpperCase(), x+3, y);
+          x += w + 4;
+        });
+      } else {
+        doc.text('—', 14, y);
+      }
+      y += 14;
+
+      y = section(doc, y, '4. Serviços Executados', title);
+      const services = list(ticket.services);
+      y = ensurePage(doc, y, 14 + Math.ceil((services.length || 1)/4)*8, title);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(8);
+      if (services.length) {
+        let x = 14;
+        services.forEach(s => {
+          const w = Math.min(55, Math.max(25, doc.getTextWidth(String(s)) + 8));
+          if (x + w > 195) { x = 14; y += 8; }
+          doc.roundedRect(x, y-5, w, 7, 1.5, 1.5);
+          doc.text(String(s).toUpperCase(), x+3, y);
+          x += w + 4;
+        });
+      } else {
+        doc.text('—', 14, y);
+      }
+      y += 14;
+
+      y = section(doc, y, '5. Laudo e Diagnóstico Técnico', title);
+      y = textBlock(doc, y, 'Descrição Detalhada do Problema Encontrado', ticket.faultDescription, title);
+      y = textBlock(doc, y, 'Solução Aplicada / Laudo Técnico', ticket.solutionDescription, title);
+      fieldBox(doc, 14, y, 'Carga de Gás (gramas)', ticket.gasCharge ? `${ticket.gasCharge}g` : '—', 80);
+      fieldBox(doc, 108, y, 'Observações Adicionais', ticket.additionalNotes, 80);
+      y += 23;
+
+      y = section(doc, y, '6. Fotos e Vídeo da Visita', title);
+      y = ensurePage(doc, y, 145, title);
+      await addImageBox(doc, 12, y, 88, 66, 'Foto do Defeito', ticket.defectPhoto);
+      await addImageBox(doc, 110, y, 88, 66, 'Foto Antes do Reparo', ticket.fotoAntes);
+      y += 72;
+      y = ensurePage(doc, y, 76, title);
+      await addImageBox(doc, 12, y, 88, 66, 'Foto Depois do Reparo', ticket.fotoDepois);
+      await addImageBox(doc, 110, y, 88, 66, 'Foto da Plaqueta', ticket.fotoPlaqueta);
+      y += 72;
+
+      const v1 = mediaUrl(ticket.defectVideo);
+      const v2 = mediaUrl(ticket.videoAtendimento);
+      if (v1 || v2) {
+        y = ensurePage(doc, y, 16, title);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(8);
+        doc.text('Links de vídeos:', 14, y);
+        y += 5;
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(7);
+        doc.setTextColor(37,99,235);
+        if (v1) { doc.text(doc.splitTextToSize('Vídeo do defeito: ' + v1, 180), 14, y); y += 8; }
+        if (v2) { doc.text(doc.splitTextToSize('Vídeo do atendimento: ' + v2, 180), 14, y); y += 8; }
+        doc.setTextColor(0,0,0);
+      }
+
+      y = ensurePage(doc, y, 35, title);
+      y += 22;
+      doc.line(20, y, 90, y);
+      doc.line(120, y, 190, y);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(8);
+      doc.text('Assinatura do Técnico', 55, y+5, {align:'center'});
+      doc.text('Assinatura do Cliente / Responsável', 155, y+5, {align:'center'});
+
+      footer(doc);
+      doc.save(`Ficha-Tecnica-${slug(ticket.id)}.pdf`);
+      if (window.App && App.showToast) App.showToast('PDF do chamado baixado com sucesso.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao gerar PDF do chamado: ' + (err.message || err));
+    }
+  }
+
+  function install(){
+    if (!window.App) return false;
+
+    App.generateExpenseComprovantePdf = generateExpensePdf;
+    App.generateRegisteredExpensePdf = generateExpensePdf;
+    App.generateRegisteredExpensePDF = generateExpensePdf;
+    App.generateExpenseReceiptPdf = generateExpensePdf;
+    App.generateExpenseProofPdf = generateExpensePdf;
+
+    App.generateTicketPdf = generateTicketPdfById;
     App.generateTicketPdfFromForm = function(){
       const form = document.getElementById('ticket-form');
-      if (!form) return;
-      const id = form.dataset.ticketId;
+      const id = form && form.dataset.ticketId;
       if (!id) return alert('Nenhuma Ordem de Serviço carregada no formulário.');
-      const tickets = (Store.getTickets && Store.getTickets()) || [];
-      const saved = tickets.find(t => String(t.id) === String(id)) || {};
-      const ticket = buildTicketFromForm(id, saved);
-      return App.printTicketData(ticket);
+      return generateTicketPdfById(id);
+    };
+    App.printTicketData = function(ticket){
+      return generateTicketPdfById(ticket && ticket.id);
     };
 
     return true;
   }
 
-  function start(){
-    installPdfOverrides();
-  }
+  function start(){ install(); }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
