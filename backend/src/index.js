@@ -1393,6 +1393,14 @@ const ALLOWED_STORE_KEYS = new Set([
   'notification_emails'
 ]);
 
+function getStoreKey(req, key) {
+  if (key === 'company_identity' || key === 'units') {
+    return key;
+  }
+  const userId = req.user && req.user.id ? String(req.user.id) : 'global';
+  return `${userId}_${key}`;
+}
+
 function getStoreCompanyId(req) {
   return req.user && req.user.empresa_id ? String(req.user.empresa_id) : '001';
 }
@@ -1404,9 +1412,19 @@ function safeParseStoreJson(value, fallback = null) {
 app.get('/api/store', async (req, res) => {
   try {
     const companyId = getStoreCompanyId(req);
-    const rows = await db('app_kv_store').where({ company_id: companyId });
+    const userId = req.user && req.user.id ? String(req.user.id) : 'global';
+    const rows = await db('app_kv_store')
+      .where({ company_id: companyId })
+      .andWhere(function() {
+        this.where('store_key', 'company_identity')
+            .orWhere('store_key', 'units')
+            .orWhere('store_key', 'like', `${userId}_%`);
+      });
     const payload = {};
-    for (const row of rows) payload[row.store_key] = safeParseStoreJson(row.data_json, null);
+    for (const row of rows) {
+      const cleanKey = row.store_key.replace(`${userId}_`, '');
+      payload[cleanKey] = safeParseStoreJson(row.data_json, null);
+    }
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -1419,7 +1437,8 @@ app.get('/api/store/:key', async (req, res) => {
     const key = req.params.key;
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
-    const row = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+    const dbKey = getStoreKey(req, key);
+    const row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     res.json({ key, data: row ? safeParseStoreJson(row.data_json, null) : null });
   } catch (err) {
     console.error('Erro ao carregar item da store:', err);
@@ -1432,11 +1451,12 @@ app.post('/api/store/:key', async (req, res) => {
     const key = req.params.key;
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
+    const dbKey = getStoreKey(req, key);
     const data = Object.prototype.hasOwnProperty.call(req.body || {}, 'data') ? req.body.data : req.body;
     let dataJson = JSON.stringify(data == null ? null : data);
     
     if (['clients', 'prospects', 'equipments'].includes(key) && Array.isArray(data)) {
-      const existingRow = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+      const existingRow = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
       if (existingRow) {
         let existingList = safeParseStoreJson(existingRow.data_json, []);
         if (Array.isArray(existingList)) {
@@ -1480,10 +1500,10 @@ app.post('/api/store/:key', async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: key }).first();
+    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     const previousData = existing ? safeParseStoreJson(existing.data_json, []) : [];
     if (existing) {
-      await db('app_kv_store').where({ company_id: companyId, store_key: key }).update({
+      await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).update({
         data_json: dataJson,
         updated_by: req.user.id,
         updated_at: now
@@ -1491,7 +1511,7 @@ app.post('/api/store/:key', async (req, res) => {
     } else {
       await db('app_kv_store').insert({
         company_id: companyId,
-        store_key: key,
+        store_key: dbKey,
         data_json: dataJson,
         updated_by: req.user.id,
         created_at: now,
@@ -2789,8 +2809,13 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
     // 3. Sincronizar com o KV store 'equipments'
     try {
       const companyId = req.user.empresa_id || '001';
-      const kvRow = await db('app_kv_store').where({ company_id: companyId, store_key: 'equipments' }).first();
-      if (kvRow) {
+      const kvRows = await db('app_kv_store')
+        .where({ company_id: companyId })
+        .andWhere(function() {
+          this.where('store_key', 'equipments')
+              .orWhere('store_key', 'like', '%_equipments');
+        });
+      for (const kvRow of kvRows) {
         let equipments = safeParseStoreJson(kvRow.data_json, []);
         if (Array.isArray(equipments)) {
           let updatedAny = false;
@@ -2863,7 +2888,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
           }
 
           if (updatedAny) {
-            await db('app_kv_store').where({ company_id: companyId, store_key: 'equipments' }).update({
+            await db('app_kv_store').where({ id: kvRow.id }).update({
               data_json: JSON.stringify(equipments),
               updated_by: req.user.id,
               updated_at: now

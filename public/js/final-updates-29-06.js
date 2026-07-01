@@ -348,7 +348,8 @@
   }
   function enhanceBulkDeletes(){
     addBulkForTable('clients-table-body','getClients','saveClients','clientes');
-    addBulkForTable('movements-table-body','getMovements','saveMovements','movimentações');
+    // movements has its own native bulk delete implementation, do not duplicate:
+    // addBulkForTable('movements-table-body','getMovements','saveMovements','movimentações');
     addBulkForTable('tickets-table-body','getTickets','saveTickets','chamados');
     addBulkForTable('expenses-table-body','getExpenses','saveExpenses','despesas');
     addBulkForTable('balances-table-body','getBalanceRequests','saveBalances','saldos');

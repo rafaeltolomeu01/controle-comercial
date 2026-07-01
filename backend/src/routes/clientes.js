@@ -64,16 +64,21 @@ router.delete('/api/clientes/:id', async (req, res) => {
     // Remove também da lista sincronizada do frontend (app_kv_store), senão o cliente volta
     // ao abrir em outro aparelho ou depois de uma sincronização.
     const companyId = (existing && existing.empresa_id) || user.empresa_id || user.company_id || '001';
-    const stores = await db('app_kv_store').where({ store_key: 'clients' }).modify(q => {
-      if (companyId) q.where({ company_id: companyId });
-    });
+    const stores = await db('app_kv_store')
+      .where(function() {
+        this.where('store_key', 'clients')
+            .orWhere('store_key', 'like', '%_clients');
+      })
+      .modify(q => {
+        if (companyId) q.where({ company_id: companyId });
+      });
     for (const row of stores) {
       let data = [];
       try { data = JSON.parse(row.data_json || '[]'); } catch (_) { data = []; }
       if (!Array.isArray(data)) continue;
       const next = data.filter(c => String(c && c.id) !== String(id));
       if (next.length !== data.length) {
-        await db('app_kv_store').where({ company_id: row.company_id, store_key: 'clients' }).update({
+        await db('app_kv_store').where({ company_id: row.company_id, store_key: row.store_key }).update({
           data_json: JSON.stringify(next),
           updated_by: user.id || 'admin',
           updated_at: new Date().toISOString()

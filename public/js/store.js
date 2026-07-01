@@ -208,14 +208,18 @@ const Store = {
     }
   },
 
+  getUserScope() {
+    const user = this.getLoggedUser();
+    return user && user.id ? String(user.id) : DATA_GLOBAL_SCOPE;
+  },
+
   /**
    * Generic List getter
    */
   getList(key, defaultData) {
     try {
-      // A chave dos dados não pode depender do nome/CNPJ visual da empresa.
-      // Se a empresa for renomeada nas configurações, usuários, clientes e saldos não podem sumir.
-      const stableKey = DATA_KEY_PREFIX + DATA_GLOBAL_SCOPE + '_' + key;
+      const scope = (key === 'company_identity' || key === 'units') ? DATA_GLOBAL_SCOPE : this.getUserScope();
+      const stableKey = DATA_KEY_PREFIX + scope + '_' + key;
       const stableData = localStorage.getItem(stableKey);
       if (stableData) return JSON.parse(stableData);
 
@@ -253,7 +257,8 @@ const Store = {
    */
   saveList(key, data) {
     try {
-      const stableKey = DATA_KEY_PREFIX + DATA_GLOBAL_SCOPE + '_' + key;
+      const scope = (key === 'company_identity' || key === 'units') ? DATA_GLOBAL_SCOPE : this.getUserScope();
+      const stableKey = DATA_KEY_PREFIX + scope + '_' + key;
       localStorage.setItem(stableKey, JSON.stringify(data));
       this.saveToBackend(key, data);
       return true;
@@ -346,9 +351,44 @@ const Store = {
   },
 
   clearLoggedUser() {
+    const user = this.getLoggedUser();
+    const userId = user && user.id ? String(user.id) : null;
+
     localStorage.removeItem('controle_campo_logged_user');
     localStorage.removeItem('controle_campo_auth');
     localStorage.removeItem('controle_campo_token');
+
+    if (userId) {
+      const prefix = DATA_KEY_PREFIX + userId + '_';
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith(prefix)) {
+          localStorage.removeItem(k);
+        }
+        if (k.startsWith('controle_campo_fast_') && k.includes(`_${userId}_`)) {
+          localStorage.removeItem(k);
+        }
+        if (k.includes(userId)) {
+          localStorage.removeItem(k);
+        }
+      });
+    }
+
+    try {
+      document.querySelectorAll('form').forEach(form => {
+        try { form.reset(); } catch(e) {}
+      });
+      document.querySelectorAll('input, select, textarea').forEach(el => {
+        if (el.type !== 'submit' && el.type !== 'button') {
+          try {
+            if (el.type === 'checkbox' || el.type === 'radio') {
+              el.checked = false;
+            } else {
+              el.value = '';
+            }
+          } catch(e) {}
+        }
+      });
+    } catch (e) {}
   },
 
   getToken() {

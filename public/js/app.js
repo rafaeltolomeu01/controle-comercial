@@ -139,6 +139,15 @@ const App = {
       return true;
     } catch (err) {
       console.warn('Sessão inválida ou expirada:', err);
+      const errMsg = String(err.message || '').toLowerCase();
+      const isNetwork = errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('failed') || errMsg.includes('timeout') || errMsg.includes('connection') || !navigator.onLine;
+      if (isNetwork) {
+        this.isLoggedIn = true;
+        if (!window.location.hash || window.location.hash === '#login') {
+          window.location.hash = '#dashboard';
+        }
+        return true;
+      }
       Store.clearLoggedUser();
       this.isLoggedIn = false;
       window.location.hash = '#login';
@@ -5566,7 +5575,8 @@ const App = {
   getFastCacheKey(key) {
     const user = Store.getLoggedUser ? (Store.getLoggedUser() || {}) : {};
     const companyId = user.empresa_id || '001';
-    return `controle_campo_fast_${companyId}_${key}`;
+    const userId = user.id || 'global';
+    return `controle_campo_fast_${companyId}_${userId}_${key}`;
   },
 
   readFastCache(key, fallback = []) {
@@ -6280,8 +6290,11 @@ const App = {
       }
     } catch (err) {
       console.warn('Erro ao validar sessão:', err);
-      // Qualquer falha de validação da sessão deve derrubar o usuário.
-      // Não pode manter painel aberto com token inválido/ausente/expirado.
+      if (!navigator.onLine) return;
+      const errMsg = String(err.message || '').toLowerCase();
+      if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('failed') || errMsg.includes('timeout') || errMsg.includes('connection')) {
+        return; // Network/connectivity error, do not force logout
+      }
       this.forceLogout();
     }
   },
