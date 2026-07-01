@@ -1,0 +1,37 @@
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Exportação de Mídias e Documentos Coletados</span>
+  </div>
+  <div style="padding: 16px;">
+    <p style="color:var(--text-muted); margin:0; font-size:0.85rem; line-height:1.4;">
+      Este módulo centraliza todas as fotos, comprovantes de despesas, plaquetas e arquivos enviados nos diversos módulos do sistema (Clientes, Movimentações, Chamados Técnicos e Despesas). Use a barra de filtros abaixo para refinar os arquivos de interesse e exportar a planilha contendo os caminhos de download e metadados.
+    </p>
+  </div>
+</div>
+
+<div class="card" style="margin-top: 16px;">
+  <div class="card-header">
+    <span class="card-title">Lista de Arquivos e Documentos Enviados</span>
+  </div>
+  
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome do Arquivo</th>
+          <th>Tipo</th>
+          <th>Cliente Relacionado</th>
+          <th>Vendedor</th>
+          <th>Unidade</th>
+          <th>Data de Envio</th>
+          <th>Módulo de Origem</th>
+          <th>Registro Relacionado</th>
+          <th style="width: 100px;">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="files-table-body">
+        <!-- Injected dynamically by FiltersManager.renderExportacaoArquivosPage() -->
+      </tbody>
+    </table>
+  </div>
+</div>

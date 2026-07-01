@@ -437,6 +437,12 @@ const App = {
           App.loadNotificationPage();
         }
         break;
+      case '#exportacao-arquivos':
+        headerTitle.textContent = 'Exportação de Mídias e Documentos';
+        if (window.FiltersManager && FiltersManager.renderExportacaoArquivosPage) {
+          FiltersManager.renderExportacaoArquivosPage();
+        }
+        break;
       case '#relatorios':
         headerTitle.textContent = 'Relatórios Gerenciais';
         if (Store.syncAllFromBackend) Store.syncAllFromBackend({ forceRemote: true }).then(() => UI.renderDashboard());
