@@ -736,7 +736,7 @@ const UI = {
         actionBtn = isStaff ? `<button class="btn btn-success btn-sm" onclick="App.openFichaTecnica('${ticket.id}')">FICHA TÉCNICA</button>` : `<span style="font-size:0.75rem; color:var(--text-muted);">Em Atendimento</span>`;
       } else if (ticket.status === 'Resolvido') {
         statusClass = 'badge-success';
-        actionBtn = `<span style="font-size:0.75rem; color:var(--text-muted);">OS Finalizada</span>`;
+        actionBtn = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.openFichaTecnica('${ticket.id}')">VER LAUDO</button>`;
       }
 
       const partsDisplay = ticket.parts && ticket.parts.length > 0 

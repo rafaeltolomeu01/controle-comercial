@@ -2991,6 +2991,40 @@ const App = {
     if (form) {
       form.dataset.ticketId = id;
       
+      const isResolved = ticket.status === 'Resolvido';
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        if (isResolved) {
+          submitBtn.style.display = 'none';
+        } else {
+          submitBtn.style.display = 'block';
+        }
+      }
+
+      // Enable/Disable inputs based on status
+      const inputs = form.querySelectorAll('input, textarea, select');
+      inputs.forEach(input => {
+        if (input.id === 'ticket-mechanic' || input.id === 'ticket-eq-type-text' || 
+            input.id === 'ticket-eq-serial' || input.id === 'ticket-client-name' || 
+            input.id === 'ticket-seller-text' || input.id === 'ticket-unit-text' || 
+            input.id === 'ticket-title' || input.id === 'ticket-priority-text') {
+          return; // Always read-only
+        }
+        input.disabled = isResolved;
+      });
+
+      // Enable/Disable toggle buttons based on status
+      const toggleBtns = form.querySelectorAll('.btn-part-toggle');
+      toggleBtns.forEach(btn => {
+        if (isResolved) {
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.7';
+        } else {
+          btn.style.pointerEvents = 'auto';
+          btn.style.opacity = '1';
+        }
+      });
+
       const loggedUser = Store.getLoggedUser();
       const mechInput = document.getElementById('ticket-mechanic');
       if (mechInput) mechInput.value = ticket.mechanic || (loggedUser ? loggedUser.name : '');
@@ -3087,13 +3121,17 @@ const App = {
         }
       });
 
-      // Display previews of already selected files if cache exists
+      // Display previews of already selected files
       const renderPreviewIfExists = (url, imgId, containerId) => {
         const img = document.getElementById(imgId);
         const container = document.getElementById(containerId);
-        if (url && img && container && window.TempPhotosCache && window.TempPhotosCache[url]) {
-          img.src = window.TempPhotosCache[url];
+        const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
+        const isValid = finalUrl && finalUrl !== 'null' && finalUrl !== 'undefined' && finalUrl !== '/uploads/null' && finalUrl !== '/uploads/undefined' && finalUrl !== '/uploads/';
+        if (isValid && img && container) {
+          img.src = finalUrl;
           container.style.display = 'block';
+          img.style.cursor = 'pointer';
+          img.onclick = () => App.showFacadeImage(finalUrl);
         } else if (container) {
           container.style.display = 'none';
         }
@@ -6358,10 +6396,134 @@ App.generateTicketPdf = function(id) {
   const ticket = tickets.find(t => String(t.id) === String(id));
   if (!ticket) return alert('Chamado não encontrado.');
 
+  App.printTicketData({
+    id: ticket.id,
+    date: ticket.date,
+    status: ticket.status,
+    mechanic: ticket.mechanic || (UI.getUserName ? UI.getUserName(ticket.userId) : ''),
+    startTime: ticket.startTime,
+    endTime: ticket.endTime,
+    equipmentType: ticket.equipmentType,
+    equipmentSerial: ticket.equipmentSerial,
+    client: ticket.client,
+    seller: UI.getUserName ? UI.getUserName(ticket.userId) : ticket.userId,
+    unit: UI.getUnitName ? UI.getUnitName(ticket.unitId) : ticket.unitId,
+    title: ticket.title,
+    priority: ticket.priority,
+    faultDescription: ticket.faultDescription,
+    solutionDescription: ticket.solutionDescription,
+    eqStatusAfter: ticket.eqStatusAfter,
+    gasCharge: ticket.gasCharge,
+    additionalNotes: ticket.additionalNotes,
+    parts: ticket.parts,
+    services: ticket.services,
+    fotoAntes: ticket.fotoAntes,
+    fotoDepois: ticket.fotoDepois,
+    fotoPlaqueta: ticket.fotoPlaqueta,
+    defectPhoto: ticket.defectPhoto
+  });
+};
+
+App.generateTicketPdfFromForm = function() {
+  const form = document.getElementById('ticket-form');
+  if (!form) return;
+  const id = form.dataset.ticketId;
+  if (!id) return alert('Nenhuma Ordem de Serviço carregada no formulário.');
+
+  const tickets = (Store.getTickets && Store.getTickets()) || [];
+  const ticket = tickets.find(t => String(t.id) === String(id)) || {};
+
+  // Gather current values from form
+  const mechanic = document.getElementById('ticket-mechanic')?.value || '';
+  const startDateVal = document.getElementById('ticket-start-date')?.value || '';
+  const dateFormatted = startDateVal ? startDateVal.split('-').reverse().join('/') : '';
+  const startTime = document.getElementById('ticket-start-time')?.value || '';
+  const endTime = document.getElementById('ticket-end-time')?.value || '';
+  
+  const equipmentType = document.getElementById('ticket-eq-type-text')?.value || '';
+  const equipmentSerial = document.getElementById('ticket-eq-serial')?.value || '';
+  const client = document.getElementById('ticket-client-name')?.value || '';
+  const seller = document.getElementById('ticket-seller-text')?.value || '';
+  const unit = document.getElementById('ticket-unit-text')?.value || '';
+  const title = document.getElementById('ticket-title')?.value || '';
+  const priority = document.getElementById('ticket-priority-text')?.value || '';
+
+  const faultDescription = document.getElementById('ticket-fault-description')?.value || '';
+  const solutionDescription = document.getElementById('ticket-solution-description')?.value || '';
+  const eqStatusAfter = document.getElementById('ticket-eq-status-after')?.value || '';
+  const gasCharge = document.getElementById('ticket-gas-charge')?.value || '';
+  const additionalNotes = document.getElementById('ticket-additional-notes')?.value || '';
+
+  // Parts
+  const parts = [];
+  document.querySelectorAll('#modal-ficha-tecnica .btn-part-toggle[data-part].active').forEach(btn => {
+    parts.push(btn.getAttribute('data-part'));
+  });
+  const outraPecaInput = document.getElementById('ticket-outra-peca');
+  if (outraPecaInput && outraPecaInput.value.trim() && document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-part="Outra Peça"].active')) {
+    parts.push('Outra: ' + outraPecaInput.value.trim());
+  }
+
+  // Services
+  const services = [];
+  document.querySelectorAll('#modal-ficha-tecnica .btn-part-toggle[data-service].active').forEach(btn => {
+    services.push(btn.getAttribute('data-service'));
+  });
+  const outroServicoInput = document.getElementById('ticket-outro-servico');
+  if (outroServicoInput && outroServicoInput.value.trim() && document.querySelector('#modal-ficha-tecnica .btn-part-toggle[data-service="Outro Serviço"].active')) {
+    services.push('Outro: ' + outroServicoInput.value.trim());
+  }
+
+  // Photos
+  const getPhotoUrl = (imgId, defaultUrl) => {
+    const img = document.getElementById(imgId);
+    if (img && img.parentElement && img.parentElement.style.display !== 'none' && img.src) {
+      return img.src;
+    }
+    return defaultUrl || '';
+  };
+  
+  const fotoAntes = getPhotoUrl('preview-img-ticket-foto-antes', ticket.fotoAntes);
+  const fotoDepois = getPhotoUrl('preview-img-ticket-foto-depois', ticket.fotoDepois);
+  const fotoPlaqueta = getPhotoUrl('preview-img-ticket-foto-plaqueta', ticket.fotoPlaqueta);
+  const defectPhoto = ticket.defectPhoto || '';
+
+  App.printTicketData({
+    id,
+    date: dateFormatted,
+    status: ticket.status || 'Em Atendimento',
+    mechanic,
+    startTime,
+    endTime,
+    equipmentType,
+    equipmentSerial,
+    client,
+    seller,
+    unit,
+    title,
+    priority,
+    faultDescription,
+    solutionDescription,
+    eqStatusAfter,
+    gasCharge,
+    additionalNotes,
+    parts,
+    services,
+    fotoAntes,
+    fotoDepois,
+    fotoPlaqueta,
+    defectPhoto
+  });
+};
+
+App.printTicketData = function(ticket) {
   const esc = (v) => String(v ?? '—').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
   
-  const partsStr = Array.isArray(ticket.parts) ? ticket.parts.join(', ') : (ticket.parts || '—');
-  const servicesStr = Array.isArray(ticket.services) ? ticket.services.join(', ') : (ticket.services || '—');
+  const partsArray = Array.isArray(ticket.parts) ? ticket.parts : (ticket.parts ? String(ticket.parts).split(',').map(x => x.trim()) : []);
+  const servicesArray = Array.isArray(ticket.services) ? ticket.services : (ticket.services ? String(ticket.services).split(',').map(x => x.trim()) : []);
+  
+  const partsHtml = partsArray.map(p => `<span class="badge-item">${esc(p)}</span>`).join(' ') || '—';
+  const servicesHtml = servicesArray.map(s => `<span class="badge-item">${esc(s)}</span>`).join(' ') || '—';
 
   const addPhoto = (url, label) => {
     const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
@@ -6370,79 +6532,263 @@ App.generateTicketPdf = function(id) {
     return `<div class="photo"><b>${esc(label)}</b><img src="${esc(finalUrl)}"></div>`;
   };
 
-  const html = `<!doctype html><html><head><title>Ficha Técnica de Manutenção - OS #${esc(ticket.id)}</title><style>
-    body{font-family:Arial,sans-serif;background:#fff;color:#111;margin:24px;font-size:12px}
-    h1{color:#2563eb;font-size:18px;margin:0 0 4px}
-    h3{color:#2563eb;font-size:13px;border-bottom:1px solid #bbb;padding-bottom:4px;margin-top:12px;margin-bottom:8px}
-    .header{display:flex;justify-content:space-between;border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}
-    p{margin:4px 0}
-    .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    .photo{border:1px solid #bbb;border-radius:8px;padding:6px;text-align:center;break-inside:avoid}
-    .photo img{max-width:100%;height:100px;object-fit:cover;margin-top:4px}
-    .empty{height:60px;display:flex;align-items:center;justify-content:center;color:#777;border:1px dashed #bbb;margin-top:4px;font-size:11px}
-    .footer{margin-top:24px;font-size:10px;color:#555;border-top:1px solid #bbb;padding-top:8px}
-    .signature{margin-top:30px;border-top:1px dashed #bbb;padding-top:10px;display:flex;justify-content:space-between}
-    .sig-box{width:45%;border-top:1px solid #777;text-align:center;margin-top:40px;padding-top:5px;font-size:11px}
-    @media print{button{display:none}.grid{grid-template-columns:1fr 1fr}}
-  </style></head><body>
-    <h1>Ficha Técnica de Manutenção - Ordem de Serviço</h1>
-    <div class="header">
-      <div><b>OS:</b> #${esc(ticket.id)}</div>
-      <div><b>Data:</b> ${esc(ticket.date)}</div>
-      <div><b>Status:</b> ${esc(ticket.status)}</div>
-    </div>
-    
-    <div class="grid">
-      <div class="box">
-        <h3>1. Identificação do Atendimento</h3>
-        <p><b>Mecânico Responsável:</b> ${esc(ticket.mechanic || (UI.getUserName ? UI.getUserName(ticket.userId) : ''))}</p>
-        <p><b>Data:</b> ${esc(ticket.date)}</p>
-        <p><b>Hora de Conclusão:</b> ${esc(ticket.endTime)}</p>
-      </div>
-      <div class="box">
-        <h3>2. Identificação do Equipamento</h3>
-        <p><b>Nº Patrimônio / Serial:</b> ${esc(ticket.equipmentSerial)}</p>
-        <p><b>Cliente Vinculado:</b> ${esc(ticket.client)}</p>
-        <p><b>Situação após Atendimento:</b> ${esc(ticket.eqStatusAfter)}</p>
-      </div>
-    </div>
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Ficha Técnica de Manutenção - OS #${esc(ticket.id)}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fff;
+      color: #000;
+      margin: 20px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    .header-table td {
+      border: 1px solid #000;
+      padding: 10px;
+    }
+    .title-cell {
+      text-align: center;
+      font-weight: bold;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+    h3 {
+      font-size: 11px;
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 3px;
+      margin-top: 15px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .section-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    .section-table td {
+      border: 1px solid #000;
+      padding: 8px;
+      vertical-align: top;
+    }
+    .label {
+      font-weight: bold;
+      text-transform: uppercase;
+      font-size: 9px;
+      color: #333;
+      display: block;
+      margin-bottom: 3px;
+    }
+    .val {
+      font-size: 11px;
+      font-family: monospace;
+    }
+    .badge-item {
+      display: inline-block;
+      border: 1px solid #000;
+      border-radius: 3px;
+      padding: 3px 6px;
+      font-size: 10px;
+      margin: 2px;
+      background: #fff;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .photos {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 5px;
+    }
+    .photo {
+      border: 1px solid #000;
+      padding: 6px;
+      text-align: center;
+      break-inside: avoid;
+    }
+    .photo img {
+      max-width: 100%;
+      height: 120px;
+      object-fit: contain;
+      margin-top: 4px;
+      filter: grayscale(100%);
+      -webkit-filter: grayscale(100%);
+    }
+    .empty {
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      border: 1px dashed #000;
+      margin-top: 4px;
+      font-size: 11px;
+    }
+    .signature {
+      margin-top: 40px;
+      display: flex;
+      justify-content: space-between;
+      break-inside: avoid;
+    }
+    .sig-box {
+      width: 45%;
+      border-top: 1.5px solid #000;
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 5px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .footer {
+      margin-top: 25px;
+      font-size: 9px;
+      color: #555;
+      border-top: 1px solid #000;
+      padding-top: 6px;
+      text-align: center;
+    }
+    @media print {
+      button { display: none; }
+      body { margin: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td class="title-cell" colspan="2">Ficha Técnica de Manutenção - Ordem de Serviço</td>
+    </tr>
+    <tr>
+      <td style="width: 50%;"><b>OS:</b> #${esc(ticket.id)}</td>
+      <td style="width: 50%;"><b>Status:</b> ${esc(ticket.status)}</td>
+    </tr>
+  </table>
 
-    <div class="box">
-      <h3>3. Laudo Técnico e Descrições</h3>
-      <p><b>Chamado original:</b> ${esc(ticket.title)}</p>
-      <p><b>Prioridade:</b> ${esc(ticket.priority)}</p>
-      <p><b>Problema Encontrado:</b> ${esc(ticket.faultDescription)}</p>
-      <p><b>Solução Aplicada:</b> ${esc(ticket.solutionDescription)}</p>
-      <p><b>Carga de Gás (gramas):</b> ${esc(ticket.gasCharge)}</p>
-      <p><b>Observações Adicionais:</b> ${esc(ticket.additionalNotes)}</p>
-    </div>
+  <h3>1. Identificação do Atendimento</h3>
+  <table class="section-table">
+    <tr>
+      <td style="width: 50%;">
+        <span class="label">Mecânico Responsável</span>
+        <span class="val">${esc(ticket.mechanic)}</span>
+      </td>
+      <td style="width: 50%;">
+        <span class="label">Data de Realização</span>
+        <span class="val">${esc(ticket.date)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%;">
+        <span class="label">Hora de Início / Conclusão</span>
+        <span class="val">${esc(ticket.startTime || '—')} / ${esc(ticket.endTime || '—')}</span>
+      </td>
+      <td style="width: 50%;">
+        <span class="label">Unidade Vinculada</span>
+        <span class="val">${esc(ticket.unit)}</span>
+      </td>
+    </tr>
+  </table>
 
-    <div class="box">
-      <h3>4. Peças e Serviços</h3>
-      <p><b>Peças Utilizadas:</b> ${esc(partsStr)}</p>
-      <p><b>Serviços Executados:</b> ${esc(servicesStr)}</p>
-    </div>
+  <h3>2. Identificação do Equipamento</h3>
+  <table class="section-table">
+    <tr>
+      <td style="width: 33%;">
+        <span class="label">Tipo de Equipamento</span>
+        <span class="val">${esc(ticket.equipmentType)}</span>
+      </td>
+      <td style="width: 33%;">
+        <span class="label">Nº Patrimônio / Serial</span>
+        <span class="val">${esc(ticket.equipmentSerial)}</span>
+      </td>
+      <td style="width: 34%;">
+        <span class="label">Cliente Vinculado</span>
+        <span class="val">${esc(ticket.client)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 33%;">
+        <span class="label">Vendedor Responsável</span>
+        <span class="val">${esc(ticket.seller)}</span>
+      </td>
+      <td style="width: 33%;">
+        <span class="label">Prioridade da OS</span>
+        <span class="val">${esc(ticket.priority)}</span>
+      </td>
+      <td style="width: 34%;">
+        <span class="label">Situação após Atendimento</span>
+        <span class="val">${esc(ticket.eqStatusAfter)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="3">
+        <span class="label">Descrição Simplificada da Falha</span>
+        <span class="val">${esc(ticket.title)}</span>
+      </td>
+    </tr>
+  </table>
 
-    <div class="box">
-      <h3>5. Fotos do Atendimento</h3>
-      <div class="photos">
-        ${addPhoto(ticket.defectPhoto, 'Foto Defeito')}
-        ${addPhoto(ticket.fotoAntes, 'Foto Antes')}
-        ${addPhoto(ticket.fotoDepois, 'Foto Depois')}
-        ${addPhoto(ticket.fotoPlaqueta, 'Foto Plaqueta')}
-      </div>
-    </div>
+  <h3>3. Peças Utilizadas</h3>
+  <div style="border: 1px solid #000; padding: 10px; margin-bottom: 12px;">
+    ${partsHtml}
+  </div>
 
-    <div class="signature">
-      <div class="sig-box">Assinatura do Técnico</div>
-      <div class="sig-box">Assinatura do Cliente / Responsável</div>
-    </div>
+  <h3>4. Serviços Executados</h3>
+  <div style="border: 1px solid #000; padding: 10px; margin-bottom: 12px;">
+    ${servicesHtml}
+  </div>
 
-    <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} - Controle de Campo</div>
-    <script>setTimeout(()=>window.print(),500)<\/script>
-  </body></html>`;
+  <h3>5. Laudo e Diagnóstico Técnico</h3>
+  <table class="section-table">
+    <tr>
+      <td colspan="2">
+        <span class="label">Descrição Detalhada do Problema Encontrado</span>
+        <span class="val" style="white-space: pre-wrap;">${esc(ticket.faultDescription)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2">
+        <span class="label">Solução Aplicada / Laudo Técnico</span>
+        <span class="val" style="white-space: pre-wrap;">${esc(ticket.solutionDescription)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 50%;">
+        <span class="label">Carga de Gás (gramas)</span>
+        <span class="val">${ticket.gasCharge ? (esc(ticket.gasCharge) + 'g') : '—'}</span>
+      </td>
+      <td style="width: 50%;">
+        <span class="label">Observações Adicionais</span>
+        <span class="val">${esc(ticket.additionalNotes)}</span>
+      </td>
+    </tr>
+  </table>
+
+  <h3>6. Fotos da Visita</h3>
+  <div class="photos">
+    ${addPhoto(ticket.defectPhoto, 'Foto Defeito')}
+    ${addPhoto(ticket.fotoAntes, 'Foto Antes')}
+    ${addPhoto(ticket.fotoDepois, 'Foto Depois')}
+    ${addPhoto(ticket.fotoPlaqueta, 'Foto Plaqueta')}
+  </div>
+
+  <div class="signature">
+    <div class="sig-box">Assinatura do Técnico</div>
+    <div class="sig-box">Assinatura do Cliente / Responsável</div>
+  </div>
+
+  <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} - Controle de Campo</div>
+  <script>setTimeout(() => window.print(), 500);<\/script>
+</body>
+</html>`;
 
   const w = window.open('', '_blank');
   if (w) {
