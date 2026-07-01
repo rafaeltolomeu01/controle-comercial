@@ -1264,7 +1264,7 @@ const UI = {
     }).join('');
   },
 
-  async renderUsers() {
+  async renderUsers(usersData, bypassRender) {
     const listBody = document.getElementById('users-table-body');
     if (!listBody) return;
 
@@ -1272,12 +1272,17 @@ const UI = {
       const loggedUser = Store.getLoggedUser() || {};
       const loggedPerms = loggedUser.permissions || [];
       const canManageUsers = loggedUser.profile === 'Administrador' || loggedPerms.includes('Administrador') || loggedPerms.includes('Usuários');
-      const users = await App.fetchFromApi('/api/usuarios');
+      const users = usersData || await App.fetchFromApi('/api/usuarios');
       try {
         Store.saveUsers(users);
       } catch (e) {
         console.error('Erro ao sincronizar cache de usuários:', e);
       }
+
+      if (bypassRender && !usersData) {
+        return users;
+      }
+
       listBody.innerHTML = users.map(u => {
         const statusClass = u.status === 'LIBERADO' ? 'badge-success' : (u.status === 'INATIVO' ? 'badge-danger' : 'badge-warning');
         const canDelete = canManageUsers && String(loggedUser.id) !== String(u.id);
@@ -1295,6 +1300,7 @@ const UI = {
           </tr>
         `;
       }).join('');
+      return users;
     } catch (err) {
       console.error('Error rendering users:', err);
       listBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Erro ao carregar usuários: ${err.message}</td></tr>`;

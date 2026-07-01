@@ -850,7 +850,18 @@
         UI['_original_' + renderMethod] = UI[renderMethod];
 
         // Redefine rendering method
-        UI[renderMethod] = function(data) {
+        UI[renderMethod] = async function(data) {
+          if (data === undefined) {
+            const fetched = await UI['_original_' + renderMethod].call(UI, undefined, true);
+            if (!Array.isArray(fetched)) return fetched;
+
+            FiltersManager.caches[moduleKey] = fetched;
+            FiltersManager.ensureFilterPanel(moduleKey, config.tbodyId);
+            const activeFilters = FiltersManager.getFilterValues(moduleKey);
+            const filtered = FiltersManager.filterData(fetched, activeFilters, moduleKey);
+            return await UI['_original_' + renderMethod].call(UI, filtered);
+          }
+
           // Pre-apply safety and visibility rules
           const securedData = applySecurityFilters(moduleKey, data);
 
@@ -867,7 +878,7 @@
           const filtered = FiltersManager.filterData(securedData, activeFilters, moduleKey);
 
           // 5. Call original render code to paint DOM
-          UI['_original_' + renderMethod].call(UI, filtered);
+          return await UI['_original_' + renderMethod].call(UI, filtered);
         };
       }
     });
