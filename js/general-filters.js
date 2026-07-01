@@ -344,6 +344,7 @@
 
     // Filter array based on selections and text search
     filterData(data, filters, moduleKey) {
+      data = Array.isArray(data) ? data : [];
       return data.filter(item => {
         // 1. Text Search across all properties
         if (filters.search) {
@@ -769,6 +770,7 @@
     },
 
     filterDataForArquivos(data, filters) {
+      data = Array.isArray(data) ? data : [];
       return data.filter(item => {
         if (filters.search) {
           const q = filters.search.toLowerCase();
