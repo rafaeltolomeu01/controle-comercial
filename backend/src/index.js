@@ -2090,12 +2090,15 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
     const data_aprovacao = bdt.date;
     const hora_aprovacao = bdt.time;
 
-    let allApprovedIntegral = true;
-    let allReproved = true;
-    let hasCorrection = false;
+    let generalStatus;
     let totalAprovado = 0;
 
     const result = await db.transaction(async (trx) => {
+      let allApprovedIntegral = true;
+      let allReproved = true;
+      let hasCorrection = false;
+      let localTotalAprovado = 0;
+
       for (const evalItem of items) {
         const dbItem = await trx('despesas_solicitacoes_itens')
           .where({ id: evalItem.id, solicitacao_id: id })
@@ -2129,7 +2132,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
           if (itemStatus === 'aprovado parcialmente') {
             allApprovedIntegral = false;
           }
-          totalAprovado += valAprovado;
+          localTotalAprovado += valAprovado;
         } else {
           allApprovedIntegral = false;
         }
@@ -2157,22 +2160,22 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
       }
 
       // Determine general status
-      let generalStatus = 'Pendente';
+      let localGeneralStatus = 'Pendente';
       if (hasCorrection) {
-        generalStatus = 'Correção Solicitada';
+        localGeneralStatus = 'Correção Solicitada';
       } else if (allReproved) {
-        generalStatus = 'Rejeitada';
+        localGeneralStatus = 'Rejeitada';
       } else if (allApprovedIntegral) {
-        generalStatus = 'Aprovada';
+        localGeneralStatus = 'Aprovada';
       } else {
-        generalStatus = 'Aprovada (não valor total)';
+        localGeneralStatus = 'Aprovada (não valor total)';
       }
 
       const now = new Date();
 
       // Update main request status
       await trx('despesas_solicitacoes').where({ id }).update({
-        status: generalStatus,
+        status: localGeneralStatus,
         updated_at: now.toISOString()
       });
 
@@ -2182,8 +2185,8 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
         gerente_id: req.user.id,
         data_aprovacao,
         hora_aprovacao,
-        observacao: observacao || `Avaliação detalhada concluída. Total Aprovado: R$ ${totalAprovado.toFixed(2)}`,
-        status: generalStatus,
+        observacao: observacao || `Avaliação detalhada concluída. Total Aprovado: R$ ${localTotalAprovado.toFixed(2)}`,
+        status: localGeneralStatus,
         created_at: now.toISOString(),
         updated_at: now.toISOString()
       });
@@ -2191,15 +2194,16 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
       // Auditoria Geral
       await trx('auditoria_logs').insert({
         usuario_id: req.user.id,
-        acao: generalStatus === 'Rejeitada' ? 'REPROVOU_ITEM' : 'APROVOU_ITEM',
-        detalhes: `Solicitação #${id} finalizada com status geral ${generalStatus.toUpperCase()} por ${req.user.name || req.user.id}. Total Aprovado Geral: R$ ${totalAprovado.toFixed(2)}`,
+        acao: localGeneralStatus === 'Rejeitada' ? 'REPROVOU_ITEM' : 'APROVOU_ITEM',
+        detalhes: `Solicitação #${id} finalizada com status geral ${localGeneralStatus.toUpperCase()} por ${req.user.name || req.user.id}. Total Aprovado Geral: R$ ${localTotalAprovado.toFixed(2)}`,
         empresa_id: req.user.empresa_id
       });
 
-      return { generalStatus, totalAprovado };
+      return { generalStatus: localGeneralStatus, totalAprovado: localTotalAprovado };
     });
 
-    const { generalStatus, totalAprovado } = result;
+    generalStatus = result.generalStatus;
+    totalAprovado = result.totalAprovado;
 
     // Log notification details
     const formattedItemsLog = items.map(evalItem => {
