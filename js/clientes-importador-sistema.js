@@ -232,6 +232,8 @@
     const tabs = panel.querySelector('.view-tabs');
     if (!tabs) return false;
 
+    let createdOrRebuilt = false;
+
     let importerTab = panel.querySelector('#tab-client-importador-sistema');
     if (!importerTab) {
       importerTab = document.createElement('button');
@@ -240,17 +242,32 @@
       importerTab.id = 'tab-client-importador-sistema';
       importerTab.textContent = 'Clientes Importador do Sistema';
       tabs.appendChild(importerTab);
+      createdOrRebuilt = true;
     }
 
     let importerContent = panel.querySelector('#clientes-importador-sistema-content');
     if (!importerContent) {
       tabs.insertAdjacentHTML('afterend', buildContentHtml());
       importerContent = panel.querySelector('#clientes-importador-sistema-content');
+      createdOrRebuilt = true;
+    }
+
+    // Quando o sistema recarrega o HTML da tela, o dataset do painel pode ficar antigo.
+    // Se a aba/conteúdo precisou ser recriado, forçamos o rebinding dos eventos só dessa guia.
+    if (createdOrRebuilt) {
+      delete panel.dataset.clientesImportadorBound;
+      delete panel.dataset.clientesImportadorInitialRendered;
     }
 
     bindEvents(panel);
-    refreshFilterOptions();
-    renderTable();
+
+    // Renderiza apenas uma vez por montagem da tela para não gerar loop de MutationObserver.
+    if (createdOrRebuilt || panel.dataset.clientesImportadorInitialRendered !== '1') {
+      refreshFilterOptions();
+      renderTable();
+      panel.dataset.clientesImportadorInitialRendered = '1';
+    }
+
     return true;
   }
 
@@ -665,16 +682,44 @@
     if (ensureUi() && state.showImporter) setImporterVisible(true);
   }
 
-  document.addEventListener('DOMContentLoaded', init);
-  window.addEventListener('hashchange', () => setTimeout(init, 250));
-  window.addEventListener('load', () => setTimeout(init, 500));
-
-  const observer = new MutationObserver(() => {
-    if (window.location.hash === '#clientes' || document.getElementById('view-clientes')) {
+  let initTimer = null;
+  function scheduleInit(delay = 150) {
+    if (initTimer) return;
+    initTimer = setTimeout(() => {
+      initTimer = null;
       init();
-    }
+    }, delay);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => scheduleInit(0));
+  } else {
+    scheduleInit(0);
+  }
+
+  window.addEventListener('hashchange', () => scheduleInit(250));
+  window.addEventListener('load', () => scheduleInit(500));
+
+  // Observa somente a montagem/recarregamento da tela de clientes.
+  // Não chama init a cada alteração da tabela, evitando tela travada/congelada.
+  const observer = new MutationObserver(() => {
+    const panel = findClientesPanel();
+    if (!panel || !panel.innerHTML.trim()) return;
+    const precisaMontar = !panel.querySelector('#clientes-importador-sistema-content') || !panel.querySelector('#tab-client-importador-sistema');
+    if (precisaMontar) scheduleInit(150);
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  function startObserver() {
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startObserver);
+  } else {
+    startObserver();
+  }
 
   window.ClientesImportadorSistema = {
     init,
