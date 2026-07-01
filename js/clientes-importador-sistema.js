@@ -46,7 +46,10 @@
     mapping: {},
     mappedRows: [],
     validRows: [],
-    errors: []
+    errors: [],
+    currentPage: 1,
+    pageSize: 20,
+    currentDisplayRows: []
   };
 
   function normalize(value) {
@@ -157,6 +160,16 @@
       .clientes-importador-map-select { min-width:220px; }
       .clientes-importador-table-wrap { overflow-x:auto; }
       .clientes-importador-table-wrap table { min-width:1100px; }
+      #clientes-importador-table-body tr { cursor:pointer; transition:background .16s ease, transform .16s ease; }
+      #clientes-importador-table-body tr:hover { background:rgba(59,130,246,.10); }
+      .clientes-importador-pagination { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 0 2px; color:var(--text-muted); font-size:.78rem; }
+      .clientes-importador-pagination-info { line-height:1.35; }
+      .clientes-importador-pagination-controls { display:flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:wrap; }
+      .clientes-importador-page-btn { min-width:32px; height:32px; padding:0 10px; border-radius:7px; border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-main); cursor:pointer; font-size:.78rem; }
+      .clientes-importador-page-btn:hover:not(:disabled) { border-color:var(--primary-color); color:#fff; }
+      .clientes-importador-page-btn.active { background:var(--primary-color); border-color:var(--primary-color); color:#fff; }
+      .clientes-importador-page-btn:disabled { opacity:.45; cursor:not-allowed; }
+      .clientes-importador-row-hint { color:var(--primary-color); font-weight:600; }
       .clientes-importador-modal-overlay { display:none; position:fixed; inset:0; z-index:2600; background:rgba(0,0,0,.68); align-items:center; justify-content:center; padding:18px 10px; }
       .clientes-importador-modal-overlay.open { display:flex; }
       .clientes-importador-modal { width:min(1120px, 96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.45); padding:18px; color:var(--text-main); }
@@ -174,12 +187,28 @@
       .clientes-importador-errors { display:none; border:1px solid rgba(239,68,68,.45); background:rgba(239,68,68,.08); border-radius:8px; padding:10px; color:#fecaca; font-size:.78rem; max-height:180px; overflow:auto; }
       .clientes-importador-errors.open { display:block; }
       .clientes-importador-modal-footer { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border-color); padding-top:14px; margin-top:14px; }
+      .clientes-importador-detail-modal { width:min(980px, 96vw); max-height:92vh; overflow:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:14px; box-shadow:0 16px 44px rgba(0,0,0,.45); padding:18px; color:var(--text-main); }
+      .clientes-importador-detail-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; border-bottom:1px solid var(--border-color); padding-bottom:12px; margin-bottom:14px; }
+      .clientes-importador-detail-title { margin:0; font-family:var(--font-title); font-size:1.08rem; color:var(--text-main); }
+      .clientes-importador-detail-subtitle { margin:4px 0 0; color:var(--text-muted); font-size:.8rem; line-height:1.35; }
+      .clientes-importador-detail-section { border:1px solid var(--border-color); border-radius:10px; background:rgba(255,255,255,.02); padding:12px; margin-bottom:12px; }
+      .clientes-importador-detail-section h4 { margin:0 0 10px; color:var(--primary-color); font-family:var(--font-title); font-size:.88rem; }
+      .clientes-importador-detail-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+      .clientes-importador-detail-item { border:1px solid rgba(148,163,184,.18); border-radius:8px; padding:9px 10px; background:rgba(15,23,42,.35); min-width:0; }
+      .clientes-importador-detail-label { display:block; margin-bottom:4px; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.02em; color:var(--text-muted); }
+      .clientes-importador-detail-value { display:block; font-size:.86rem; color:var(--text-main); word-break:break-word; line-height:1.32; }
+      .clientes-importador-detail-value.empty { color:var(--text-muted); }
+      .clientes-importador-detail-wide { grid-column:1 / -1; }
       @media (max-width: 768px) {
         #view-clientes .view-tabs { overflow-x:auto; display:flex; flex-wrap:nowrap; padding-bottom:8px; }
         .clientes-importador-filter-group,
         .clientes-importador-filter-group.search { min-width:100%; }
         .clientes-importador-map-grid { grid-template-columns:1fr; }
         .clientes-importador-modal { padding:14px; }
+        .clientes-importador-pagination { align-items:flex-start; }
+        .clientes-importador-pagination-controls { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:4px; }
+        .clientes-importador-detail-modal { padding:14px; }
+        .clientes-importador-detail-grid { grid-template-columns:1fr; }
       }
     `;
     document.head.appendChild(style);
@@ -228,6 +257,7 @@
               <tbody id="clientes-importador-table-body"></tbody>
             </table>
           </div>
+          <div id="clientes-importador-pagination" class="clientes-importador-pagination"></div>
         </div>
 
         <div id="modal-clientes-importador" class="clientes-importador-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="clientes-importador-modal-title">
@@ -268,6 +298,19 @@
               <button type="button" class="btn btn-secondary" id="btn-clientes-importador-errors-xlsx" style="display:none;">Baixar Relatório de Erros</button>
               <button type="button" class="btn btn-primary" id="btn-clientes-importador-confirm" disabled>Confirmar Importação</button>
             </div>
+          </div>
+        </div>
+
+        <div id="modal-clientes-importador-detail" class="clientes-importador-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="clientes-importador-detail-title">
+          <div class="clientes-importador-detail-modal">
+            <div class="clientes-importador-detail-head">
+              <div>
+                <h3 id="clientes-importador-detail-title" class="clientes-importador-detail-title">Informações do Cliente</h3>
+                <p id="clientes-importador-detail-subtitle" class="clientes-importador-detail-subtitle">Clique em uma linha para visualizar os dados completos importados.</p>
+              </div>
+              <button type="button" class="clientes-importador-close" id="btn-clientes-importador-detail-close" aria-label="Fechar">×</button>
+            </div>
+            <div id="clientes-importador-detail-body"></div>
           </div>
         </div>
       </div>`;
@@ -344,7 +387,32 @@
     ['clientes-importador-search', 'clientes-importador-empresa', 'clientes-importador-cidade', 'clientes-importador-vendedor', 'clientes-importador-supervisor'].forEach(id => {
       const el = panel.querySelector('#' + id);
       if (!el) return;
-      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', renderTable);
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+        state.currentPage = 1;
+        renderTable();
+      });
+    });
+
+    panel.querySelector('#clientes-importador-table-body')?.addEventListener('click', event => {
+      const rowEl = event.target.closest('tr[data-detail-index]');
+      if (!rowEl) return;
+      const index = Number(rowEl.dataset.detailIndex);
+      const row = state.currentDisplayRows[index];
+      if (row) openClientDetail(row);
+    });
+
+    panel.querySelector('#clientes-importador-pagination')?.addEventListener('click', event => {
+      const button = event.target.closest('[data-page]');
+      if (!button || button.disabled) return;
+      const page = Number(button.dataset.page);
+      if (!Number.isFinite(page) || page < 1) return;
+      state.currentPage = page;
+      renderTable();
+    });
+
+    panel.querySelector('#btn-clientes-importador-detail-close')?.addEventListener('click', closeClientDetail);
+    panel.querySelector('#modal-clientes-importador-detail')?.addEventListener('click', event => {
+      if (event.target && event.target.id === 'modal-clientes-importador-detail') closeClientDetail();
     });
 
     panel.querySelector('#btn-clientes-importador-close')?.addEventListener('click', closeImportModal);
@@ -391,6 +459,7 @@
       const el = panel.querySelector('#' + id);
       if (el) el.value = '';
     });
+    state.currentPage = 1;
     renderTable();
   }
 
@@ -448,16 +517,160 @@
   function renderTable() {
     const tbody = document.getElementById('clientes-importador-table-body');
     if (!tbody) return;
+
     const rows = filterRows(getRows());
-    if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="${FIELDS.length}" style="text-align:center;color:var(--text-muted);padding:18px;">Nenhum cliente importado encontrado.</td></tr>`;
+    const total = rows.length;
+    const pageSize = state.pageSize || 20;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    if (state.currentPage > totalPages) state.currentPage = totalPages;
+    if (state.currentPage < 1) state.currentPage = 1;
+
+    const startIndex = total ? (state.currentPage - 1) * pageSize : 0;
+    const endIndex = Math.min(startIndex + pageSize, total);
+    const pageRows = rows.slice(startIndex, endIndex);
+    state.currentDisplayRows = pageRows;
+
+    if (!total) {
+      tbody.innerHTML = `<tr><td colspan="${FIELDS.length}" style="text-align:center;color:var(--text-muted);padding:18px;cursor:default;">Nenhum cliente importado encontrado.</td></tr>`;
+      renderPagination(0, 0, 0, 0, 0);
       return;
     }
-    tbody.innerHTML = rows.map(row => `
-      <tr>
+
+    tbody.innerHTML = pageRows.map((row, index) => `
+      <tr data-detail-index="${index}" title="Clique para abrir as informações completas do cliente">
         ${FIELDS.map(field => `<td data-label="${escapeAttr(field.label)}">${escapeHtml(getDisplayValue(row, field) || '-')}</td>`).join('')}
       </tr>
     `).join('');
+
+    renderPagination(total, state.currentPage, totalPages, startIndex + 1, endIndex);
+  }
+
+  function renderPagination(total, currentPage, totalPages, start, end) {
+    const pagination = document.getElementById('clientes-importador-pagination');
+    if (!pagination) return;
+
+    if (!total) {
+      pagination.innerHTML = `<div class="clientes-importador-pagination-info">Nenhum cliente para mostrar.</div>`;
+      return;
+    }
+
+    const pages = getVisiblePages(currentPage, totalPages);
+    const pageButtons = pages.map(page => page === '...'
+      ? `<span style="padding:0 4px;color:var(--text-muted);">...</span>`
+      : `<button type="button" class="clientes-importador-page-btn ${page === currentPage ? 'active' : ''}" data-page="${page}" ${page === currentPage ? 'disabled' : ''}>${page}</button>`
+    ).join('');
+
+    pagination.innerHTML = `
+      <div class="clientes-importador-pagination-info">
+        Mostrando <strong>${start}</strong> a <strong>${end}</strong> de <strong>${total}</strong> cliente(s).<br>
+        <span class="clientes-importador-row-hint">Clique em uma linha para ver as informações completas.</span>
+      </div>
+      <div class="clientes-importador-pagination-controls" aria-label="Paginação dos clientes importados">
+        <button type="button" class="clientes-importador-page-btn" data-page="1" ${currentPage <= 1 ? 'disabled' : ''}>Primeira</button>
+        <button type="button" class="clientes-importador-page-btn" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>Anterior</button>
+        ${pageButtons}
+        <button type="button" class="clientes-importador-page-btn" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>Próxima</button>
+        <button type="button" class="clientes-importador-page-btn" data-page="${totalPages}" ${currentPage >= totalPages ? 'disabled' : ''}>Última</button>
+      </div>
+    `;
+  }
+
+  function getVisiblePages(currentPage, totalPages) {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+    const pages = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    if (start > 2) pages.push('...');
+    for (let page = start; page <= end; page++) pages.push(page);
+    if (end < totalPages - 1) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function detailItem(label, value, wide = false) {
+    const empty = isEmptyValue(value);
+    return `
+      <div class="clientes-importador-detail-item ${wide ? 'clientes-importador-detail-wide' : ''}">
+        <span class="clientes-importador-detail-label">${escapeHtml(label)}</span>
+        <span class="clientes-importador-detail-value ${empty ? 'empty' : ''}">${escapeHtml(empty ? 'Não informado' : value)}</span>
+      </div>
+    `;
+  }
+
+  function openClientDetail(row) {
+    const panel = findClientesPanel();
+    if (!panel || !row) return;
+
+    const modal = panel.querySelector('#modal-clientes-importador-detail');
+    const title = panel.querySelector('#clientes-importador-detail-title');
+    const subtitle = panel.querySelector('#clientes-importador-detail-subtitle');
+    const body = panel.querySelector('#clientes-importador-detail-body');
+    if (!modal || !title || !subtitle || !body) return;
+
+    const fantasia = getDisplayValue(row, { key: 'fantasia' }) || 'Cliente importado';
+    const codigo = getDisplayValue(row, { key: 'codigo' }) || '-';
+    const documentoPrincipal = getDisplayValue(row, { key: 'cnpj' }) || getDisplayValue(row, { key: 'cpf' }) || 'Documento não informado';
+
+    title.textContent = fantasia;
+    subtitle.textContent = `Código ${codigo} • ${documentoPrincipal}`;
+
+    body.innerHTML = `
+      <div class="clientes-importador-detail-section">
+        <h4>Dados principais</h4>
+        <div class="clientes-importador-detail-grid">
+          ${detailItem('Código', row.codigo)}
+          ${detailItem('Fantasia', row.fantasia)}
+          ${detailItem('CNPJ', row.cnpj)}
+          ${detailItem('CPF', row.cpf)}
+          ${detailItem('Atividade', row.atividade)}
+          ${detailItem('Empresa Responsável', row.empresaResponsavel)}
+        </div>
+      </div>
+      <div class="clientes-importador-detail-section">
+        <h4>Contato e responsáveis</h4>
+        <div class="clientes-importador-detail-grid">
+          ${detailItem('Fone', row.fone)}
+          ${detailItem('Email', row.email)}
+          ${detailItem('Vendedor', row.vendedor)}
+          ${detailItem('Supervisor', row.supervisor)}
+        </div>
+      </div>
+      <div class="clientes-importador-detail-section">
+        <h4>Endereço completo</h4>
+        <div class="clientes-importador-detail-grid">
+          ${detailItem('Endereço Completo', row.enderecoCompleto || buildEnderecoCompleto(row), true)}
+          ${detailItem('Logradouro', row.logradouro)}
+          ${detailItem('Endereço', row.endereco)}
+          ${detailItem('Número', row.numero)}
+          ${detailItem('Complemento', row.complemento)}
+          ${detailItem('CEP', row.cep)}
+          ${detailItem('Bairro', row.bairro)}
+          ${detailItem('Cidade', row.cidade)}
+        </div>
+      </div>
+      <div class="clientes-importador-detail-section">
+        <h4>Controle interno</h4>
+        <div class="clientes-importador-detail-grid">
+          ${detailItem('Importado em', formatDateTime(row.importedAt))}
+          ${detailItem('Origem', 'Clientes Importador do Sistema')}
+        </div>
+      </div>
+    `;
+
+    modal.classList.add('open');
+  }
+
+  function closeClientDetail() {
+    const modal = document.getElementById('modal-clientes-importador-detail');
+    modal?.classList.remove('open');
   }
 
   function openImportModal() {
@@ -768,6 +981,7 @@
       await saveRows(allRows);
       closeImportModal();
       refreshFilterOptions();
+      state.currentPage = 1;
       renderTable();
       const ignored = state.errors.length ? ` ${state.errors.length} erro(s) foram ignorados.` : '';
       showToast(`${rowsToSave.length} cliente(s) salvo(s) no banco com sucesso!${ignored}`);
