@@ -1,18 +1,18 @@
 /*
  * Clientes Importador do Sistema
  * Adiciona uma guia isolada na tela Gestão de Clientes, sem alterar funções existentes.
- * Os dados importados ficam separados em localStorage e podem ser exportados em Excel.
+ * Os dados importados ficam separados e agora são salvos também no banco via app_kv_store.
  */
 (function () {
   'use strict';
 
   const STORAGE_KEY = 'controle_comercial_clientes_importador_sistema_v1';
-  const IMPORT_SESSION_KEY = 'controle_comercial_clientes_importador_session_v1';
+  const STORE_KEY = 'clientes_importador_sistema';
 
-  const FIELDS = [
+  const VISIBLE_FIELDS = [
     { key: 'codigo', label: 'Código', required: true, aliases: ['codigo', 'código', 'cod', 'cód', 'codigo cliente', 'codigo do cliente', 'cód cliente', 'cod cliente'] },
     { key: 'fantasia', label: 'Fantasia', required: true, aliases: ['fantasia', 'nome fantasia', 'cliente', 'nome cliente', 'razao fantasia'] },
-    { key: 'cnpj', label: 'CNPJ', required: true, aliases: ['cnpj', 'cpf/cnpj', 'documento'] },
+    { key: 'cnpj', label: 'CNPJ', required: false, aliases: ['cnpj', 'cpf/cnpj', 'cnpj/cpf', 'documento'] },
     { key: 'atividade', label: 'Atividade', required: false, aliases: ['atividade', 'categoria', 'ramo', 'ramo atividade', 'atividade principal'] },
     { key: 'fone', label: 'Fone', required: false, aliases: ['fone', 'telefone', 'tel', 'celular', 'whatsapp', 'contato'] },
     { key: 'email', label: 'Email', required: false, aliases: ['email', 'e-mail', 'mail', 'correio eletrônico'] },
@@ -22,6 +22,22 @@
     { key: 'supervisor', label: 'Supervisor', required: false, aliases: ['supervisor', 'gerente', 'coordenador'] }
   ];
 
+  // Campos que são importados e salvos no banco, mas ficam ocultos na tabela principal.
+  // Eles serão usados futuramente sem poluir a tela atual.
+  const HIDDEN_FIELDS = [
+    { key: 'cpf', label: 'CPF', required: false, hidden: true, aliases: ['cpf', 'cpf/cnpj', 'cnpj/cpf', 'documento', 'cadastro pessoa fisica', 'cadastro pessoa física'] },
+    { key: 'logradouro', label: 'Logradouro', required: false, hidden: true, aliases: ['logradouro', 'tipo logradouro', 'tipo de logradouro'] },
+    { key: 'endereco', label: 'Endereço', required: false, hidden: true, aliases: ['endereco', 'endereço', 'rua', 'avenida', 'av', 'logradouro endereco', 'logradouro endereço'] },
+    { key: 'numero', label: 'Número', required: false, hidden: true, aliases: ['numero', 'número', 'num', 'nº', 'nro'] },
+    { key: 'complemento', label: 'Complemento', required: false, hidden: true, aliases: ['complemento', 'compl'] },
+    { key: 'cep', label: 'CEP', required: false, hidden: true, aliases: ['cep', 'c.e.p', 'c.e.p.', 'c e p'] },
+    { key: 'bairro', label: 'Bairro', required: false, hidden: true, aliases: ['bairro'] },
+    { key: 'enderecoCompleto', label: 'Endereço Completo', required: false, hidden: true, calculated: true, aliases: ['endereco completo', 'endereço completo', 'endereco completo cliente', 'endereço completo cliente'] }
+  ];
+
+  const IMPORT_FIELDS = [...VISIBLE_FIELDS, ...HIDDEN_FIELDS];
+  const FIELDS = VISIBLE_FIELDS;
+
   const state = {
     initializedForPanel: null,
     showImporter: false,
@@ -29,6 +45,7 @@
     importRows: [],
     mapping: {},
     mappedRows: [],
+    validRows: [],
     errors: []
   };
 
@@ -54,19 +71,56 @@
     return escapeHtml(value).replace(/`/g, '&#96;');
   }
 
-  function getRows() {
+  function readLegacyRows() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
-      console.warn('Falha ao ler clientes importados:', err);
+      console.warn('Falha ao ler backup local de clientes importados:', err);
       return [];
     }
   }
 
-  function saveRows(rows) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+  function getRows() {
+    try {
+      if (window.Store && typeof Store.getList === 'function') {
+        const rows = Store.getList(STORE_KEY, []);
+        if (Array.isArray(rows) && rows.length) return rows;
+
+        // Migração automática da primeira versão, que salvava somente no navegador.
+        const legacy = readLegacyRows();
+        if (legacy.length && typeof Store.saveList === 'function') {
+          Store.saveList(STORE_KEY, legacy);
+          return legacy;
+        }
+        return Array.isArray(rows) ? rows : [];
+      }
+      return readLegacyRows();
+    } catch (err) {
+      console.warn('Falha ao ler clientes importados:', err);
+      return readLegacyRows();
+    }
+  }
+
+  async function saveRows(rows) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+
+    // Backup local para não perder a importação caso a internet caia no meio.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeRows));
+
+    // Salva no armazenamento central do sistema e no banco PostgreSQL.
+    if (window.Store && typeof Store.saveList === 'function') {
+      Store.saveList(STORE_KEY, safeRows);
+    }
+
+    // Garante a gravação no banco antes de fechar o modal e avisar sucesso.
+    if (window.Store && typeof Store.backendRequest === 'function' && Store.getToken && Store.getToken()) {
+      await Store.backendRequest(`/api/store/${encodeURIComponent(STORE_KEY)}`, {
+        method: 'POST',
+        body: JSON.stringify({ data: safeRows })
+      });
+    }
   }
 
   function showToast(message) {
@@ -114,7 +168,7 @@
       .clientes-importador-step h4 { margin:0 0 10px; color:var(--primary-color); font-family:var(--font-title); font-size:.9rem; }
       .clientes-importador-map-grid { display:grid; grid-template-columns: minmax(160px, 240px) 1fr; gap:10px; align-items:center; }
       .clientes-importador-required { color:var(--danger); font-weight:700; }
-      .clientes-importador-preview-table { width:100%; min-width:980px; font-size:.78rem; }
+      .clientes-importador-preview-table { width:100%; min-width:1500px; font-size:.78rem; }
       .clientes-importador-preview-table th,
       .clientes-importador-preview-table td { white-space:nowrap; }
       .clientes-importador-errors { display:none; border:1px solid rgba(239,68,68,.45); background:rgba(239,68,68,.08); border-radius:8px; padding:10px; color:#fecaca; font-size:.78rem; max-height:180px; overflow:auto; }
@@ -150,7 +204,7 @@
             <div class="clientes-importador-filter-row">
               <div class="clientes-importador-filter-group search">
                 <label for="clientes-importador-search">Buscar Texto</label>
-                <input type="text" id="clientes-importador-search" placeholder="Pesquisar por código, fantasia, CNPJ, cidade, vendedor...">
+                <input type="text" id="clientes-importador-search" placeholder="Pesquisar por código, fantasia, CNPJ, CPF, endereço, cidade, vendedor...">
               </div>
               ${filterSelect('clientes-importador-empresa', 'Empresa Responsável')}
               ${filterSelect('clientes-importador-cidade', 'Cidade')}
@@ -181,7 +235,7 @@
             <div class="clientes-importador-modal-header">
               <div>
                 <h3 id="clientes-importador-modal-title" class="clientes-importador-modal-title">Importar Clientes do Sistema</h3>
-                <p class="clientes-importador-modal-subtitle">Envie uma planilha Excel ou CSV, confira o mapeamento das colunas e revise a prévia antes de confirmar.</p>
+                <p class="clientes-importador-modal-subtitle">Envie uma planilha Excel ou CSV, confira o mapeamento das colunas e revise a prévia antes de confirmar. CNPJ pode ficar vazio quando houver CPF.</p>
               </div>
               <button type="button" class="clientes-importador-close" id="btn-clientes-importador-close" aria-label="Fechar">×</button>
             </div>
@@ -201,7 +255,7 @@
               <h4>3. Prévia da Importação</h4>
               <div class="table-responsive" style="overflow-x:auto;">
                 <table class="clientes-importador-preview-table">
-                  <thead><tr>${FIELDS.map(field => `<th>${escapeHtml(field.label)}</th>`).join('')}</tr></thead>
+                  <thead><tr>${IMPORT_FIELDS.map(field => `<th>${escapeHtml(field.label)}${field.hidden ? ' (oculto)' : ''}</th>`).join('')}</tr></thead>
                   <tbody id="clientes-importador-preview-body"></tbody>
                 </table>
               </div>
@@ -356,7 +410,7 @@
     const filters = getFilterValues();
     return rows.filter(row => {
       if (filters.search) {
-        const haystack = normalize(FIELDS.map(field => row[field.key]).join(' '));
+        const haystack = normalize(IMPORT_FIELDS.map(field => row[field.key]).join(' '));
         if (!haystack.includes(filters.search)) return false;
       }
       for (const key of ['empresaResponsavel', 'cidade', 'vendedor', 'supervisor']) {
@@ -386,6 +440,11 @@
     });
   }
 
+  function getDisplayValue(row, field) {
+    if (!row || !field) return '';
+    return row[field.key] || '';
+  }
+
   function renderTable() {
     const tbody = document.getElementById('clientes-importador-table-body');
     if (!tbody) return;
@@ -396,7 +455,7 @@
     }
     tbody.innerHTML = rows.map(row => `
       <tr>
-        ${FIELDS.map(field => `<td data-label="${escapeAttr(field.label)}">${escapeHtml(row[field.key] || '-')}</td>`).join('')}
+        ${FIELDS.map(field => `<td data-label="${escapeAttr(field.label)}">${escapeHtml(getDisplayValue(row, field) || '-')}</td>`).join('')}
       </tr>
     `).join('');
   }
@@ -422,6 +481,7 @@
     state.mapping = {};
     state.mappedRows = [];
     state.errors = [];
+    state.validRows = [];
     const panel = findClientesPanel();
     if (!panel) return;
     const mapStep = panel.querySelector('#clientes-importador-map-step');
@@ -483,7 +543,7 @@
   function autoMapHeaders() {
     const normalizedHeaders = state.importHeaders.map(header => ({ header, norm: normalize(header) }));
     state.mapping = {};
-    FIELDS.forEach(field => {
+    IMPORT_FIELDS.forEach(field => {
       const aliasNorms = [field.label, ...(field.aliases || [])].map(normalize);
       let found = normalizedHeaders.find(h => aliasNorms.includes(h.norm));
       if (!found) found = normalizedHeaders.find(h => aliasNorms.some(alias => h.norm.includes(alias) || alias.includes(h.norm)));
@@ -499,15 +559,15 @@
     if (!mapStep || !mapGrid) return;
     mapStep.style.display = 'block';
     const options = '<option value="">Selecione a coluna da planilha...</option>' + state.importHeaders.map(header => `<option value="${escapeAttr(header)}">${escapeHtml(header)}</option>`).join('');
-    mapGrid.innerHTML = FIELDS.map(field => `
+    mapGrid.innerHTML = IMPORT_FIELDS.map(field => `
       <label for="map-${field.key}" style="font-size:.8rem;color:var(--text-main);font-weight:600;">
-        ${escapeHtml(field.label)} ${field.required ? '<span class="clientes-importador-required">*</span>' : ''}
+        ${escapeHtml(field.label)} ${field.required ? '<span class="clientes-importador-required">*</span>' : ''} ${field.hidden ? '<span style="color:var(--text-muted);font-weight:500;">(oculto)</span>' : ''}
       </label>
       <select id="map-${field.key}" class="clientes-importador-map-select" data-field="${field.key}">
         ${options}
       </select>
     `).join('');
-    FIELDS.forEach(field => {
+    IMPORT_FIELDS.forEach(field => {
       const select = mapGrid.querySelector(`#map-${field.key}`);
       if (select) {
         select.value = state.mapping[field.key] || '';
@@ -523,13 +583,35 @@
     const mapped = [];
     state.importRows.forEach(source => {
       const row = { __line: source.__line };
-      FIELDS.forEach(field => {
+      IMPORT_FIELDS.forEach(field => {
         const header = state.mapping[field.key];
         row[field.key] = header ? String(source.__values[header] || '').trim() : '';
       });
-      if (FIELDS.some(field => String(row[field.key] || '').trim())) mapped.push(row);
+
+      row.enderecoCompleto = buildEnderecoCompleto(row);
+
+      if (IMPORT_FIELDS.some(field => String(row[field.key] || '').trim())) mapped.push(row);
     });
     return mapped;
+  }
+
+  function buildEnderecoCompleto(row) {
+    const direto = String(row.enderecoCompleto || '').trim();
+    const enderecoBase = [row.logradouro, row.endereco]
+      .map(value => String(value || '').trim())
+      .filter(value => value && value !== '-')
+      .join(' ');
+
+    const partes = [];
+    if (enderecoBase) partes.push(enderecoBase);
+    if (!isEmptyValue(row.numero)) partes.push(String(row.numero).trim());
+    if (!isEmptyValue(row.complemento)) partes.push(String(row.complemento).trim());
+    if (!isEmptyValue(row.bairro)) partes.push(String(row.bairro).trim());
+    if (!isEmptyValue(row.cidade)) partes.push(String(row.cidade).trim());
+    if (!isEmptyValue(row.cep)) partes.push('CEP ' + String(row.cep).trim());
+
+    const montado = partes.join(', ');
+    return montado || direto;
   }
 
   function isValidEmail(email) {
@@ -541,52 +623,82 @@
     return String(value || '').replace(/\D/g, '');
   }
 
+  function isEmptyValue(value) {
+    const text = String(value ?? '').trim();
+    return text === '' || text === '-' || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined';
+  }
+
   function validateMappedRows(rows) {
     const errors = [];
+    const validRows = [];
     const existing = getRows();
     const existingCodes = new Set(existing.map(row => normalize(row.codigo)).filter(Boolean));
     const existingCnpjs = new Set(existing.map(row => onlyDigits(row.cnpj)).filter(Boolean));
+    const existingCpfs = new Set(existing.map(row => onlyDigits(row.cpf)).filter(Boolean));
     const seenCodes = new Set();
     const seenCnpjs = new Set();
+    const seenCpfs = new Set();
+    let hasMappingError = false;
 
-    FIELDS.filter(field => field.required).forEach(field => {
+    IMPORT_FIELDS.filter(field => field.required).forEach(field => {
       if (!state.mapping[field.key]) {
+        hasMappingError = true;
         errors.push({ line: 'Mapeamento', field: field.label, message: `O campo obrigatório "${field.label}" não foi mapeado.` });
       }
     });
 
+    if (!state.mapping.cnpj && !state.mapping.cpf) {
+      hasMappingError = true;
+      errors.push({ line: 'Mapeamento', field: 'CNPJ/CPF', message: 'Mapeie CNPJ ou CPF. Cliente sem CNPJ será aceito quando tiver CPF.' });
+    }
+
     rows.forEach(row => {
+      const rowErrors = [];
       const codeNorm = normalize(row.codigo);
       const cnpjDigits = onlyDigits(row.cnpj);
+      const cpfDigits = onlyDigits(row.cpf);
 
-      if (!String(row.codigo || '').trim()) errors.push({ line: row.__line, field: 'Código', message: 'Código vazio.' });
-      if (!String(row.fantasia || '').trim()) errors.push({ line: row.__line, field: 'Fantasia', message: 'Fantasia vazia.' });
-      if (!String(row.cnpj || '').trim()) errors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ vazio.' });
-      if (row.email && !isValidEmail(row.email)) errors.push({ line: row.__line, field: 'Email', message: 'Email inválido.' });
+      if (isEmptyValue(row.codigo)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código vazio.' });
+      if (isEmptyValue(row.fantasia)) rowErrors.push({ line: row.__line, field: 'Fantasia', message: 'Fantasia vazia.' });
+      if (!cnpjDigits && !cpfDigits) rowErrors.push({ line: row.__line, field: 'CNPJ/CPF', message: 'Informe CNPJ ou CPF. Cliente sem CNPJ é aceito quando tiver CPF.' });
+      if (!isEmptyValue(row.email) && !isValidEmail(row.email)) rowErrors.push({ line: row.__line, field: 'Email', message: 'Email inválido.' });
 
       if (codeNorm) {
-        if (existingCodes.has(codeNorm)) errors.push({ line: row.__line, field: 'Código', message: 'Código já importado anteriormente.' });
-        if (seenCodes.has(codeNorm)) errors.push({ line: row.__line, field: 'Código', message: 'Código duplicado dentro da planilha.' });
+        if (existingCodes.has(codeNorm)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código já importado anteriormente.' });
+        if (seenCodes.has(codeNorm)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código duplicado dentro da planilha.' });
         seenCodes.add(codeNorm);
       }
 
       if (cnpjDigits) {
-        if (existingCnpjs.has(cnpjDigits)) errors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ já importado anteriormente.' });
-        if (seenCnpjs.has(cnpjDigits)) errors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ duplicado dentro da planilha.' });
+        if (existingCnpjs.has(cnpjDigits)) rowErrors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ já importado anteriormente.' });
+        if (seenCnpjs.has(cnpjDigits)) rowErrors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ duplicado dentro da planilha.' });
         seenCnpjs.add(cnpjDigits);
+      }
+
+      if (cpfDigits) {
+        if (existingCpfs.has(cpfDigits)) rowErrors.push({ line: row.__line, field: 'CPF', message: 'CPF já importado anteriormente.' });
+        if (seenCpfs.has(cpfDigits)) rowErrors.push({ line: row.__line, field: 'CPF', message: 'CPF duplicado dentro da planilha.' });
+        seenCpfs.add(cpfDigits);
+      }
+
+      errors.push(...rowErrors);
+      if (!hasMappingError && rowErrors.length === 0) {
+        validRows.push(row);
       }
     });
 
     if (!rows.length) {
-      errors.push({ line: 'Arquivo', field: 'Dados', message: 'Nenhuma linha válida encontrada para importar.' });
+      errors.push({ line: 'Arquivo', field: 'Dados', message: 'Nenhuma linha encontrada para importar.' });
     }
 
-    return errors;
+    return { errors, validRows };
   }
 
   function updatePreviewAndValidation() {
     state.mappedRows = mapRows();
-    state.errors = validateMappedRows(state.mappedRows);
+    const result = validateMappedRows(state.mappedRows);
+    state.errors = result.errors;
+    state.validRows = result.validRows;
     renderPreview();
     renderErrors();
   }
@@ -600,8 +712,8 @@
     previewStep.style.display = 'block';
     const previewRows = state.mappedRows.slice(0, 15);
     previewBody.innerHTML = previewRows.map(row => `
-      <tr>${FIELDS.map(field => `<td>${escapeHtml(row[field.key] || '-')}</td>`).join('')}</tr>
-    `).join('') || `<tr><td colspan="${FIELDS.length}" style="text-align:center;color:var(--text-muted);">Nenhuma linha para prévia.</td></tr>`;
+      <tr>${IMPORT_FIELDS.map(field => `<td>${escapeHtml(getDisplayValue(row, field) || '-')}</td>`).join('')}</tr>
+    `).join('') || `<tr><td colspan="${IMPORT_FIELDS.length}" style="text-align:center;color:var(--text-muted);">Nenhuma linha para prévia.</td></tr>`;
   }
 
   function renderErrors() {
@@ -613,33 +725,60 @@
     if (!errorsBox || !confirmBtn || !errorsBtn) return;
 
     if (state.errors.length) {
+      const hasValid = state.validRows.length > 0;
       errorsBox.classList.add('open');
-      errorsBox.innerHTML = `<strong>Corrija antes de importar:</strong><ul style="margin:8px 0 0 18px;padding:0;">${state.errors.map(err => `<li>Linha ${escapeHtml(err.line)} — ${escapeHtml(err.field)}: ${escapeHtml(err.message)}</li>`).join('')}</ul>`;
-      confirmBtn.disabled = true;
+      errorsBox.innerHTML = `<strong>${hasValid ? 'Atenção: as linhas abaixo serão ignoradas, mas as válidas podem ser importadas.' : 'Corrija antes de importar:'}</strong><ul style="margin:8px 0 0 18px;padding:0;">${state.errors.map(err => `<li>Linha ${escapeHtml(err.line)} — ${escapeHtml(err.field)}: ${escapeHtml(err.message)}</li>`).join('')}</ul>`;
+      confirmBtn.disabled = !hasValid;
+      confirmBtn.textContent = hasValid ? `Confirmar Importação (${state.validRows.length} válidos)` : 'Confirmar Importação';
       errorsBtn.style.display = 'inline-flex';
     } else {
       errorsBox.classList.remove('open');
       errorsBox.innerHTML = '';
       confirmBtn.disabled = state.mappedRows.length === 0;
+      confirmBtn.textContent = state.mappedRows.length ? `Confirmar Importação (${state.mappedRows.length})` : 'Confirmar Importação';
       errorsBtn.style.display = 'none';
     }
   }
 
-  function confirmImport() {
+  async function confirmImport() {
     updatePreviewAndValidation();
-    if (state.errors.length || !state.mappedRows.length) return;
-    const now = new Date().toISOString();
-    const rowsToSave = state.mappedRows.map(row => {
-      const clean = { importedAt: now };
-      FIELDS.forEach(field => { clean[field.key] = String(row[field.key] || '').trim(); });
-      return clean;
-    });
-    const allRows = getRows().concat(rowsToSave);
-    saveRows(allRows);
-    closeImportModal();
-    refreshFilterOptions();
-    renderTable();
-    showToast(`${rowsToSave.length} cliente(s) importado(s) com sucesso!`);
+    const rowsForImport = state.validRows.length ? state.validRows : (state.errors.length ? [] : state.mappedRows);
+    if (!rowsForImport.length) {
+      showToast('Nenhuma linha válida para importar. Corrija a planilha ou o mapeamento.');
+      return;
+    }
+
+    const panel = findClientesPanel();
+    const confirmBtn = panel?.querySelector('#btn-clientes-importador-confirm');
+    const oldText = confirmBtn ? confirmBtn.textContent : '';
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Salvando no banco...';
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const rowsToSave = rowsForImport.map(row => {
+        const clean = { importedAt: now };
+        IMPORT_FIELDS.forEach(field => { clean[field.key] = String(row[field.key] || '').trim(); });
+        clean.enderecoCompleto = buildEnderecoCompleto(clean);
+        return clean;
+      });
+      const allRows = getRows().concat(rowsToSave);
+      await saveRows(allRows);
+      closeImportModal();
+      refreshFilterOptions();
+      renderTable();
+      const ignored = state.errors.length ? ` ${state.errors.length} erro(s) foram ignorados.` : '';
+      showToast(`${rowsToSave.length} cliente(s) salvo(s) no banco com sucesso!${ignored}`);
+    } catch (err) {
+      console.error('Falha ao salvar clientes importados no banco:', err);
+      alert('Não foi possível salvar no banco de dados. Verifique sua conexão/login e tente novamente. Erro: ' + (err.message || err));
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = oldText || 'Confirmar Importação';
+      }
+    }
   }
 
   function exportErrors() {
@@ -667,7 +806,7 @@
     ];
     const rows = sourceRows.map(row => {
       const mapped = {};
-      FIELDS.forEach(field => { mapped[field.label] = row[field.key] || ''; });
+      FIELDS.forEach(field => { mapped[field.label] = getDisplayValue(row, field) || ''; });
       return mapped;
     });
     const ws = XLSX.utils.aoa_to_sheet(meta);

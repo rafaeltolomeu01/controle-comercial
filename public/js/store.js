@@ -1,7 +1,7 @@
 const IDENTITY_KEY = 'controle_campo_company_identity';
 const DATA_KEY_PREFIX = 'controle_campo_db_';
 const DATA_GLOBAL_SCOPE = 'global';
-const STORE_SYNC_KEYS = ['company_identity', 'prospects', 'clients', 'equipments', 'movements', 'tickets', 'expenses', 'balances', 'units', 'client_categories', 'equipment_types', 'rejection_reasons', 'prospect_loss_reasons', 'expense_categories', 'notification_emails'];
+const STORE_SYNC_KEYS = ['company_identity', 'prospects', 'clients', 'clientes_importador_sistema', 'equipments', 'movements', 'tickets', 'expenses', 'balances', 'units', 'client_categories', 'equipment_types', 'rejection_reasons', 'prospect_loss_reasons', 'expense_categories', 'notification_emails'];
 
 const DEFAULT_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a' stroke='%231e293b' stroke-width='2'/><path d='M50,15 L80,30 C80,60 50,80 50,80 C50,80 20,60 20,30 Z' fill='none' stroke='%233b82f6' stroke-width='6'/><path d='M38,46 L46,54 L62,34' fill='none' stroke='%2310b981' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
 

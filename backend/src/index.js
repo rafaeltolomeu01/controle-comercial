@@ -1379,6 +1379,7 @@ const ALLOWED_STORE_KEYS = new Set([
   'company_identity',
   'prospects',
   'clients',
+  'clientes_importador_sistema',
   'equipments',
   'movements',
   'tickets',
