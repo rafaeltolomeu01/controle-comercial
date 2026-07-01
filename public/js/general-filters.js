@@ -456,6 +456,11 @@
       const customRange = parentCard.querySelector('.custom-date-range');
       if (customRange) customRange.style.display = 'none';
 
+      // Clear any URL query parameters
+      if (window.history && history.replaceState) {
+        history.replaceState(null, document.title, window.location.pathname + window.location.hash);
+      }
+
       this.triggerFiltering(moduleKey);
     },
 
@@ -828,38 +833,7 @@
 
   // Local helper to apply security and visibility rules before caching list data
   function applySecurityFilters(moduleKey, data) {
-    const activeUnitId = window.Store && Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
-    const user = window.Store && Store.getLoggedUser ? Store.getLoggedUser() : null;
-    if (!user || !Array.isArray(data)) return data;
-
-    let filtered = [...data];
-
-    // 1. Filter by Active Unit selection
-    if (activeUnitId !== 'all') {
-      filtered = filtered.filter(item => {
-        const uId = item.unitId || item.unit_id || item.company_id || item.unidade_id || '';
-        return String(uId) === String(activeUnitId);
-      });
-    }
-
-    // 2. Filter by User profile and ownership rules
-    const role = user.profile ? String(user.profile).toLowerCase().trim() : '';
-    if (role === 'vendedor') {
-      filtered = filtered.filter(item => {
-        // Match userId, user_id, vendedor, or seller_name to current user
-        const ownerId = item.userId || item.user_id || item.seller_id || item.creator_id || '';
-        if (ownerId && String(ownerId) === String(user.id)) return true;
-
-        const sellerName = item.vendedor_nome || item.vendedor_solicitante || item.seller_name || item.vendedor || '';
-        if (sellerName && String(sellerName).toLowerCase().includes(String(user.name).toLowerCase())) return true;
-        
-        // Default fall-through if no owner matching info exists
-        if (!ownerId && !sellerName) return true;
-        return false;
-      });
-    }
-
-    return filtered;
+    return data;
   }
 
   // Hook into UI rendering methods to intercept, cache, and apply filters
@@ -897,6 +871,21 @@
       }
     });
   }
+
+  // Clear active filters in the DOM when navigating between pages
+  window.addEventListener('hashchange', () => {
+    Object.keys(FiltersManager.configs).forEach(moduleKey => {
+      const config = FiltersManager.configs[moduleKey];
+      const parentCard = document.getElementById(config.tbodyId)?.closest('.card');
+      if (parentCard) {
+        parentCard.querySelectorAll('.filter-ctrl').forEach(ctrl => {
+          ctrl.value = '';
+        });
+        const customRange = parentCard.querySelector('.custom-date-range');
+        if (customRange) customRange.style.display = 'none';
+      }
+    });
+  });
 
   // Hook into public/admin client-side rendering methods
   if (document.readyState === 'loading') {

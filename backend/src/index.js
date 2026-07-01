@@ -1764,16 +1764,16 @@ app.get('/api/despesas', async (req, res) => {
     }
 
     // Apply filters
-    if (req.query.status) {
+    if (req.query.status && String(req.query.status || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.status', req.query.status);
     }
-    if (req.query.solicitante) {
+    if (req.query.solicitante && String(req.query.solicitante || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.solicitante', 'like', `%${req.query.solicitante}%`);
     }
-    if (req.query.data_inicio) {
+    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.data_solicitacao', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim) {
+    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.data_solicitacao', '<=', req.query.data_fim);
     }
 
@@ -1860,16 +1860,16 @@ app.get('/api/despesas/summary', async (req, res) => {
     }
 
     // Apply the same filters used by /api/despesas so dashboard metrics can follow the visible list.
-    if (req.query.status) {
+    if (req.query.status && String(req.query.status || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.status', req.query.status);
     }
-    if (req.query.solicitante) {
+    if (req.query.solicitante && String(req.query.solicitante || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.solicitante', 'like', `%${req.query.solicitante}%`);
     }
-    if (req.query.data_inicio) {
+    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.data_solicitacao', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim) {
+    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
       query = query.where('despesas_solicitacoes.data_solicitacao', '<=', req.query.data_fim);
     }
 
@@ -2460,29 +2460,29 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     }
 
     // Filtros dinâmicos
-    if (req.query.cidade) {
+    if (req.query.cidade && String(req.query.cidade || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.cliente_cidade', 'like', `%${req.query.cidade}%`);
     }
-    if (req.query.vendedor) {
+    if (req.query.vendedor && String(req.query.vendedor || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.vendedor_solicitante', 'like', `%${req.query.vendedor}%`);
     }
-    if (req.query.patrimonio) {
+    if (req.query.patrimonio && String(req.query.patrimonio || '').trim() !== '') {
       const p = req.query.patrimonio;
       query = query.andWhere(function() {
         this.where('equipamentos_movimentacoes.patrimonio', 'like', `%${p}%`)
             .orWhere('equipamentos_movimentacoes.patrimonio_novo', 'like', `%${p}%`);
       });
     }
-    if (req.query.tipo_solicitacao) {
+    if (req.query.tipo_solicitacao && String(req.query.tipo_solicitacao || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.tipo_solicitacao', req.query.tipo_solicitacao);
     }
-    if (req.query.status) {
+    if (req.query.status && String(req.query.status || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.status', req.query.status);
     }
-    if (req.query.data_inicio) {
+    if (req.query.data_inicio && String(req.query.data_inicio || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.created_at', '>=', req.query.data_inicio);
     }
-    if (req.query.data_fim) {
+    if (req.query.data_fim && String(req.query.data_fim || '').trim() !== '') {
       query = query.where('equipamentos_movimentacoes.created_at', '<=', req.query.data_fim + 'T23:59:59');
     }
 
@@ -4034,9 +4034,9 @@ app.get('/api/chamados', async (req, res) => {
   try {
     let query = db('chamados_tecnicos');
     await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
-    if (req.query.unitId && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
-    if (req.query.status) query.where('status', req.query.status);
-    if (req.query.patrimonio) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
+    if (req.query.unitId && String(req.query.unitId || '').trim() !== '' && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
+    if (req.query.status && String(req.query.status || '').trim() !== '') query.where('status', req.query.status);
+    if (req.query.patrimonio && String(req.query.patrimonio || '').trim() !== '') query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
     const list = await query.orderBy('created_at', 'desc');
     res.json(list.map(normalizeChamado));
   } catch (err) {
