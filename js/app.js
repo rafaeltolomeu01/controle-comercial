@@ -1253,6 +1253,11 @@ const App = {
           status: 'Pendente', // Sent to manager queue
           unitId,
           userId,
+          user_id: userId,
+          vendedor_id: userId,
+          seller_id: userId,
+          vendedor_nome: (loggedUser && loggedUser.profile === 'Vendedor') ? loggedUser.name : (UI.getUserName ? UI.getUserName(userId) : ''),
+          sellerName: (loggedUser && loggedUser.profile === 'Vendedor') ? loggedUser.name : (UI.getUserName ? UI.getUserName(userId) : ''),
           date: new Date().toLocaleDateString('pt-BR'),
           category,
           companyName,
@@ -5591,7 +5596,7 @@ const App = {
         video_url = await this.uploadFile(vTroca);
       }
     } else if (tipo_solicitacao === 'Adição') {
-      patrimonio = ''; // patrimônio será informado apenas pelo gestor na aprovação
+      patrimonio = (document.getElementById('mov-patrimonio-adicao')?.value || '').trim().toUpperCase();
       modelo = document.getElementById('mov-modelo-adicao').value.trim();
       voltagem = document.getElementById('mov-voltagem-adicao').value;
       quantidade = parseInt(document.getElementById('mov-quantidade-adicao').value) || 1;

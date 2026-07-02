@@ -517,6 +517,23 @@ async function initDb() {
   }
 
 
+  // 7C. Equipamentos importados para preenchimento automatico das movimentacoes.
+  if (!await db.schema.hasTable('equipamentos_importados')) {
+    await db.schema.createTable('equipamentos_importados', table => {
+      table.increments('id').primary();
+      table.string('empresa_id').notNullable().defaultTo('001');
+      table.string('unitId').notNullable().defaultTo('all');
+      table.string('codigo_equipamento').notNullable();
+      table.string('nome_equipamento').notNullable();
+      table.string('criado_por').nullable();
+      table.string('atualizado_por').nullable();
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+      table.unique(['empresa_id', 'unitId', 'codigo_equipamento']);
+    });
+    console.log('Database: Tabela equipamentos_importados criada com sucesso.');
+  }
+
   // 8. Create app_kv_store table (cache central do frontend no PostgreSQL)
   // Guarda listas/configurações que ainda são renderizadas no front para ficarem rápidas no celular,
   // mas também persistidas no banco por empresa.
@@ -1367,6 +1384,48 @@ async function registrarDiferencasStore(req, key, beforeValue, afterValue) {
   }
 }
 
+function canUseImportedEquipments(user) {
+  const profile = normalizeRole(user && user.profile);
+  const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeRole) : [];
+  const text = [profile, ...perms].join(' | ');
+  return profile.includes('admin') || profile.includes('administrador')
+    || text.includes('movimentacao de equipamentos')
+    || text.includes('movimentacao equipamento')
+    || text.includes('equipamentos')
+    || text.includes('responsavel equipamentos')
+    || text.includes('responsavel equipamento')
+    || text.includes('confirmacao de movimentacao')
+    || text.includes('avaliacao de movimentacao');
+}
+
+function assertImportedEquipmentAccess(req, res) {
+  if (!canUseImportedEquipments(req.user)) {
+    res.status(403).json({ error: 'Sem permissao para acessar equipamentos importados.' });
+    return false;
+  }
+  return true;
+}
+
+function normalizeEquipCode(value) {
+  return String(value == null ? '' : value).trim();
+}
+
+function normalizeEquipHeader(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function pickImportedEquipmentColumns(row) {
+  const out = { code: '', name: '' };
+  for (const [key, value] of Object.entries(row || {})) {
+    const h = normalizeEquipHeader(key);
+    if (!out.code && (h.includes('codigo') || h.includes('patrimonio') || h === 'codigodoequipamento')) out.code = normalizeEquipCode(value);
+    if (!out.name && (h.includes('nome') || h.includes('modelo') || h.includes('equipamento'))) {
+      if (!h.includes('codigo')) out.name = String(value == null ? '' : value).trim();
+    }
+  }
+  return out;
+}
+
 function isFinancialUser(user) {
   return userHasRole(user, ['Financeiro', 'Aprovação de Saldo', 'Aprovacao de Saldo', 'Aprovação de Despesas', 'Aprovacao de Despesas']);
 }
@@ -1559,6 +1618,121 @@ app.post('/api/upload', (req, res) => {
   });
 });
 
+
+// Equipamentos Importados
+app.get('/api/equipamentos-importados', async (req, res) => {
+  try {
+    if (!assertImportedEquipmentAccess(req, res)) return;
+    const qText = String(req.query.q || '').trim();
+    const requestedUnit = String(req.query.unitId || '').trim();
+    let query = db('equipamentos_importados').where({ empresa_id: req.user.empresa_id || '001' });
+    if (req.user.unitId && req.user.unitId !== 'all') query = query.where({ unitId: req.user.unitId });
+    else if (requestedUnit && requestedUnit !== 'all') query = query.where({ unitId: requestedUnit });
+    if (qText) {
+      query = query.andWhere(function() {
+        this.where('codigo_equipamento', 'like', '%' + qText + '%').orWhere('nome_equipamento', 'like', '%' + qText + '%');
+      });
+    }
+    const rows = await query.orderBy('codigo_equipamento', 'asc');
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao listar equipamentos importados:', err);
+    res.status(500).json({ error: 'Erro ao listar equipamentos importados.' });
+  }
+});
+
+app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
+  try {
+    if (!assertImportedEquipmentAccess(req, res)) return;
+    const code = normalizeEquipCode(req.params.codigo);
+    if (!code) return res.status(400).json({ error: 'Codigo nao informado.' });
+    let query = db('equipamentos_importados').where({ empresa_id: req.user.empresa_id || '001', codigo_equipamento: code });
+    if (req.user.unitId && req.user.unitId !== 'all') query = query.where(function() { this.where({ unitId: req.user.unitId }).orWhere({ unitId: 'all' }); });
+    const row = await query.orderBy('updated_at', 'desc').first();
+    res.json(row ? { found: true, equipamento: row } : { found: false });
+  } catch (err) {
+    console.error('Erro ao buscar equipamento importado:', err);
+    res.status(500).json({ error: 'Erro ao buscar equipamento importado.' });
+  }
+});
+
+app.post('/api/equipamentos-importados/import', upload.single('file'), async (req, res) => {
+  try {
+    if (!assertImportedEquipmentAccess(req, res)) return;
+    if (!req.file) return res.status(400).json({ error: 'Arquivo nao enviado.' });
+    const ext = path.extname(req.file.originalname || '').toLowerCase();
+    let rows = [];
+    if (ext === '.xlsx' || ext === '.xls') {
+      let XLSX;
+      try { XLSX = require('xlsx'); } catch (_) { return res.status(500).json({ error: 'Dependencia xlsx nao instalada. Rode npm install antes do deploy.' }); }
+      const wb = XLSX.readFile(req.file.path, { cellText: true, cellDates: false });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+    } else if (ext === '.csv' || ext === '.txt') {
+      const raw = fs.readFileSync(req.file.path, 'utf8').replace(/^\uFEFF/, '');
+      const lines = raw.split(/\r?\n/).filter(Boolean);
+      const delimiter = (lines[0] || '').includes(';') ? ';' : ',';
+      const headers = (lines.shift() || '').split(delimiter).map(h => h.trim());
+      rows = lines.map(line => {
+        const cols = line.split(delimiter);
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+        return obj;
+      });
+    } else {
+      return res.status(400).json({ error: 'Formato invalido. Envie .xlsx ou .csv.' });
+    }
+
+    const empresaId = req.user.empresa_id || '001';
+    const unitId = req.user.unitId && req.user.unitId !== 'all' ? req.user.unitId : (req.body.unitId || 'all');
+    let created = 0, updated = 0, ignored = 0;
+    const errors = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const picked = pickImportedEquipmentColumns(rows[i]);
+      const code = normalizeEquipCode(picked.code);
+      const name = String(picked.name || '').trim();
+      if (!code || !name) { ignored += 1; errors.push('Linha ' + (i + 2) + ': codigo ou nome vazio.'); continue; }
+      const existing = await db('equipamentos_importados').where({ empresa_id: empresaId, unitId, codigo_equipamento: code }).first();
+      if (existing) {
+        await db('equipamentos_importados').where({ id: existing.id }).update({ nome_equipamento: name, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
+        updated += 1;
+      } else {
+        await db('equipamentos_importados').insert({ empresa_id: empresaId, unitId, codigo_equipamento: code, nome_equipamento: name, criado_por: req.user.id, atualizado_por: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        created += 1;
+      }
+    }
+    fs.unlink(req.file.path, () => {});
+    res.json({ success: true, created, updated, ignored, errors: errors.slice(0, 10) });
+  } catch (err) {
+    console.error('Erro ao importar equipamentos:', err);
+    res.status(500).json({ error: 'Erro ao importar equipamentos.' });
+  }
+});
+
+app.put('/api/equipamentos-importados/:id', async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode editar.' });
+    const code = normalizeEquipCode(req.body.codigo_equipamento);
+    const name = String(req.body.nome_equipamento || '').trim();
+    if (!code || !name) return res.status(400).json({ error: 'Codigo e nome sao obrigatorios.' });
+    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({ codigo_equipamento: code, nome_equipamento: name, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao editar equipamento importado:', err);
+    res.status(500).json({ error: 'Erro ao editar equipamento.' });
+  }
+});
+
+app.delete('/api/equipamentos-importados/:id', async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode excluir.' });
+    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir equipamento importado:', err);
+    res.status(500).json({ error: 'Erro ao excluir equipamento.' });
+  }
+});
 
 // Persistência geral de listas/configurações do frontend no PostgreSQL.
 // O aplicativo mostra primeiro o cache local para não sumir nada no celular e sincroniza aqui em segundo plano.

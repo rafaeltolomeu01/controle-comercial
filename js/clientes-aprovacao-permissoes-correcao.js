@@ -119,8 +119,13 @@
     return list;
   }
 
-  function sellerName(id){
-    try { return (window.UI && UI.getUserName) ? UI.getUserName(id) : (id || '-'); } catch (_) { return id || '-'; }
+  function sellerName(id, client){
+    const direct = client && (client.vendedor_nome || client.vendedorName || client.sellerName || client.seller_name || client.vendedor || client.responsavel || client.userName || client.user_name);
+    try {
+      const resolved = (window.UI && UI.getUserName && id) ? UI.getUserName(id) : '';
+      if (resolved && resolved !== 'Usuário não localizado') return resolved;
+    } catch (_) {}
+    return direct || id || '-';
   }
 
   function unitName(id){
@@ -164,7 +169,7 @@
         <td data-label="Telefone">${esc(c.phone || c.telefone || '-')}</td>
         <td data-label="E-mail">${esc(c.email || '-')}</td>
         <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:.7rem;font-weight:500;">${esc(unitName(c.unitId))}</span></td>
-        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c)))}</span></td>
+        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c), c))}</span></td>
         <td data-label="Score">${esc(scoreText(c))}</td>
         <td data-label="Status">${statusBadge(c)}</td>
         <td data-label="Ações"><button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;" onclick="event.stopPropagation(); App.showClientDetails('${esc(c.id)}')">Ver Ficha</button>${actionCorrection}${delBtn}</td>
@@ -195,7 +200,7 @@
         <td data-label="Telefone">${esc(c.phone || '-')}</td>
         <td data-label="E-mail">${esc(c.email || '-')}</td>
         <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:.7rem;font-weight:500;">${esc(unitName(c.unitId))}</span></td>
-        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c)))}</span></td>
+        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c), c))}</span></td>
         <td data-label="Score">${esc(scoreText(c))}</td>
         <td data-label="Status">${statusBadge(c)}</td>
         <td data-label="Ações">${actions}</td>
@@ -625,5 +630,5 @@
   start();
   document.addEventListener('DOMContentLoaded', start);
   window.addEventListener('hashchange', () => setTimeout(start, 80));
-  setInterval(start, 3000);
+  setInterval(() => { patchStoreAndUi(); patchApp(); patchRejectionForm(); patchClientDetailsButton(); }, 3000);
 })();
