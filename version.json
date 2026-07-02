@@ -1,5 +1,6 @@
 {
-  "version": "20260702-1325-fila-aprovacao-restrita-persistente",
-  "updatedAt": "2026-07-02T13:25:00-03:00",
-  "description": "Restringe fila de aprovação, corrige persistência de aprovar/reprovar e notifica vendedor para correção"
+  "version": "20260702-1625-aprovacao-persistencia-banco",
+  "updatedAt": "2026-07-02T19:20:06.831Z",
+  "description": "Restringe fila de aprovação, corrige persistência de aprovar/reprovar e notifica vendedor para correção",
+  "build": "20260702-1625-aprovacao-persistencia-banco"
 }

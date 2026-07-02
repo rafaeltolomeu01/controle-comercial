@@ -1668,12 +1668,24 @@ function filterClientsForUser(list, user) {
   return list.filter(item => isClientVisibleToUser(item, user));
 }
 
-async function getMergedClientsStore(companyId) {
-  const rows = await db('app_kv_store')
+async function getClientStoreRows(companyId) {
+  return db('app_kv_store')
     .where({ company_id: companyId })
     .andWhere(function() {
       this.where('store_key', 'clients').orWhere('store_key', 'like', '%_clients');
     });
+}
+
+function clientRecordMatches(item, id, index = 0) {
+  const wanted = String(id || '');
+  const keys = [item && item.id, item && item.cnpj, item && item.codigo, storeItemKey(item, index, 'client')]
+    .filter(Boolean)
+    .map(String);
+  return wanted && keys.includes(wanted);
+}
+
+async function getMergedClientsStore(companyId) {
+  const rows = await getClientStoreRows(companyId);
   const globalRows = [];
   const scopedRows = [];
   for (const row of rows) {
@@ -1681,7 +1693,28 @@ async function getMergedClientsStore(companyId) {
     if (row.store_key === 'clients') globalRows.push(parsed);
     else scopedRows.push(parsed);
   }
+  // Listas antigas por usuario entram primeiro; a lista global da empresa vence conflitos.
   return mergeStoreArrays(...scopedRows, ...globalRows);
+}
+
+async function updateClientInEveryStore(companyId, id, updated, actingUserId) {
+  const rows = await getClientStoreRows(companyId);
+  const now = new Date().toISOString();
+  for (const row of rows) {
+    const list = safeParseStoreJson(row.data_json, []);
+    if (!Array.isArray(list)) continue;
+    let changed = false;
+    const next = list.map((item, index) => {
+      if (!clientRecordMatches(item, id, index)) return item;
+      changed = true;
+      return { ...(item || {}), ...updated };
+    });
+    if (changed) {
+      await db('app_kv_store')
+        .where({ company_id: companyId, store_key: row.store_key })
+        .update({ data_json: JSON.stringify(next), updated_by: actingUserId, updated_at: now });
+    }
+  }
 }
 
 
@@ -1703,10 +1736,7 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
       : (sendToCorrection || stNorm.includes('ajuste') || stNorm.includes('correc') ? 'Aguardando Ajuste' : 'Reprovado');
 
     const previousData = await getMergedClientsStore(companyId);
-    const idx = previousData.findIndex((item, index) => {
-      const keys = [item && item.id, item && item.cnpj, item && item.codigo, storeItemKey(item, index, 'client')].filter(Boolean).map(String);
-      return keys.includes(id);
-    });
+    const idx = previousData.findIndex((item, index) => clientRecordMatches(item, id, index));
     if (idx < 0) return res.status(404).json({ error: 'Cadastro não encontrado na base de clientes.' });
 
     const before = previousData[idx] || {};
@@ -1751,6 +1781,8 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
     } else {
       await db('app_kv_store').insert({ company_id: companyId, store_key: 'clients', data_json: dataJson, updated_by: req.user.id, created_at: now, updated_at: now });
     }
+    // Garante persistencia real: atualiza tambem copias antigas usuario_clients com o mesmo cliente.
+    await updateClientInEveryStore(companyId, id, updated, req.user.id);
 
     // Sincroniza também a tabela física clientes quando existir, sem apagar fotos nem campos extras.
     try {
@@ -1823,7 +1855,8 @@ app.get('/api/store', async (req, res) => {
             .orWhere('store_key', 'like', `${userId}_%`);
       });
     const payload = {};
-    const clientLists = [];
+    const scopedClientLists = [];
+    const globalClientLists = [];
     for (const row of rows) {
       const isScoped = row.store_key.startsWith(`${userId}_`);
       const cleanKey = isScoped ? row.store_key.replace(`${userId}_`, '') : row.store_key;
@@ -1832,7 +1865,10 @@ app.get('/api/store', async (req, res) => {
       // Migração segura: todos os cadastros comerciais agora são globais da empresa.
       // Também lê versões antigas salvas como usuario_clients para nenhum cadastro sumir.
       if (row.store_key === 'clients' || row.store_key.endsWith('_clients')) {
-        if (Array.isArray(parsed)) clientLists.push(parsed);
+        if (Array.isArray(parsed)) {
+          if (row.store_key === 'clients') globalClientLists.push(parsed);
+          else scopedClientLists.push(parsed);
+        }
         continue;
       }
 
@@ -1844,7 +1880,8 @@ app.get('/api/store', async (req, res) => {
         payload[cleanKey] = parsed;
       }
     }
-    payload.clients = filterClientsForUser(mergeStoreArrays(...clientLists), req.user);
+    // Listas antigas por usuario entram primeiro; a lista global da empresa vence conflitos.
+    payload.clients = filterClientsForUser(mergeStoreArrays(...scopedClientLists, ...globalClientLists), req.user);
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
