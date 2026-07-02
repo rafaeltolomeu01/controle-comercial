@@ -1,7 +1,7 @@
 /* Atualização automática do sistema após deploy. */
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20260702-1110-paginacao-performance-listas';
+  const CURRENT_VERSION = '20260702-1255-login-estavel-sem-loop';
   const VERSION_KEY = 'controle_campo_app_version';
   window.__APP_VERSION__ = CURRENT_VERSION;
 
@@ -29,6 +29,12 @@
       if (local !== remote) {
         localStorage.setItem(VERSION_KEY, remote);
         await clearAppCaches();
+        const isLoginScreen = window.location.hash === '#login' || document.getElementById('login-wrapper-container')?.style.display === 'flex';
+        const active = document.activeElement;
+        const userTyping = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+        const reloadKey = VERSION_KEY + '_reloaded_' + remote;
+        if (isLoginScreen || userTyping || sessionStorage.getItem(reloadKey)) return;
+        sessionStorage.setItem(reloadKey, '1');
         window.location.reload();
       }
     } catch (_) {}

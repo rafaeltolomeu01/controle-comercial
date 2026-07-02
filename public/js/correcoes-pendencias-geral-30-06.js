@@ -96,9 +96,12 @@
       // Auto-reload current clients when new Service Worker takes control (updates PWA automatically)
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
+        const isLoginScreen = window.location.hash === '#login' || document.getElementById('login-wrapper-container')?.style.display === 'flex';
+        const active = document.activeElement;
+        const userTyping = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+        if (!refreshing && !isLoginScreen && !userTyping) {
           refreshing = true;
-          window.location.reload();
+          setTimeout(() => window.location.reload(), 250);
         }
       });
 
@@ -121,6 +124,7 @@
   let lastNotifIds = new Set();
   async function pollNotifications(){
     try {
+      if (!window.App || !App.isLoggedIn || window.location.hash === '#login' || !window.Store || !Store.getToken || !Store.getToken()) return;
       const list = await api('/api/notificacoes');
       const unread = (list || []).filter(n => !n.read);
       

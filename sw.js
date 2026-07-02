@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260702-1110-paginacao-performance-listas';
+const CACHE_VERSION = '20260702-1255-login-estavel-sem-loop';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

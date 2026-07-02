@@ -96,7 +96,8 @@ const App = {
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        const swUrl = './sw.js?v=' + encodeURIComponent(window.__APP_VERSION__ || Date.now());
+        const swVersion = window.__APP_VERSION__ || '20260702-1255-login-estavel-sem-loop';
+        const swUrl = './sw.js?v=' + encodeURIComponent(swVersion);
         navigator.serviceWorker.register(swUrl)
           .then(reg => {
             console.log('Service Worker registered', reg.scope);
@@ -115,8 +116,14 @@ const App = {
           .catch(err => console.error('Service Worker registration failed', err));
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (window.__ccReloadingForSw) return;
+          const isLoginScreen = window.location.hash === '#login' || document.getElementById('login-wrapper-container')?.style.display === 'flex';
+          const active = document.activeElement;
+          const userTyping = active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+          // Não recarrega a tela enquanto o usuário está no login ou digitando.
+          // A atualização de versão continua sendo controlada pelo version-check.js.
+          if (isLoginScreen || userTyping) return;
           window.__ccReloadingForSw = true;
-          window.location.reload();
+          setTimeout(() => window.location.reload(), 250);
         });
       });
     }
@@ -3417,7 +3424,13 @@ const App = {
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       if (response.status === 401) {
-        App.forceLogout('Sessão expirada ou inválida. Por favor, faça login novamente.');
+        const isLoginRequest = endpoint === '/api/login';
+        const isLoginScreen = window.location.hash === '#login' || document.getElementById('login-wrapper-container')?.style.display === 'flex';
+        const hasSessionToken = !!token;
+        // Evita loop de alerta/reload na tela de login quando chamadas em segundo plano recebem 401.
+        if (!isLoginRequest && !isLoginScreen && hasSessionToken && App.isLoggedIn) {
+          App.forceLogout('Sessão expirada ou inválida. Por favor, faça login novamente.');
+        }
       }
       throw new Error(errData.error || `Erro de API status: ${response.status}`);
     }

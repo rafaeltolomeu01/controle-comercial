@@ -1,5 +1,5 @@
 {
-  "version": "20260702-1220-sessao-aprovacao-correcao",
-  "updatedAt": "2026-07-02T12:20:00-03:00",
-  "description": "Corrige alerta repetido de sessão e fluxo de correção de clientes por notificação"
+  "version": "20260702-1255-login-estavel-sem-loop",
+  "updatedAt": "2026-07-02T12:55:00-03:00",
+  "description": "Corrige loop de atualização na tela de login sem apagar digitação"
 }

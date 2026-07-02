@@ -374,6 +374,13 @@ const Store = {
       });
     }
 
+    const isLoginVisible = window.location.hash === '#login' ||
+      document.getElementById('login-wrapper-container')?.style.display === 'flex' ||
+      document.getElementById('view-login')?.classList.contains('active');
+
+    // Quando a sessão expira na tela de login, não limpar os campos que o usuário já começou a digitar.
+    if (isLoginVisible) return;
+
     try {
       document.querySelectorAll('form').forEach(form => {
         try { form.reset(); } catch(e) {}
