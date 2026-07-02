@@ -4,6 +4,8 @@ const App = {
   logoBase64Cache: null,
   autoSyncIntervalId: null,
   autoSyncInProgress: false,
+  sessionLogoutInProgress: false,
+  sessionAlertShown: false,
 
   /**
    * Initialize Application
@@ -147,6 +149,8 @@ const App = {
       const fresh = await this.fetchFromApi('/api/me');
       if (!fresh || !fresh.id) throw new Error('Sessão inválida');
       Store.setLoggedUser(fresh, token);
+      this.sessionLogoutInProgress = false;
+      this.sessionAlertShown = false;
       this.isLoggedIn = true;
       if (Store.syncAllFromBackend) {
         // Carrega do banco sem apagar itens locais recém-criados no celular.
@@ -849,6 +853,8 @@ const App = {
           });
 
           Store.setLoggedUser(result.user, result.token);
+          this.sessionLogoutInProgress = false;
+          this.sessionAlertShown = false;
           // Não use empresa_id como nome visual da empresa.
           // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
@@ -6590,11 +6596,26 @@ const App = {
   },
 
   forceLogout(message) {
+    // Evita alerta repetido quando várias chamadas simultâneas recebem 401.
+    const shouldAlert = !!message && !this.sessionAlertShown;
+    if (this.sessionLogoutInProgress && !shouldAlert) return;
+    if (this.sessionLogoutInProgress && this.sessionAlertShown) return;
+
+    this.sessionLogoutInProgress = true;
+    if (shouldAlert) this.sessionAlertShown = true;
+
+    try {
+      if (this.autoSyncIntervalId) {
+        clearInterval(this.autoSyncIntervalId);
+        this.autoSyncIntervalId = null;
+      }
+    } catch (_) {}
+
     Store.clearLoggedUser();
     this.isLoggedIn = false;
-    window.location.hash = '#login';
-    if (message) {
-      alert(message);
+    if (window.location.hash !== '#login') window.location.hash = '#login';
+    if (shouldAlert) {
+      setTimeout(() => alert(message), 60);
     }
   },
 

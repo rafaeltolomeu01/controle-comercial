@@ -4,6 +4,8 @@ const App = {
   logoBase64Cache: null,
   autoSyncIntervalId: null,
   autoSyncInProgress: false,
+  sessionLogoutInProgress: false,
+  sessionAlertShown: false,
 
   /**
    * Initialize Application
@@ -147,6 +149,8 @@ const App = {
       const fresh = await this.fetchFromApi('/api/me');
       if (!fresh || !fresh.id) throw new Error('Sessão inválida');
       Store.setLoggedUser(fresh, token);
+      this.sessionLogoutInProgress = false;
+      this.sessionAlertShown = false;
       this.isLoggedIn = true;
       if (Store.syncAllFromBackend) {
         // Carrega do banco sem apagar itens locais recém-criados no celular.
@@ -849,6 +853,8 @@ const App = {
           });
 
           Store.setLoggedUser(result.user, result.token);
+          this.sessionLogoutInProgress = false;
+          this.sessionAlertShown = false;
           // Não use empresa_id como nome visual da empresa.
           // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
@@ -1128,7 +1134,7 @@ const App = {
         if (loggedUser && loggedUser.profile === 'Vendedor' && loggedUser.unitId !== 'all') {
           unitId = loggedUser.unitId;
         }
-        const category = document.getElementById('client-category').value;
+        const category = App.normalizeConfigText(document.getElementById('client-category').value);
 
         // Commercial fields
         const companyName = document.getElementById('client-company-name').value;
@@ -1178,7 +1184,7 @@ const App = {
         // CNPJ without punctuation for folder naming in URL
         const cnpjVal = cnpj.replace(/\D/g, '') || '00000000000000';
 
-        // Photos URLs reais: salva TODAS no PostgreSQL/app_uploads em PARALELO.
+        // Fotos permanentes do cadastro: salva TODAS no PostgreSQL/app_uploads em PARALELO.
         // Upload paralelo é muito mais rápido e evita timeouts do servidor.
         const suffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
         const photoUrls = {};
@@ -3758,12 +3764,16 @@ const App = {
     };
 
     if (!list || list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted);">Nenhuma solicitação encontrada.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted);">Nenhuma solicitação encontrada.</td></tr>`;
       return;
     }
 
     const fmt = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
     const loggedUser = Store.getLoggedUser() || {};
+    const adminUser = isAdminLike(loggedUser);
+
+    // Garante botão de excluir selecionados acima da tabela
+    this._ensureBulkDeleteSolicitacoes();
 
     tbody.innerHTML = list.map(req => {
       let statusClass = 'badge-warning';
@@ -3773,20 +3783,30 @@ const App = {
 
       const isOwner = String(req.usuario_id || req.userId || '') === String(loggedUser.id || '');
       const canEdit = req.status === 'Pendente' && isOwner;
-      const canDelete = req.status === 'Pendente' && (isOwner || isAdminLike(loggedUser));
+      // Admin pode excluir qualquer status; dono só pode excluir Pendente
+      const canDelete = adminUser || (req.status === 'Pendente' && isOwner);
       const editButton = canEdit ? `<button class="btn btn-secondary btn-sm" onclick="App.editExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Editar</button>` : '';
       const deleteButton = canDelete ? `<button class="btn btn-danger btn-sm" onclick="App.deleteExpenseRequest('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Excluir</button>` : '';
+      // Checkbox apenas para admin
+      const checkboxCol = adminUser ? `<td onclick="event.stopPropagation()" style="width:34px;text-align:center;"><input type="checkbox" class="cc-sol-check" value="${req.id}" style="width:16px;height:16px;cursor:pointer;"></td>` : '<td></td>';
+
+      const statusLower = String(req.status || '').toLowerCase();
+      const foiAvaliada = statusLower.includes('aprovada') || statusLower.includes('rejeitada');
+      const valorHotelExibicao = foiAvaliada ? Number(req.valor_hotel_alim_aprovado || 0) : Number(req.valor_hotel_alim || 0);
+      const valorAbastecimentoExibicao = foiAvaliada ? Number(req.valor_abastecimento_aprovado || 0) : Number(req.valor_abastecimento || 0);
+      const totalGeralExibicao = foiAvaliada ? Number(req.total_liberado ?? req.totalAprovado ?? 0) : Number(req.totalGeral || 0);
 
       return `
-        <tr>
+        <tr data-id="${req.id}">
+          ${checkboxCol}
           <td style="font-family: monospace; font-size: 0.75rem;">#${req.id}</td>
           <td>${safeDateBR(req.data_solicitacao || req.created_at || req.createdAt)}</td>
           <td style="font-weight: 600;">${req.solicitante}</td>
           <td style="font-family: monospace;">${req.placa_veiculo || '-'}</td>
           <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${req.rota_destino}</td>
-          <td style="text-align: right;">${fmt(req.valor_hotel_alim)}</td>
-          <td style="text-align: right;">${fmt(req.valor_abastecimento)}</td>
-          <td style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(req.totalGeral)}</td>
+          <td style="text-align: right;">${fmt(valorHotelExibicao)}</td>
+          <td style="text-align: right;">${fmt(valorAbastecimentoExibicao)}</td>
+          <td style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(totalGeralExibicao)}</td>
           <td><span class="badge-status ${statusClass}">${req.status}</span></td>
           <td>
             <div style="display: flex; gap: 4px; justify-content: center;">
@@ -3799,7 +3819,80 @@ const App = {
         </tr>
       `;
     }).join('');
+
+    // Atualiza visibilidade do botão de excluir selecionados conforme checkboxes
+    this._updateBulkDeleteBtn();
   },
+
+  _ensureBulkDeleteSolicitacoes() {
+    const tbody = document.getElementById('despesas-solicitacoes-table-body');
+    if (!tbody) return;
+    const table = tbody.closest('table');
+    if (!table) return;
+
+    // Cabeçalho: adiciona coluna de checkbox se não tiver
+    const thead = table.querySelector('thead tr');
+    if (thead && !thead.querySelector('.cc-sol-check-all-th')) {
+      const th = document.createElement('th');
+      th.className = 'cc-sol-check-all-th';
+      th.style.cssText = 'width:34px;text-align:center;';
+      th.innerHTML = '<input type="checkbox" id="cc-sol-check-all" title="Selecionar todos" style="width:16px;height:16px;cursor:pointer;">';
+      thead.insertBefore(th, thead.firstChild);
+      document.getElementById('cc-sol-check-all')?.addEventListener('change', (e) => {
+        document.querySelectorAll('.cc-sol-check').forEach(cb => cb.checked = e.target.checked);
+        this._updateBulkDeleteBtn();
+      });
+    }
+
+    // Botão excluir selecionados
+    const card = tbody.closest('.card');
+    if (card && !document.getElementById('cc-btn-excluir-selecionados')) {
+      const btn = document.createElement('button');
+      btn.id = 'cc-btn-excluir-selecionados';
+      btn.className = 'btn btn-danger btn-sm';
+      btn.textContent = 'Excluir Selecionados';
+      btn.style.cssText = 'display:none; margin: 0 0 10px 8px; float:right;';
+      btn.onclick = () => this._deleteSelectedSolicitacoes();
+      const cardHeader = card.querySelector('.card-header');
+      if (cardHeader) cardHeader.appendChild(btn);
+    }
+
+    // Listener para atualizar botão ao marcar/desmarcar
+    if (!tbody.dataset.bulkListenerAdded) {
+      tbody.dataset.bulkListenerAdded = '1';
+      tbody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('cc-sol-check')) this._updateBulkDeleteBtn();
+      });
+    }
+  },
+
+  _updateBulkDeleteBtn() {
+    const n = document.querySelectorAll('.cc-sol-check:checked').length;
+    const btn = document.getElementById('cc-btn-excluir-selecionados');
+    if (btn) btn.style.display = n > 0 ? 'inline-block' : 'none';
+  },
+
+  async _deleteSelectedSolicitacoes() {
+    const ids = [...document.querySelectorAll('.cc-sol-check:checked')].map(cb => cb.value).filter(Boolean);
+    if (!ids.length) return;
+    if (!confirm(`Confirma exclusão de ${ids.length} solicitação(ões) selecionada(s)?`)) return;
+    let erros = 0;
+    for (const id of ids) {
+      try {
+        await this.fetchFromApi(`/api/despesas/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } catch (e) {
+        erros++;
+        console.error('Erro ao excluir solicitação ' + id, e);
+      }
+    }
+    this.showToast(erros === 0 ? `${ids.length} solicitação(ões) excluída(s)!` : `Concluído com ${erros} erro(s).`);
+    // Desmarcar tudo e recarregar
+    const chkAll = document.getElementById('cc-sol-check-all');
+    if (chkAll) chkAll.checked = false;
+    this._updateBulkDeleteBtn();
+    await this.loadDespesasDashboard?.();
+  },
+
 
   /**
    * Detail expense request modal
@@ -5932,7 +6025,15 @@ const App = {
       }
 
       const user = Store.getLoggedUser();
-      const isManager = user && ['Administrador', 'Responsável Equipamentos', 'Gestor de Equipamentos'].includes(user.profile);
+      const normalizeProfile = (value) => String(value || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim();
+      const userProfile = normalizeProfile(user && user.profile);
+      const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+      const isManager = user && (
+        ['administrador', 'administrador sistema', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos'].includes(userProfile)
+        || userPermissions.some(p => ['administrador', 'administrador acesso total', 'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos', 'confirmacao de movimentacao', 'confirmacao de troca', 'avaliacao de movimentacao', 'equipamentos'].includes(p))
+      );
       const managerPanel = document.getElementById('dossie-manager-panel');
       
       if (isManager && mov.status === 'Pendente') {
@@ -6089,7 +6190,16 @@ const App = {
 
   async deleteSelectedMovements() {
     const user = Store.getLoggedUser();
-    if (!user || user.profile !== 'Administrador') {
+    const normalizeProfile = (value) => String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+    const userProfile = normalizeProfile(user && user.profile);
+    const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+    const isAdmin = user && (
+      ['administrador', 'administrador sistema'].includes(userProfile)
+      || userPermissions.some(p => ['administrador', 'administrador acesso total'].includes(p))
+    );
+    if (!isAdmin) {
       alert('Somente administrador pode excluir movimentações.');
       return;
     }
@@ -6345,7 +6455,80 @@ const App = {
     <div class="box"><h3>3. Mapeamento de Mercado</h3><p><b>Amaretto Próximo:</b> ${esc(client.nearbyAmaretto)}</p><p><b>Concorrência Próxima:</b> ${esc(client.nearbyCompetitor)}</p><p><b>Já trabalha com sorvetes:</b> ${esc(client.iceCreamExperience)}</p><p><b>Trabalhará com ambas as marcas:</b> ${esc(client.dualBrandPreference)}</p></div>
     <div class="box"><h3>4. Equipamentos & Financeiro</h3><p><b>Qtd Equipamentos:</b> ${esc(client.equipmentQty)}</p><p><b>Equipamento Solicitado:</b> ${esc(client.requestedEqType)}</p><p><b>Padrão que pode enviar:</b> ${esc(client.sendableEqType)}</p><p><b>Valor 1ª Compra:</b> ${money(client.firstOrderValue)}</p><p><b>Média Prevista:</b> ${money(client.predictedAverage)}</p><p><b>Bonificação:</b> ${esc(client.hasBonus)} ${client.bonusValue ? '('+money(client.bonusValue)+')' : ''}</p></div></div>
     <div class="box"><h3>5. Análise do Vendedor</h3><p>${esc(client.sellerAnalysis)}</p></div><div class="box"><h3>6. Fotos do Cadastro</h3><div class="photos">${addPhoto(client.photoFachada,'Fachada')}${addPhoto(client.photoInterna01,'Interna 01')}${addPhoto(client.photoInterna02,'Interna 02')}${addPhoto(client.photoInterna03,'Interna 03')}${addPhoto(client.photoRua01,'Externa Rua 01')}${addPhoto(client.photoRua02,'Externa Rua 02')}${addPhoto(client.photoCnpj,'Foto CNPJ')}</div></div><div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} por ${(Store.getLoggedUser()||{}).name || '-'} - Controle de Campo</div><script>setTimeout(()=>window.print(),500)<\/script></body></html>`;
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close();
+    this.showPdfPreviewModal(html, `Ficha Comercial ${esc(client.id)}`);
+  },
+
+  showPdfPreviewModal(html, title = 'Visualização do PDF') {
+    let modal = document.getElementById('modal-pdf-preview-corrigido');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'modal-pdf-preview-corrigido';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:none;align-items:center;justify-content:center;padding:12px;';
+      modal.innerHTML = `
+        <div style="background:#fff;color:#111;width:min(1100px,100%);height:min(92vh,900px);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.35);">
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #ddd;">
+            <strong id="pdf-preview-title">Visualização do PDF</strong>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <button type="button" id="pdf-preview-print" class="btn btn-primary">Imprimir</button>
+              <button type="button" id="pdf-preview-download" class="btn btn-secondary">Baixar HTML</button>
+              <button type="button" id="pdf-preview-close" class="btn btn-danger">Fechar</button>
+            </div>
+          </div>
+          <iframe id="pdf-preview-frame" title="Visualização do PDF" style="border:0;width:100%;height:100%;background:#fff;"></iframe>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.querySelector('#pdf-preview-close').addEventListener('click', () => { modal.style.display = 'none'; });
+      modal.addEventListener('click', (ev) => { if (ev.target === modal) modal.style.display = 'none'; });
+    }
+    const cleanHtml = String(html || '').replace(/<script>[\s\S]*?window\.print\([\s\S]*?<\/script>/gi, '');
+    modal.querySelector('#pdf-preview-title').textContent = title;
+    const frame = modal.querySelector('#pdf-preview-frame');
+    frame.srcdoc = cleanHtml;
+    modal.style.display = 'flex';
+    modal.querySelector('#pdf-preview-print').onclick = () => {
+      if (frame.contentWindow) { frame.contentWindow.focus(); frame.contentWindow.print(); }
+    };
+    modal.querySelector('#pdf-preview-download').onclick = () => {
+      const blob = new Blob([cleanHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${String(title || 'ficha').replace(/[^a-z0-9_-]+/gi, '-')}.html`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  },
+
+  async deleteClient(clientId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const loggedUser = Store.getLoggedUser && Store.getLoggedUser();
+    const isAdmin = loggedUser && (loggedUser.profile === 'Administrador' || (loggedUser.permissions || []).includes('Administrador') || (loggedUser.permissions || []).includes('Admin'));
+    if (!isAdmin) { alert('Somente Administrador pode apagar cadastro definitivamente.'); return; }
+    if (!confirm('Tem certeza que deseja apagar definitivamente este cadastro? Esta ação não poderá ser desfeita.')) return;
+    try {
+      const current = Store.getClients ? Store.getClients() : [];
+      const removed = current.find(c => String(c.id) === String(clientId));
+      const next = current.filter(c => String(c.id) !== String(clientId));
+      if (next.length === current.length) { alert('Cadastro não encontrado.'); return; }
+      Store.saveClients(next);
+      if (Store.saveToBackend) Store.saveToBackend('clients', next);
+      try {
+        await this.fetchFromApi(`/api/store/${encodeURIComponent('clients')}`, { method: 'POST', body: JSON.stringify({ data: next, hardDeleteId: clientId }) });
+      } catch (e) {
+        console.warn('Exclusão já foi aplicada localmente; sincronização direta falhou:', e.message || e);
+      }
+      if (Store.syncAllFromBackend) await Store.syncAllFromBackend({ forceRemote: true });
+      this.currentClientFicha = null;
+      const fichaModal = document.getElementById('modal-client-ficha');
+      if (fichaModal) fichaModal.style.display = 'none';
+      UI.renderClients(Store.getClients());
+      UI.renderApprovals(Store.getClients());
+      UI.renderDashboard();
+      this.showToast('Cadastro apagado definitivamente do banco/listas.');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao apagar cadastro: ' + (err.message || err));
+    }
   },
 
   showImagePreview(url) {
@@ -6413,11 +6596,26 @@ const App = {
   },
 
   forceLogout(message) {
+    // Evita alerta repetido quando várias chamadas simultâneas recebem 401.
+    const shouldAlert = !!message && !this.sessionAlertShown;
+    if (this.sessionLogoutInProgress && !shouldAlert) return;
+    if (this.sessionLogoutInProgress && this.sessionAlertShown) return;
+
+    this.sessionLogoutInProgress = true;
+    if (shouldAlert) this.sessionAlertShown = true;
+
+    try {
+      if (this.autoSyncIntervalId) {
+        clearInterval(this.autoSyncIntervalId);
+        this.autoSyncIntervalId = null;
+      }
+    } catch (_) {}
+
     Store.clearLoggedUser();
     this.isLoggedIn = false;
-    window.location.hash = '#login';
-    if (message) {
-      alert(message);
+    if (window.location.hash !== '#login') window.location.hash = '#login';
+    if (shouldAlert) {
+      setTimeout(() => alert(message), 60);
     }
   },
 
@@ -7883,3 +8081,85 @@ App.copyExchangeHistoryMessage = async function(simId) {
   }
 };
 
+
+
+/**
+ * Correções 30/06 - categorias, padrão de equipamentos e upload resiliente de fotos.
+ * Não reescreve módulos: apenas normaliza dados vindos de configuração e ajusta selects.
+ */
+App.normalizeConfigText = function(item) {
+  if (item == null) return '';
+  if (typeof item === 'string') return item.trim();
+  if (typeof item === 'number') return String(item).trim();
+  if (typeof item === 'object') {
+    return String(item.name || item.nome || item.title || item.titulo || item.label || item.descricao || item.description || item.value || '').trim();
+  }
+  return String(item).trim();
+};
+
+App.getCleanClientCategories = function() {
+  const raw = (window.Store && typeof Store.getClientCategories === 'function') ? Store.getClientCategories() : [];
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map(App.normalizeConfigText)
+    .filter(v => v && v !== '[object Object]' && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+};
+
+App.getCleanEquipmentTypes = function() {
+  const raw = (window.Store && typeof Store.getEquipmentTypes === 'function') ? Store.getEquipmentTypes() : [];
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : [])
+    .map(App.normalizeConfigText)
+    .filter(v => v && v !== '[object Object]' && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase()));
+};
+
+App.applyClientCorrectionsToSelects = function() {
+  const cat = document.getElementById('client-category');
+  if (cat) {
+    const current = App.normalizeConfigText(cat.value);
+    const categories = App.getCleanClientCategories();
+    cat.innerHTML = '<option value="" disabled>Selecione...</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (current && categories.includes(current)) cat.value = current;
+  }
+
+  const requested = document.getElementById('client-requested-eq-type');
+  if (requested) {
+    const current = App.normalizeConfigText(requested.value);
+    const types = App.getCleanEquipmentTypes();
+    requested.innerHTML = '<option value="" disabled>Selecione...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    if (current && types.includes(current)) requested.value = current;
+  }
+
+  const sendable = document.getElementById('client-sendable-eq-type');
+  if (sendable) {
+    const current = App.normalizeConfigText(sendable.value);
+    const patterns = ['Alto padrão', 'Médio padrão', 'Baixo padrão'];
+    sendable.innerHTML = '<option value="" disabled>Selecione o padrão...</option>' + patterns.map(p => `<option value="${p}">${p}</option>`).join('');
+    if (current && patterns.includes(current)) sendable.value = current;
+  }
+};
+
+(function patchClientConfigDropdowns() {
+  const originalSetup = App.setupEventListeners;
+  if (typeof originalSetup === 'function' && !App._clientCorrectionsSetupPatched) {
+    App._clientCorrectionsSetupPatched = true;
+    App.setupEventListeners = function(...args) {
+      const result = originalSetup.apply(this, args);
+      setTimeout(() => App.applyClientCorrectionsToSelects(), 0);
+      return result;
+    };
+  }
+
+  const originalNavigate = App.navigate;
+  if (typeof originalNavigate === 'function' && !App._clientCorrectionsNavigatePatched) {
+    App._clientCorrectionsNavigatePatched = true;
+    App.navigate = function(...args) {
+      const result = originalNavigate.apply(this, args);
+      setTimeout(() => App.applyClientCorrectionsToSelects(), 0);
+      return result;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', () => setTimeout(() => App.applyClientCorrectionsToSelects(), 300));
+  window.addEventListener('hashchange', () => setTimeout(() => App.applyClientCorrectionsToSelects(), 300));
+})();

@@ -1,1 +1,5 @@
-{"version":"20260702-1135-aprovacao-clientes-correcoes","updatedAt":"2026-07-02T11:35:00-03:00"}
+{
+  "version": "20260702-1220-sessao-aprovacao-correcao",
+  "updatedAt": "2026-07-02T12:20:00-03:00",
+  "description": "Corrige alerta repetido de sessão e fluxo de correção de clientes por notificação"
+}
