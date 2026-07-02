@@ -32,20 +32,20 @@
     const text = [profile, ...perms].join(' | ');
     if (profile.includes('admin') || profile.includes('administrador')) return true;
     if (profile.includes('responsavel') && profile.includes('equip')) return true;
-    if (profile.includes('supervisor') || profile.includes('gerente')) return true; // mantém compatibilidade com instalações que usam supervisor como aprovador.
+    // Regra 02/07: somente admin, responsável de equipamentos ou permissão explícita de liberação/movimentação.
+    // Permissão apenas de "Clientes"/"Cadastro de Clientes" NÃO libera fila de aprovação.
     return [
       'aprovacao de clientes',
       'aprovar clientes',
       'liberacao de cadastro de clientes',
       'liberacao cadastro clientes',
       'liberacao de clientes',
-      'cadastro de clientes',
       'movimentacao de equipamentos',
       'movimentacao equipamento',
       'liberacao de equipamentos',
       'liberacao de equipamento',
-      'equipamentos',
-      'estoque'
+      'confirmacao de movimentacao',
+      'avaliacao de movimentacao',
     ].some(p => text.includes(p));
   }
 
@@ -64,17 +64,16 @@
   function visibleInClientsList(client, user){
     if (!client || client.deleted || client.excluido || client.active === false) return false;
     if (canApproveClients(user)) return true;
-    if (isApproved(client)) return true;
-    return isOwner(client, user);
+    // Vendedor/usuário comum só vê cliente aprovado na lista principal.
+    // Pendentes, reprovados e aguardando correção ficam ocultos e são acessados apenas via notificação de correção.
+    return isApproved(client);
   }
 
   function visibleInApprovalQueue(client, user){
     if (!client || client.deleted || client.excluido || client.active === false) return false;
+    if (!canApproveClients(user)) return false;
     const s = norm(client.status);
-    const pending = s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
-    if (!pending) return false;
-    if (canApproveClients(user)) return true;
-    return isOwner(client, user);
+    return s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
   }
 
   function getAllClients(){
@@ -228,7 +227,10 @@
         const allowed = canApproveClients(currentUser());
         ['tab-client-approvals','tab-client-approvals-queue'].forEach(id => {
           const el = document.getElementById(id);
-          if (el) el.style.display = allowed ? '' : 'none';
+          if (el) el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
+        });
+        document.querySelectorAll('#menu-aprovacao, .nav-link[href="#aprovacao"], .mobile-nav-item[href="#aprovacao"]').forEach(el => {
+          el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
         });
         if (!allowed && window.location.hash === '#aprovacao') window.location.hash = '#clientes';
       };
@@ -381,6 +383,53 @@
     }
   }
 
+
+  function updateLocalClientStatus(id, status, reason, extra){
+    const clients = getAllClients();
+    const sid = String(id || '');
+    const idx = clients.findIndex(c => String(c.id || c.cnpj || c.codigo || '') === sid);
+    if (idx < 0) return null;
+    const user = currentUser();
+    const updated = {
+      ...clients[idx],
+      status,
+      rejectionReason: reason || '',
+      reviewedBy: user && user.id,
+      reviewedAt: nowBR(),
+      ...(extra || {})
+    };
+    clients[idx] = updated;
+    if (window.Store && Store.saveClients) Store.saveClients(clients);
+    return { updated, clients };
+  }
+
+  async function updateClientApprovalOnServer(id, status, reason, sendToCorrection){
+    const local = updateLocalClientStatus(id, status, reason, { correctionRequested: !!sendToCorrection });
+    const payload = { status, reason: reason || '', sendToCorrection: !!sendToCorrection };
+    if (window.Store && Store.backendRequest && Store.getToken && Store.getToken()) {
+      try {
+        const resp = await Store.backendRequest(`/api/clientes-aprovacao/${encodeURIComponent(id)}/status`, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        if (resp && Array.isArray(resp.clients) && window.Store && Store.saveClients) {
+          // Atualiza o cache local com o retorno autorizado do banco.
+          Store.saveClients(resp.clients);
+        }
+        return resp;
+      } catch (err) {
+        // Compatibilidade com Render ainda não atualizado: usa a rota antiga /api/store/clients.
+        if (local && local.clients) {
+          await saveClientsRemote(local.clients);
+          return { success: true, fallback: true, client: local.updated };
+        }
+        throw err;
+      }
+    }
+    if (local && local.clients) await saveClientsRemote(local.clients);
+    return { success: true, localOnly: true, client: local && local.updated };
+  }
+
   function patchApp(){
     if (!window.App || App.__ccApprovalFlowPatched2) return;
     App.__ccApprovalFlowPatched2 = true;
@@ -394,23 +443,18 @@
         if (!modal || !form) return alert('Modal de reprovação não encontrado.');
         form.dataset.targetId = id;
         const notes = document.getElementById('modal-rejection-notes');
+        const select = document.getElementById('modal-rejection-select');
         const check = document.getElementById('modal-rejection-send-to-correction');
         if (notes) notes.value = '';
+        if (select && !select.value) select.value = select.options && select.options[0] ? select.options[0].value : '';
         if (check) check.checked = true;
         modal.style.display = 'flex';
         return;
       }
-      const clients = getAllClients();
-      const client = clients.find(c => String(c.id) === String(id));
-      if (!client) return alert('Cliente não encontrado.');
-      client.status = 'Aprovado';
-      client.rejectionReason = '';
-      client.approvedBy = user && user.id;
-      client.approvedAt = nowBR();
       try {
-        await saveClientsRemote(clients);
+        await updateClientApprovalOnServer(id, 'Aprovado', '', false);
         if (window.App && App.refreshAllLists) App.refreshAllLists();
-        showToast('Cadastro aprovado!');
+        showToast('Cadastro aprovado e salvo no banco!');
       } catch (err) {
         alert('Não foi possível salvar a aprovação no banco: ' + (err.message || err));
       }
@@ -508,20 +552,15 @@
       const reason = document.getElementById('modal-rejection-select')?.value || 'Correção necessária';
       const notes = document.getElementById('modal-rejection-notes')?.value.trim() || '';
       const sendToCorrection = !!document.getElementById('modal-rejection-send-to-correction')?.checked;
-      const clients = getAllClients();
-      const client = clients.find(c => String(c.id) === String(id));
-      if (!client) return alert('Cliente não encontrado.');
-      client.status = sendToCorrection ? 'Aguardando Ajuste' : 'Reprovado';
-      client.rejectionReason = reason + (notes ? ' — ' + notes : '');
-      client.reviewedBy = user && user.id;
-      client.reviewedAt = nowBR();
-      client.correctionRequested = sendToCorrection;
+      const finalStatus = sendToCorrection ? 'Aguardando Ajuste' : 'Reprovado';
+      const fullReason = reason + (notes ? ' — ' + notes : '');
       try {
-        await saveClientsRemote(clients);
-        document.getElementById('modal-rejection-reason').style.display = 'none';
+        await updateClientApprovalOnServer(id, finalStatus, fullReason, sendToCorrection);
+        const modal = document.getElementById('modal-rejection-reason');
+        if (modal) modal.style.display = 'none';
         form.reset();
         if (window.App && App.refreshAllLists) App.refreshAllLists();
-        showToast(sendToCorrection ? 'Cadastro enviado para correção do vendedor!' : 'Cadastro reprovado!');
+        showToast(sendToCorrection ? 'Cadastro enviado para correção do vendedor e salvo no banco!' : 'Cadastro reprovado e salvo no banco!');
       } catch (err) {
         alert('Não foi possível salvar a reprovação/correção no banco: ' + (err.message || err));
       }

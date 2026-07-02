@@ -32,7 +32,7 @@
     const text = [profile, ...p].join(' | ');
     if (profile.includes('admin') || profile.includes('administrador')) return true;
     if (profile.includes('responsavel') && profile.includes('equip')) return true;
-    if (profile.includes('supervisor') || profile.includes('gerente')) return true;
+    // Permissão "Clientes" ou "Cadastro de Clientes" não deve abrir Fila de Aprovações.
     return [
       'aprovacao de clientes',
       'aprovar clientes',
@@ -43,8 +43,8 @@
       'movimentacao equipamento',
       'liberacao de equipamentos',
       'liberacao de equipamento',
-      'equipamentos',
-      'estoque'
+      'confirmacao de movimentacao',
+      'avaliacao de movimentacao',
     ].some(x => text.includes(x));
   }
 
@@ -138,10 +138,11 @@
       const allowed = canApproveClients(user());
       ['tab-client-approvals','tab-client-approvals-queue'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = allowed ? '' : 'none';
+        if (el) el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
       });
-      const approvalNav = document.querySelector('.nav-link[href="#aprovacao"], .mobile-nav-item[href="#aprovacao"]');
-      if (approvalNav) approvalNav.style.display = allowed ? '' : 'none';
+      document.querySelectorAll('#menu-aprovacao, .nav-link[href="#aprovacao"], .mobile-nav-item[href="#aprovacao"]').forEach(el => {
+        el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
+      });
       if (!allowed && window.location.hash === '#aprovacao') window.location.hash = '#clientes';
     };
   }

@@ -460,6 +460,8 @@ const Store = {
     if (perms.includes('Clientes')) {
       allowed.push('#clientes');
       allowed.push('#prospeccao');
+    }
+    if (perms.includes('Aprovação de Clientes') || perms.includes('Liberação de Cadastro de Clientes') || perms.includes('Movimentação de Equipamentos') || perms.includes('Confirmação de Movimentação') || perms.includes('Avaliação de Movimentação')) {
       allowed.push('#aprovacao');
     }
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) {
@@ -558,7 +560,8 @@ window.Store = Store;
     if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
     if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
     if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios');
-    if (perms.includes('Clientes')) add('#clientes','#prospeccao','#aprovacao');
+    if (perms.includes('Clientes')) add('#clientes','#prospeccao');
+    if (perms.includes('Aprovação de Clientes') || perms.includes('Liberação de Cadastro de Clientes') || perms.includes('Movimentação de Equipamentos') || perms.includes('Confirmação de Movimentação') || perms.includes('Avaliação de Movimentação')) add('#aprovacao');
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) add('#equipamentos','#movimentacao');
     if (perms.includes('Chamados') || perms.includes('Chamados Mecânicos')) add('#chamados');
     if (perms.includes('Solicitação de Saldo') || perms.includes('Despesas') || perms.includes('Despesas de Campo')) add('#despesas','#solicitacao-despesas');

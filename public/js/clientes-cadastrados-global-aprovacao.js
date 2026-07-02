@@ -63,11 +63,14 @@
 
   function canApproveClients(user) {
     user = user || (window.Store && Store.getLoggedUser && Store.getLoggedUser()) || {};
-    const profile = norm(user.profile);
+    const profile = norm(user.profile || user.role || user.perfil);
     const perms = Array.isArray(user.permissions) ? user.permissions.map(norm) : [];
-    const roles = ['administrador','admin','administrador sistema','administrador geral','supervisor','gerente','responsavel equipamentos','responsavel por equipamentos'];
-    const allowedPerms = ['administrador','admin','equipamentos','estoque','movimentacao','movimentacao de equipamentos','liberacao de equipamento','liberacao de equipamentos','aprovacao de clientes'];
-    return roles.includes(profile) || perms.some(p => allowedPerms.includes(p));
+    const text = [profile, ...perms].join(' | ');
+    if (profile.includes('admin') || profile.includes('administrador')) return true;
+    if (profile.includes('responsavel') && profile.includes('equip')) return true;
+    // Não liberar fila por permissão simples de Clientes/Cadastro.
+    const allowedPerms = ['aprovacao de clientes','aprovar clientes','liberacao de cadastro de clientes','liberacao cadastro clientes','liberacao de clientes','movimentacao de equipamentos','movimentacao equipamento','liberacao de equipamento','liberacao de equipamentos','confirmacao de movimentacao','avaliacao de movimentacao'];
+    return allowedPerms.some(p => text.includes(p));
   }
 
   function installStorePatch() {
@@ -162,7 +165,10 @@
       const allowed = canApproveClients(user);
       ['tab-client-approvals','tab-client-approvals-queue'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = allowed ? 'flex' : 'none';
+        if (el) el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
+      });
+      document.querySelectorAll('#menu-aprovacao, .nav-link[href="#aprovacao"], .mobile-nav-item[href="#aprovacao"]').forEach(el => {
+        el.style.setProperty('display', allowed ? 'flex' : 'none', 'important');
       });
       if (!allowed && window.location.hash === '#aprovacao') {
         window.location.hash = '#clientes';

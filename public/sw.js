@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260702-1255-login-estavel-sem-loop';
+const CACHE_VERSION = '20260702-1325-fila-aprovacao-restrita-persistente';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

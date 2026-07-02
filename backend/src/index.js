@@ -1618,22 +1618,26 @@ function mergeStoreArrays(...lists) {
 }
 
 function canApproveClientsUser(user) {
-  const profile = normalizeRole(user && user.profile);
+  const profile = normalizeRole(user && (user.profile || user.role || user.perfil));
   let perms = [];
   if (Array.isArray(user && user.permissions)) perms = user.permissions.map(normalizeRole);
   else {
     try { perms = JSON.parse((user && user.permissions) || '[]').map(normalizeRole); } catch (_) { perms = []; }
   }
   const joined = [profile, ...perms].join(' | ');
-  const allowedRoles = ['administrador', 'admin', 'administrador sistema', 'administrador geral', 'supervisor', 'gerente', 'responsavel equipamentos', 'responsavel por equipamentos'];
+  if (profile.includes('admin') || profile.includes('administrador')) return true;
+  if (profile.includes('responsavel') && profile.includes('equip')) return true;
+
+  // Regra de segurança: permissão simples de Clientes/Cadastro NÃO libera aprovação.
+  // Libera somente quem tem aprovação/liberação de clientes ou movimentação/liberação de equipamentos.
   const allowedPerms = [
-    'administrador', 'admin', 'equipamentos', 'estoque',
-    'movimentacao', 'movimentacao de equipamentos', 'movimentacao equipamento',
-    'liberacao de equipamento', 'liberacao de equipamentos',
     'aprovacao de clientes', 'aprovar clientes',
-    'liberacao de cadastro de clientes', 'liberacao cadastro clientes', 'liberacao de clientes', 'cadastro de clientes'
+    'liberacao de cadastro de clientes', 'liberacao cadastro clientes', 'liberacao de clientes',
+     'movimentacao de equipamentos', 'movimentacao equipamento',
+    'liberacao de equipamento', 'liberacao de equipamentos',
+    'confirmacao de movimentacao', 'avaliacao de movimentacao'
   ];
-  return allowedRoles.includes(profile) || allowedPerms.some(p => joined.includes(p));
+  return allowedPerms.some(p => joined.includes(p));
 }
 
 function getClientOwnerId(item) {
@@ -1675,6 +1679,113 @@ async function getMergedClientsStore(companyId) {
   }
   return mergeStoreArrays(...scopedRows, ...globalRows);
 }
+
+
+// Aprovação/reprovação de clientes por registro único.
+// Evita perder dados ao salvar listas grandes e garante notificação ao vendedor dono do cadastro.
+app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
+  try {
+    if (!canApproveClientsUser(req.user)) {
+      return res.status(403).json({ error: 'Sem permissão para aprovar ou reprovar cadastro de cliente.' });
+    }
+    const companyId = getStoreCompanyId(req);
+    const id = String(req.params.id || '');
+    const bodyStatus = String((req.body && req.body.status) || '').trim();
+    const reason = String((req.body && req.body.reason) || '').trim();
+    const sendToCorrection = !!(req.body && req.body.sendToCorrection);
+    const stNorm = normalizeRole(bodyStatus);
+    const finalStatus = stNorm.includes('aprov')
+      ? 'Aprovado'
+      : (sendToCorrection || stNorm.includes('ajuste') || stNorm.includes('correc') ? 'Aguardando Ajuste' : 'Reprovado');
+
+    const previousData = await getMergedClientsStore(companyId);
+    const idx = previousData.findIndex((item, index) => {
+      const keys = [item && item.id, item && item.cnpj, item && item.codigo, storeItemKey(item, index, 'client')].filter(Boolean).map(String);
+      return keys.includes(id);
+    });
+    if (idx < 0) return res.status(404).json({ error: 'Cadastro não encontrado na base de clientes.' });
+
+    const before = previousData[idx] || {};
+    const nowText = new Date().toISOString();
+    const updated = {
+      ...before,
+      status: finalStatus,
+      reviewedBy: req.user.id,
+      reviewedAt: nowText,
+      updatedAt: nowText,
+      updated_at: nowText,
+      correctionRequested: finalStatus === 'Aguardando Ajuste'
+    };
+    if (finalStatus === 'Aprovado') {
+      updated.rejectionReason = '';
+      updated.approvalReason = '';
+      updated.approvedBy = req.user.id;
+      updated.approvedAt = nowText;
+    } else {
+      updated.rejectionReason = reason || (finalStatus === 'Aguardando Ajuste' ? 'Correção necessária' : 'Reprovado');
+      updated.approvalReason = updated.rejectionReason;
+    }
+
+    const finalData = previousData.map((item, i) => i === idx ? updated : item);
+    const dataJson = JSON.stringify(finalData);
+    const now = new Date().toISOString();
+    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: 'clients' }).first();
+    if (existing) {
+      await db('app_kv_store').where({ company_id: companyId, store_key: 'clients' }).update({ data_json: dataJson, updated_by: req.user.id, updated_at: now });
+    } else {
+      await db('app_kv_store').insert({ company_id: companyId, store_key: 'clients', data_json: dataJson, updated_by: req.user.id, created_at: now, updated_at: now });
+    }
+
+    // Sincroniza também a tabela física clientes quando existir, sem apagar fotos nem campos extras.
+    try {
+      const clientData = {
+        name: updated.name || null,
+        cnpj: updated.cnpj || null,
+        phone: updated.phone || null,
+        email: updated.email || null,
+        unitId: updated.unitId || null,
+        userId: updated.userId || updated.user_id || null,
+        status: updated.status || null,
+        companyName: updated.companyName || null,
+        city: updated.city || null,
+        address: updated.addressFull || updated.street || updated.address || null,
+        status_final: ['Aprovado', 'Reprovado', 'Pendente'].includes(updated.status) ? updated.status : 'Pendente'
+      };
+      const existingClient = await db('clientes').where({ id: updated.id || id }).first().catch(() => null);
+      if (existingClient) {
+        await db('clientes').where({ id: updated.id || id }).update(clientData).catch(() => null);
+      } else if (updated.id) {
+        await db('clientes').insert({ id: updated.id, ...clientData, data_cadastro: getBrasiliaDateTime().date }).catch(() => null);
+      }
+    } catch (syncErr) {
+      console.warn('Falha ao sincronizar aprovação na tabela clientes:', syncErr.message);
+    }
+
+    await registrarDiferencasStore(req, 'clients', previousData, finalData).catch(err => console.warn('Falha auditoria aprovação cliente:', err.message));
+
+    const owner = getClientOwnerId(updated);
+    if (owner) {
+      let title = 'Cliente aprovado';
+      if (finalStatus === 'Aguardando Ajuste') title = 'Cadastro voltou para correção';
+      if (finalStatus === 'Reprovado') title = 'Cliente reprovado';
+      const clientName = updated.name || updated.nome || updated.companyName || updated.nomeFantasia || updated.fantasy_name || id;
+      const reasonText = updated.rejectionReason ? ` Motivo: ${updated.rejectionReason}` : '';
+      await notifyUsers([owner], {
+        empresa_id: companyId,
+        module: 'clientes',
+        record_id: updated.id || id,
+        target_hash: '#clientes',
+        title,
+        body: `O cadastro ${clientName} foi atualizado para: ${finalStatus}.${reasonText}`
+      });
+    }
+
+    res.json({ success: true, client: updated, clients: filterClientsForUser(finalData, req.user) });
+  } catch (err) {
+    console.error('Erro ao atualizar aprovação de cliente:', err);
+    res.status(500).json({ error: 'Erro ao salvar aprovação do cliente no banco.' });
+  }
+});
 
 app.get('/api/store', async (req, res) => {
   try {
@@ -1925,12 +2036,18 @@ app.post('/api/store/:key', async (req, res) => {
           if (!prev && normalizeRole(status).includes('pendente')) {
             const targets = await obterDestinatarios('NOVO_CLIENTE', req.user, companyId);
             await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title:'Novo cliente para análise', body:`${req.user.name || 'Usuário'} cadastrou um novo cliente para aprovação.` });
-          } else if (prev && String(prev.status || '') !== status && owner) {
+          } else if (prev && String(prev.status || '') !== status) {
             const stNorm = normalizeRole(status);
-            const title = stNorm.includes('reprov') ? 'Cliente reprovado' : ((stNorm.includes('correc') || stNorm.includes('analise') || stNorm.includes('ajuste')) ? 'Cadastro voltou para correção' : 'Cliente aprovado');
-            const targets = await obterDestinatarios('CLIENTE_STATUS_ALTERADO', owner, companyId);
+            const prevNorm = normalizeRole(prev.status || '');
+            const clientName = item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId;
             const reason = item.rejectionReason ? ` Motivo: ${item.rejectionReason}` : '';
-            await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.${reason}` });
+            if (stNorm.includes('pendent') && (prevNorm.includes('ajuste') || prevNorm.includes('correc') || prevNorm.includes('reprov'))) {
+              const targets = await obterDestinatarios('NOVO_CLIENTE', req.user, companyId);
+              await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#aprovacao', title:'Cadastro reenviado para aprovação', body:`${req.user.name || 'Usuário'} corrigiu e reenviou o cliente ${clientName} para análise.` });
+            } else if (owner) {
+              const title = stNorm.includes('reprov') ? 'Cliente reprovado' : ((stNorm.includes('correc') || stNorm.includes('analise') || stNorm.includes('ajuste')) ? 'Cadastro voltou para correção' : 'Cliente aprovado');
+              await notifyUsers([owner], { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${clientName} foi atualizado para: ${status}.${reason}` });
+            }
           }
         }
       } catch (notifErr) { console.warn('Falha ao gerar notificações de clientes:', notifErr.message); }
