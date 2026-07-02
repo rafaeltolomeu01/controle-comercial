@@ -15,8 +15,14 @@
     if (Array.isArray(u.permissions)) return u.permissions;
     try { return JSON.parse(u.permissions || '[]'); } catch(_) { return []; }
   };
-  const clientOwnerId = (c) => String((c && (c.userId || c.user_id || c.vendedor_id || c.seller_id)) || '');
-  const isOwner = (c, u) => String(clientOwnerId(c)) && String(clientOwnerId(c)) === String((u || user()).id || '');
+  const clientOwnerId = (c) => String((c && (c.userId || c.user_id || c.usuario_id || c.usuarioId || c.vendedor_id || c.vendedorId || c.seller_id || c.sellerId || c.createdBy || c.created_by || c.ownerId)) || '');
+  const clientOwnerName = (c) => String((c && (c.vendedor_nome || c.vendedorName || c.sellerName || c.seller_name || c.vendedor || c.responsavel || c.responsavel_nome || c.userName || c.user_name)) || '');
+  const isOwner = (c, u) => {
+    const current = u || user();
+    const idMatch = String(clientOwnerId(c)) && String(clientOwnerId(c)) === String(current.id || '');
+    const nameMatch = norm(clientOwnerName(c)) && norm(clientOwnerName(c)) === norm(current.name || current.username || current.email || '');
+    return !!(idMatch || nameMatch);
+  };
   const statusNorm = (c) => norm(c && c.status);
   const isApproved = (c) => statusNorm(c).includes('aprov');
   const isCorrection = (c) => {

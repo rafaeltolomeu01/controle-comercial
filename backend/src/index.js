@@ -1641,7 +1641,24 @@ function canApproveClientsUser(user) {
 }
 
 function getClientOwnerId(item) {
-  return String((item && (item.userId || item.user_id || item.vendedor_id || item.seller_id)) || '');
+  return String((item && (
+    item.userId || item.user_id || item.usuario_id || item.usuarioId ||
+    item.vendedor_id || item.vendedorId || item.seller_id || item.sellerId ||
+    item.createdBy || item.created_by || item.created_by_id || item.ownerId
+  )) || '');
+}
+
+function getClientOwnerName(item) {
+  return String((item && (
+    item.vendedor_nome || item.vendedorName || item.sellerName || item.seller_name ||
+    item.vendedor || item.responsavel || item.responsavel_nome || item.userName || item.user_name
+  )) || '');
+}
+
+function sameNormalizedText(a, b) {
+  const na = normalizeRole(a);
+  const nb = normalizeRole(b);
+  return !!na && !!nb && na === nb;
 }
 
 function isClientPendingCorrection(status) {
@@ -1658,9 +1675,12 @@ function isClientVisibleToUser(item, user) {
   if (!item) return false;
   if (canApproveClientsUser(user)) return true;
   const owner = getClientOwnerId(item);
+  const ownerName = getClientOwnerName(item);
   const userId = String((user && user.id) || '');
+  const userName = String((user && (user.name || user.username || user.email)) || '');
   const status = normalizeRole(item.status);
-  return owner && userId && owner === userId && !status.includes('excl');
+  const belongsToUser = (owner && userId && owner === userId) || sameNormalizedText(ownerName, userName);
+  return belongsToUser && !status.includes('excl');
 }
 
 function filterClientsForUser(list, user) {
@@ -1938,7 +1958,9 @@ app.post('/api/store/:key', async (req, res) => {
         const previous = existingByKey.get(itemKey);
         if (!canApprove) {
           const owner = getClientOwnerId(previous) || getClientOwnerId(item) || currentUserId;
-          const isOwner = currentUserId && String(owner) === currentUserId;
+          const ownerName = getClientOwnerName(previous) || getClientOwnerName(item);
+          const currentUserName = String((req.user && (req.user.name || req.user.username || req.user.email)) || '');
+          const isOwner = (currentUserId && String(owner) === currentUserId) || sameNormalizedText(ownerName, currentUserName);
 
           // Usuário comum não pode alterar cadastro de outro vendedor.
           if (previous && !isOwner) return previous;

@@ -1,6 +1,6 @@
 {
-  "version": "20260702-1625-aprovacao-persistencia-banco",
-  "updatedAt": "2026-07-02T19:20:06.831Z",
+  "version": "20260702-1705-corrigir-cadastro-reprovado",
+  "updatedAt": "2026-07-02T19:33:51.464Z",
   "description": "Restringe fila de aprovação, corrige persistência de aprovar/reprovar e notifica vendedor para correção",
-  "build": "20260702-1625-aprovacao-persistencia-banco"
+  "build": "20260702-1705-corrigir-cadastro-reprovado"
 }

@@ -12,7 +12,8 @@
   const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const digits = (v) => String(v || '').replace(/\D/g, '');
   const clientKey = (c, idx) => String(c && (c.id || c.cnpj || c.cpf || c.codigo || c.name || c.companyName) || `cliente-${idx}`);
-  const ownerId = (c) => String((c && (c.userId || c.user_id || c.vendedor_id || c.seller_id)) || '');
+  const ownerId = (c) => String((c && (c.userId || c.user_id || c.usuario_id || c.usuarioId || c.vendedor_id || c.vendedorId || c.seller_id || c.sellerId || c.createdBy || c.created_by || c.ownerId)) || '');
+  const ownerName = (c) => String((c && (c.vendedor_nome || c.vendedorName || c.sellerName || c.seller_name || c.vendedor || c.responsavel || c.responsavel_nome || c.userName || c.user_name)) || '');
   const nowBR = () => new Date().toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', hour12:false });
 
   function currentUser(){
@@ -52,7 +53,10 @@
   function isOwner(client, user){
     user = user || currentUser();
     if (!client || !user) return false;
-    return ownerId(client) && String(ownerId(client)) === String(user.id);
+    const uid = String(user.id || '');
+    const byId = ownerId(client) && uid && String(ownerId(client)) === uid;
+    const byName = norm(ownerName(client)) && norm(ownerName(client)) === norm(user.name || user.username || user.email || '');
+    return !!(byId || byName);
   }
 
   function isApproved(client){ return norm(client && client.status).includes('aprov'); }
@@ -182,7 +186,7 @@
     }
     body.innerHTML = list.map(c => {
       const owner = isOwner(c, user);
-      const needsCorrection = norm(c.status).includes('ajuste') || norm(c.status).includes('correc');
+      const needsCorrection = isCorrection(c);
       const canCorrect = !approver && owner && needsCorrection;
       const actions = approver ? `<button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-right:4px;" onclick="event.stopPropagation(); App.showClientDetails('${esc(c.id)}')">Ver Ficha</button><button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveClient('${esc(c.id)}','Aprovado')">Aprovar</button><button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveClient('${esc(c.id)}','Reprovado')">Reprovar</button>` : `<button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-right:4px;" onclick="event.stopPropagation(); App.showClientDetails('${esc(c.id)}')">Ver Ficha</button>${canCorrect ? `<button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); App.editClientCorrection('${esc(c.id)}')">Corrigir</button>` : `<span style="font-size:.75rem;color:var(--text-muted);">Aguardando análise</span>`}`;
       return `<tr class="mobile-summary-row" onclick="App.showClientDetails('${esc(c.id)}')">
