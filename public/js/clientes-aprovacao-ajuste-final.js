@@ -54,9 +54,8 @@
     return (Array.isArray(list) ? list : []).filter(c => {
       if (isDeleted(c)) return false;
       if (approver) return true;
-      // Vendedor e usuário sem permissão não veem pendentes, reprovados ou aguardando correção na lista principal.
-      // Esses cadastros aparecem somente via notificação/botão Corrigir.
-      return isApproved(c);
+      // Vendedor ve apenas os proprios cadastros: aprovados ou devolvidos para correcao.
+      return isApproved(c) || (isOwner(c, u) && isCorrection(c));
     });
   }
 
@@ -67,7 +66,7 @@
     return (Array.isArray(list) ? list : []).filter(c => {
       if (isDeleted(c)) return false;
       const s = statusNorm(c);
-      return !s.includes('aprov') && (s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov') || !s);
+      return s.includes('pendent') || s.includes('analise') || !s;
     });
   }
 

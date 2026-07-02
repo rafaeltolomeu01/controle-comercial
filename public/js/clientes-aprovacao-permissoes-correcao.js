@@ -56,6 +56,10 @@
   }
 
   function isApproved(client){ return norm(client && client.status).includes('aprov'); }
+  function isCorrection(client){
+    const s = norm(client && client.status);
+    return s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
+  }
   function isPendingLike(client){
     const s = norm(client && client.status);
     return !s || s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
@@ -64,16 +68,15 @@
   function visibleInClientsList(client, user){
     if (!client || client.deleted || client.excluido || client.active === false) return false;
     if (canApproveClients(user)) return true;
-    // Vendedor/usuário comum só vê cliente aprovado na lista principal.
-    // Pendentes, reprovados e aguardando correção ficam ocultos e são acessados apenas via notificação de correção.
-    return isApproved(client);
+    // Vendedor/usuario comum ve apenas cadastros proprios, incluindo os devolvidos para correcao.
+    return isApproved(client) || (isOwner(client, user) && isCorrection(client));
   }
 
   function visibleInApprovalQueue(client, user){
     if (!client || client.deleted || client.excluido || client.active === false) return false;
     if (!canApproveClients(user)) return false;
     const s = norm(client.status);
-    return s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
+    return s.includes('pendent') || s.includes('analise') || !s;
   }
 
   function getAllClients(){
@@ -146,7 +149,7 @@
     list.sort((a,b) => String(b.createdAt || b.created_at || b.date || '').localeCompare(String(a.createdAt || a.created_at || a.date || '')));
 
     body.innerHTML = list.map(c => {
-      const canEditCorrection = isOwner(c, user) && (norm(c.status).includes('ajuste') || norm(c.status).includes('correc'));
+      const canEditCorrection = isOwner(c, user) && isCorrection(c);
       const actionCorrection = canEditCorrection ? `<button class="btn btn-warning btn-sm" style="padding:2px 8px;font-size:.75rem;margin-left:4px;" onclick="event.stopPropagation(); App.editClientCorrection('${esc(c.id)}')">Corrigir</button>` : '';
       const canDelete = canApproveClients(user) && window.App;
       const delBtn = canDelete ? `<button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-left:4px;" onclick="event.stopPropagation(); App.deleteClientAdmin ? App.deleteClientAdmin('${esc(c.id)}') : App.deleteClient('${esc(c.id)}', event)">Apagar</button>` : '';
@@ -354,7 +357,9 @@
         route: document.getElementById('client-route')?.value || '',
         status: 'Pendente',
         rejectionReason: '',
-        correctionResubmittedAt: nowBR(),
+        approvalReason: '',
+        correctionRequested: false,
+        correctionResubmittedAt: new Date().toISOString(),
         correctionResubmittedBy: user && user.id,
         photoFachada: photoUrls.fachada,
         photoInterna01: photoUrls.interna01,
@@ -395,7 +400,9 @@
       status,
       rejectionReason: reason || '',
       reviewedBy: user && user.id,
-      reviewedAt: nowBR(),
+      reviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       ...(extra || {})
     };
     clients[idx] = updated;

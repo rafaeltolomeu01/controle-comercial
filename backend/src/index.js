@@ -1649,14 +1649,18 @@ function isClientPendingCorrection(status) {
   return s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
 }
 
+function isClientPendingApproval(status) {
+  const s = normalizeRole(status);
+  return !s || s.includes('pendent') || s.includes('analise');
+}
+
 function isClientVisibleToUser(item, user) {
   if (!item) return false;
   if (canApproveClientsUser(user)) return true;
-  const status = normalizeRole(item.status);
   const owner = getClientOwnerId(item);
   const userId = String((user && user.id) || '');
-  if (status.includes('aprov')) return true;
-  return owner && userId && owner === userId;
+  const status = normalizeRole(item.status);
+  return owner && userId && owner === userId && !status.includes('excl');
 }
 
 function filterClientsForUser(list, user) {
@@ -1721,9 +1725,21 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
       updated.approvalReason = '';
       updated.approvedBy = req.user.id;
       updated.approvedAt = nowText;
+      updated.approved_at = nowText;
+      updated.approvalDate = nowText;
+      updated.rejectedBy = '';
+      updated.rejectedAt = '';
+      updated.rejected_at = '';
+      updated.rejectionDate = '';
+      updated.correctionRequestedAt = '';
     } else {
       updated.rejectionReason = reason || (finalStatus === 'Aguardando Ajuste' ? 'Correção necessária' : 'Reprovado');
       updated.approvalReason = updated.rejectionReason;
+      updated.rejectedBy = req.user.id;
+      updated.rejectedAt = nowText;
+      updated.rejected_at = nowText;
+      updated.rejectionDate = nowText;
+      if (finalStatus === 'Aguardando Ajuste') updated.correctionRequestedAt = nowText;
     }
 
     const finalData = previousData.map((item, i) => i === idx ? updated : item);
@@ -1749,6 +1765,11 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
         companyName: updated.companyName || null,
         city: updated.city || null,
         address: updated.addressFull || updated.street || updated.address || null,
+        aprovador: finalStatus === 'Aprovado' ? String(req.user.id) : null,
+        data_aprovacao: finalStatus === 'Aprovado' ? nowText : null,
+        motivo_reprovacao: finalStatus !== 'Aprovado' ? updated.rejectionReason : null,
+        data_reprovacao: finalStatus !== 'Aprovado' ? nowText : null,
+        data_reenvio: updated.correctionResubmittedAt || null,
         status_final: ['Aprovado', 'Reprovado', 'Pendente'].includes(updated.status) ? updated.status : 'Pendente'
       };
       const existingClient = await db('clientes').where({ id: updated.id || id }).first().catch(() => null);
@@ -1902,8 +1923,15 @@ app.post('/api/store/:key', async (req, res) => {
           // O vendedor só pode reenviar para Pendente quando o cadastro voltou para correção.
           // Qualquer outra tentativa de mudar status é preservada como estava.
           if (resubmittingCorrection) {
+            const nowText = new Date().toISOString();
             item.status = 'Pendente';
             item.rejectionReason = '';
+            item.approvalReason = '';
+            item.correctionRequested = false;
+            item.correctionResubmittedAt = nowText;
+            item.correctionResubmittedBy = currentUserId;
+            item.updatedAt = nowText;
+            item.updated_at = nowText;
           } else {
             item.status = previousStatus;
             item.rejectionReason = previous.rejectionReason || item.rejectionReason || '';
@@ -2003,6 +2031,9 @@ app.post('/api/store/:key', async (req, res) => {
             companyName: client.companyName || null,
             city: client.city || null,
             address: client.addressFull || client.street || null,
+            motivo_reprovacao: client.rejectionReason || null,
+            data_reprovacao: client.rejectedAt || client.rejected_at || null,
+            data_reenvio: client.correctionResubmittedAt || null,
             status_final: ['Aprovado', 'Reprovado', 'Pendente'].includes(client.status) ? client.status : 'Pendente'
           };
           if (existingClient) {
