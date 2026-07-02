@@ -1,25 +1,56 @@
 <div class="card">
-  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-    <span class="card-title">Histórico de Exclusões</span>
-    <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadDeletionHistory()">Atualizar</button>
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div>
+      <span class="card-title">Registro de Movimentações do Sistema</span>
+      <p style="color:var(--text-muted); margin:6px 0 0; font-size:.85rem;">Área permanente somente para administrador. Estes registros não possuem opção de apagar.</p>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="App.loadSystemAuditLogs && App.loadSystemAuditLogs(true)">Atualizar</button>
   </div>
-  <p style="color:var(--text-muted); margin-top:0;">Área oculta somente para administrador. Registra movimentações excluídas e quem realizou a exclusão.</p>
-  <div class="table-responsive">
+
+  <div class="filters-section" style="margin-top:16px;">
+    <div class="filters-grid" style="grid-template-columns: minmax(220px, 1fr) 220px 220px;">
+      <div class="form-group">
+        <label for="audit-search-input">Buscar Texto</label>
+        <input id="audit-search-input" type="text" placeholder="Pesquisar por usuário, ação, módulo ou detalhe..." oninput="App.renderSystemAuditLogs && App.renderSystemAuditLogs()">
+      </div>
+      <div class="form-group">
+        <label for="audit-action-filter">Tipo</label>
+        <select id="audit-action-filter" onchange="App.renderSystemAuditLogs && App.renderSystemAuditLogs()">
+          <option value="">Todos</option>
+          <option value="CRIOU">Criações</option>
+          <option value="EDITOU">Edições</option>
+          <option value="ALTEROU">Alterações</option>
+          <option value="EXCLUIU">Exclusões</option>
+          <option value="APROVOU">Aprovações</option>
+          <option value="REPROVOU">Reprovações</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="audit-module-filter">Módulo</label>
+        <select id="audit-module-filter" onchange="App.renderSystemAuditLogs && App.renderSystemAuditLogs()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="margin-top:12px;">
     <table>
       <thead>
         <tr>
           <th>Data</th>
+          <th>Usuário</th>
+          <th>Ação</th>
           <th>Módulo</th>
           <th>Registro</th>
-          <th>Criado por</th>
-          <th>Excluído por</th>
-          <th>Motivo</th>
+          <th>Detalhes</th>
         </tr>
       </thead>
-      <tbody id="deletion-history-table-body">
-        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr>
+      <tbody id="system-audit-table-body">
+        <tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Carregando registros...</td></tr>
       </tbody>
     </table>
   </div>
 </div>
-<script>setTimeout(()=>App.loadDeletionHistory && App.loadDeletionHistory(), 100);</script>
+
+<script>setTimeout(()=>App.loadSystemAuditLogs && App.loadSystemAuditLogs(), 100);</script>

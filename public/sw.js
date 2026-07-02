@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260702-0845-importados-autofill-cache';
+const CACHE_VERSION = '20260702-0935-auditoria-sistema';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

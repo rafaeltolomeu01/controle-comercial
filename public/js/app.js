@@ -328,6 +328,9 @@ const App = {
       } else if (pageName === 'configuracoes') {
         UI.renderConfigSettings();
         this.loadConfigEmails();
+        this.applyAuditSettingsAccess();
+      } else if (pageName === 'historico-exclusoes') {
+        this.loadSystemAuditLogs();
       } else if (pageName === 'empresa') {
         this.loadCompanyIdentityForm();
       } else if (pageName === 'simulador-troca') {
@@ -497,6 +500,11 @@ const App = {
         headerTitle.textContent = 'Configurações Gerais';
         UI.renderConfigSettings();
         this.loadConfigEmails();
+        this.applyAuditSettingsAccess();
+        break;
+      case '#historico-exclusoes':
+        headerTitle.textContent = 'Registro de Movimentações do Sistema';
+        this.loadSystemAuditLogs();
         break;
       case '#pdf':
         headerTitle.textContent = 'Documento de Impressão';
@@ -5577,29 +5585,103 @@ const App = {
   },
 
 
-  async loadDeletionHistory() {
-    const body = document.getElementById('deletion-history-table-body');
-    if (!body) return;
+  isAuditAdminUser() {
     try {
-      const rows = await this.fetchFromApi('/api/historico-exclusoes');
-      if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhuma exclusão registrada.</td></tr>';
-        return;
-      }
-      body.innerHTML = rows.map(row => `
-        <tr>
-          <td>${row.created_at ? new Date(row.created_at).toLocaleString('pt-BR') : '-'}</td>
-          <td>${row.modulo || '-'}</td>
-          <td>#${row.registro_id || '-'}</td>
-          <td>${row.criado_por || '-'}</td>
-          <td>${row.excluido_por || '-'}</td>
-          <td>${row.motivo || '-'}</td>
-        </tr>
-      `).join('');
-    } catch (err) {
-      body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Erro ao carregar histórico: ${err.message}</td></tr>`;
+      const user = Store.getLoggedUser ? Store.getLoggedUser() : null;
+      const profile = String(user && user.profile || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const perms = Array.isArray(user && user.permissions) ? user.permissions.map(p => String(p).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()) : [];
+      return profile.includes('admin') || profile.includes('administrador') || perms.includes('administrador') || perms.includes('admin');
+    } catch (_) {
+      return false;
     }
   },
+
+  applyAuditSettingsAccess() {
+    const card = document.getElementById('settings-card-registros-sistema');
+    if (card) card.style.display = this.isAuditAdminUser() ? 'block' : 'none';
+  },
+
+  escapeAuditHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
+  async loadSystemAuditLogs(force = false) {
+    const body = document.getElementById('system-audit-table-body') || document.getElementById('deletion-history-table-body');
+    if (!body) return;
+    if (!this.isAuditAdminUser()) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Acesso restrito ao administrador.</td></tr>';
+      return;
+    }
+    if (!force && Array.isArray(this.systemAuditLogsCache)) {
+      this.renderSystemAuditLogs();
+      return;
+    }
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Carregando registros...</td></tr>';
+    try {
+      const rows = await this.fetchFromApi('/api/auditoria');
+      this.systemAuditLogsCache = Array.isArray(rows) ? rows : [];
+      this.populateAuditModuleFilter();
+      this.renderSystemAuditLogs();
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Erro ao carregar registros: ${this.escapeAuditHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  populateAuditModuleFilter() {
+    const select = document.getElementById('audit-module-filter');
+    if (!select || select.dataset.loaded === 'true') return;
+    const modules = Array.from(new Set((this.systemAuditLogsCache || []).map(r => r.modulo).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+    select.innerHTML = '<option value="">Todos</option>' + modules.map(m => `<option value="${this.escapeAuditHtml(m)}">${this.escapeAuditHtml(m)}</option>`).join('');
+    select.dataset.loaded = 'true';
+  },
+
+  renderSystemAuditLogs() {
+    const body = document.getElementById('system-audit-table-body') || document.getElementById('deletion-history-table-body');
+    if (!body) return;
+    const search = String(document.getElementById('audit-search-input')?.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const action = String(document.getElementById('audit-action-filter')?.value || '').toLowerCase();
+    const moduleFilter = String(document.getElementById('audit-module-filter')?.value || '');
+    let rows = Array.isArray(this.systemAuditLogsCache) ? this.systemAuditLogsCache : [];
+
+    rows = rows.filter(row => {
+      const text = [row.data, row.usuario_nome, row.usuario_id, row.acao, row.modulo, row.registro_id, row.detalhes, row.empresa_id]
+        .map(v => String(v || '')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (search && !text.includes(search)) return false;
+      if (action && !String(row.acao || '').toLowerCase().includes(action)) return false;
+      if (moduleFilter && String(row.modulo || '') !== moduleFilter) return false;
+      return true;
+    });
+
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = rows.slice(0, 500).map(row => {
+      const data = row.data ? new Date(row.data).toLocaleString('pt-BR') : '-';
+      const acao = String(row.acao || '-').replace(/_/g, ' ');
+      return `
+        <tr>
+          <td>${this.escapeAuditHtml(data)}</td>
+          <td>${this.escapeAuditHtml(row.usuario_nome || row.usuario_id || '-')}</td>
+          <td><span class="status-badge status-info">${this.escapeAuditHtml(acao)}</span></td>
+          <td>${this.escapeAuditHtml(row.modulo || '-')}</td>
+          <td>${row.registro_id ? '#' + this.escapeAuditHtml(row.registro_id) : '-'}</td>
+          <td style="white-space:normal; min-width:280px;">${this.escapeAuditHtml(row.detalhes || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async loadDeletionHistory() {
+    return this.loadSystemAuditLogs(true);
+  },
+
 
 
   getFastCacheKey(key) {

@@ -126,6 +126,38 @@ async function initDb() {
     });
   }
 
+  // Registro permanente de auditoria do sistema. Não existe rota de apagar esses registros.
+  // Mantém compatibilidade com bancos antigos que já tinham auditoria_logs pela migration.
+  if (!await db.schema.hasTable('auditoria_logs')) {
+    await db.schema.createTable('auditoria_logs', table => {
+      table.increments('id').primary();
+      table.string('usuario_id').nullable();
+      table.string('acao').notNullable();
+      table.text('detalhes').notNullable();
+      table.string('empresa_id').notNullable();
+      table.string('modulo').nullable();
+      table.string('registro_id').nullable();
+      table.text('dados_antes_json').nullable();
+      table.text('dados_depois_json').nullable();
+      table.string('ip').nullable();
+      table.text('user_agent').nullable();
+      table.timestamps(true, true);
+    });
+  } else {
+    const auditColumns = {
+      modulo: t => t.string('modulo').nullable(),
+      registro_id: t => t.string('registro_id').nullable(),
+      dados_antes_json: t => t.text('dados_antes_json').nullable(),
+      dados_depois_json: t => t.text('dados_depois_json').nullable(),
+      ip: t => t.string('ip').nullable(),
+      user_agent: t => t.text('user_agent').nullable()
+    };
+    for (const [col, addColumn] of Object.entries(auditColumns)) {
+      const exists = await db.schema.hasColumn('auditoria_logs', col);
+      if (!exists) await db.schema.table('auditoria_logs', table => addColumn(table));
+    }
+  }
+
   // 1. Alter usuarios table to support email, phone, photo
   const hasEmail = await db.schema.hasColumn('usuarios', 'email');
   if (!hasEmail) {
@@ -1200,6 +1232,141 @@ function isAdminUser(user) {
   return userHasRole(user, ['Administrador', 'Admin', 'Administrador Geral', 'Administrador Sistema', 'Administrador sistema']);
 }
 
+function safeAuditJson(value) {
+  try {
+    if (value === undefined) return null;
+    const text = JSON.stringify(value);
+    return text && text.length > 12000 ? text.slice(0, 12000) + '...[cortado]' : text;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function registrarAuditoriaSistema(req, payload = {}) {
+  try {
+    const user = (req && req.user) || {};
+    const empresaId = payload.empresa_id || user.empresa_id || '001';
+    await db('auditoria_logs').insert({
+      usuario_id: String(payload.usuario_id || user.id || 'sistema'),
+      acao: String(payload.acao || 'REGISTRO_SISTEMA'),
+      modulo: payload.modulo || null,
+      registro_id: payload.registro_id != null ? String(payload.registro_id) : null,
+      detalhes: String(payload.detalhes || 'Movimentação registrada no sistema.'),
+      empresa_id: String(empresaId),
+      dados_antes_json: safeAuditJson(payload.dados_antes),
+      dados_depois_json: safeAuditJson(payload.dados_depois),
+      ip: req ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '') : '',
+      user_agent: req ? (req.headers['user-agent'] || '') : '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('Falha ao registrar auditoria do sistema:', err.message);
+  }
+}
+
+const AUDIT_STORE_LABELS = {
+  prospects: 'Prospecção de Leads',
+  clients: 'Clientes Cadastrados',
+  clientes_importador_sistema: 'Clientes Importador do Sistema',
+  equipments: 'Equipamentos',
+  movements: 'Movimentação de Equipamentos',
+  tickets: 'Chamados Mecânicos',
+  expenses: 'Despesas de Campo',
+  balances: 'Solicitações de Saldo',
+  units: 'Empresas / Unidades',
+  client_categories: 'Categorias de Clientes',
+  equipment_types: 'Tipos de Equipamentos',
+  rejection_reasons: 'Motivos de Reprovação',
+  prospect_loss_reasons: 'Motivos de Perda',
+  expense_categories: 'Categorias de Despesas',
+  notification_emails: 'E-mails de Notificações',
+  company_identity: 'Identidade da Empresa'
+};
+
+function auditRecordKey(item, index) {
+  if (item && typeof item === 'object') {
+    return String(item.id || item.codigo || item.code || item.cnpj || item.cpf || item.serial || item.patrimonio || item.username || item.name || item.fantasia || index);
+  }
+  return String(item == null ? index : item);
+}
+
+function auditRecordName(item) {
+  if (item && typeof item === 'object') {
+    return String(item.name || item.fantasia || item.fantasy_name || item.nomeFantasia || item.nome_fantasia || item.client_name || item.cliente_nome || item.cliente_nome_fantasia || item.client || item.username || item.codigo || item.id || 'registro');
+  }
+  return String(item);
+}
+
+async function registrarDiferencasStore(req, key, beforeValue, afterValue) {
+  try {
+    const modulo = AUDIT_STORE_LABELS[key] || key;
+    const beforeText = JSON.stringify(beforeValue == null ? null : beforeValue);
+    const afterText = JSON.stringify(afterValue == null ? null : afterValue);
+    if (beforeText === afterText) return;
+
+    if (key === 'clientes_importador_sistema' && Array.isArray(beforeValue) && Array.isArray(afterValue)) {
+      const beforeMap = new Map(beforeValue.map((it, idx) => [auditRecordKey(it, idx), it]));
+      const afterMap = new Map(afterValue.map((it, idx) => [auditRecordKey(it, idx), it]));
+      let criados = 0, alterados = 0, excluidos = 0;
+      for (const k of afterMap.keys()) {
+        if (!beforeMap.has(k)) criados += 1;
+        else if (JSON.stringify(beforeMap.get(k)) !== JSON.stringify(afterMap.get(k))) alterados += 1;
+      }
+      for (const k of beforeMap.keys()) if (!afterMap.has(k)) excluidos += 1;
+      if (criados || alterados || excluidos) {
+        await registrarAuditoriaSistema(req, {
+          acao: 'ATUALIZOU_IMPORTADOR_CLIENTES',
+          modulo,
+          detalhes: `${req.user.name || req.user.id} atualizou a base importada de clientes. Criados: ${criados}. Editados: ${alterados}. Removidos: ${excluidos}. Total atual: ${afterValue.length}.`,
+          registro_id: 'clientes_importador_sistema',
+          dados_antes: { total: beforeValue.length },
+          dados_depois: { total: afterValue.length, criados, alterados, excluidos }
+        });
+      }
+      return;
+    }
+
+    if (Array.isArray(beforeValue) && Array.isArray(afterValue)) {
+      const beforeMap = new Map(beforeValue.map((it, idx) => [auditRecordKey(it, idx), it]));
+      const afterMap = new Map(afterValue.map((it, idx) => [auditRecordKey(it, idx), it]));
+      const events = [];
+      for (const [id, afterItem] of afterMap.entries()) {
+        const beforeItem = beforeMap.get(id);
+        if (!beforeMap.has(id)) {
+          events.push({ acao: 'CRIOU_REGISTRO', id, detalhes: `${req.user.name || req.user.id} criou registro em ${modulo}: ${auditRecordName(afterItem)}.`, depois: afterItem });
+        } else if (JSON.stringify(beforeItem) !== JSON.stringify(afterItem)) {
+          events.push({ acao: 'EDITOU_REGISTRO', id, detalhes: `${req.user.name || req.user.id} editou registro em ${modulo}: ${auditRecordName(afterItem)}.`, antes: beforeItem, depois: afterItem });
+        }
+      }
+      for (const [id, beforeItem] of beforeMap.entries()) {
+        if (!afterMap.has(id)) {
+          events.push({ acao: 'EXCLUIU_REGISTRO', id, detalhes: `${req.user.name || req.user.id} excluiu registro em ${modulo}: ${auditRecordName(beforeItem)}.`, antes: beforeItem });
+        }
+      }
+      const limited = events.slice(0, 50);
+      for (const ev of limited) {
+        await registrarAuditoriaSistema(req, { acao: ev.acao, modulo, registro_id: ev.id, detalhes: ev.detalhes, dados_antes: ev.antes, dados_depois: ev.depois });
+      }
+      if (events.length > limited.length) {
+        await registrarAuditoriaSistema(req, { acao: 'ATUALIZOU_LOTE', modulo, registro_id: key, detalhes: `${req.user.name || req.user.id} realizou atualização em lote em ${modulo}. Total de alterações: ${events.length}.`, dados_depois: { totalAlteracoes: events.length } });
+      }
+      return;
+    }
+
+    await registrarAuditoriaSistema(req, {
+      acao: 'ALTEROU_CONFIGURACAO',
+      modulo,
+      registro_id: key,
+      detalhes: `${req.user.name || req.user.id} alterou ${modulo}.`,
+      dados_antes: beforeValue,
+      dados_depois: afterValue
+    });
+  } catch (err) {
+    console.warn('Falha ao registrar diferenças da store:', err.message);
+  }
+}
+
 function isFinancialUser(user) {
   return userHasRole(user, ['Financeiro', 'Aprovação de Saldo', 'Aprovacao de Saldo', 'Aprovação de Despesas', 'Aprovacao de Despesas']);
 }
@@ -1344,6 +1511,13 @@ app.delete('/api/prospeccoes/:id', async (req, res) => {
     const isAdmin = isAdminUser(req.user);
     if (!isAdmin) return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     await db('prospeccoes').where({ id: req.params.id }).delete();
+    await registrarAuditoriaSistema(req, {
+      acao: 'EXCLUIU_PROSPECCAO',
+      modulo: 'Prospecção de Leads',
+      registro_id: req.params.id,
+      detalhes: `${req.user.name || req.user.id} excluiu prospecção ${existing.name || existing.nomeFantasia || req.params.id}.`,
+      dados_antes: existing
+    });
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir prospecção:', err);
@@ -1552,6 +1726,8 @@ app.post('/api/store/:key', async (req, res) => {
     }
 
     const finalData = safeParseStoreJson(dataJson, []);
+
+    await registrarDiferencasStore(req, key, previousData, finalData);
 
     // Sincronização física com a tabela clientes
     if (key === 'clients' && Array.isArray(finalData)) {
@@ -2480,6 +2656,14 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
       updated_at: now
     });
 
+    await registrarAuditoriaSistema(req, {
+      acao: 'CRIOU_MOVIMENTACAO_EQUIPAMENTO',
+      modulo: 'Movimentação de Equipamentos',
+      registro_id: newId,
+      detalhes: `${req.user.name || req.user.id} registrou ${tipo_solicitacao} de equipamento para o cliente ${cliente_nome}.`,
+      dados_depois: { id: newId, empresa: empresaMovimentacao, tipo_solicitacao, cliente_codigo, cliente_nome, cliente_cidade, patrimonio, patrimonio_novo, vendedor_solicitante }
+    });
+
     // Simulação de Notificação por E-mail
     try {
       const emailConfig = fs.existsSync(configFilePath) ? JSON.parse(fs.readFileSync(configFilePath, 'utf8')) : { emails: 'notificacoes@distribuidorajds.com.br, equipamentos@distribuidorajds.com.br' };
@@ -2598,6 +2782,13 @@ app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
         excluido_por: req.user.name || req.user.nome || req.user.id,
         motivo: motivo_exclusao || 'Sem motivo informado',
         created_at: now
+      });
+      await registrarAuditoriaSistema(req, {
+        acao: 'EXCLUIU_MOVIMENTACAO_EQUIPAMENTO',
+        modulo: 'Movimentação de Equipamentos',
+        registro_id: row.id,
+        detalhes: `${req.user.name || req.user.id} excluiu movimentação #${row.id}. Motivo: ${motivo_exclusao || 'Sem motivo informado'}.`,
+        dados_antes: row
       });
     }
     await db('equipamentos_movimentacoes').whereIn('id', cleanIds).delete();
@@ -2723,6 +2914,14 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
 
     // 1. Atualizar status da movimentação
     await db('equipamentos_movimentacoes').where({ id }).update(updateMovement);
+    await registrarAuditoriaSistema(req, {
+      acao: status === 'Aprovado' ? 'APROVOU_MOVIMENTACAO_EQUIPAMENTO' : (status === 'Reprovado' ? 'REPROVOU_MOVIMENTACAO_EQUIPAMENTO' : 'EDITOU_MOVIMENTACAO_EQUIPAMENTO'),
+      modulo: 'Movimentação de Equipamentos',
+      registro_id: id,
+      detalhes: `${req.user.name || req.user.id} alterou movimentação #${id} para ${status}.`,
+      dados_antes: mov,
+      dados_depois: updateMovement
+    });
 
     // 2. Se for Aprovado, sincronizar base de Patrimônio
     if (status === 'Aprovado') {
@@ -3954,19 +4153,80 @@ app.put('/api/despesas-reembolsos/:id/approval', async (req, res) => {
   }
 });
 
-// GET Audit Logs
+// GET Audit Logs - somente administrador. Registros são permanentes e não possuem rota de exclusão.
 app.get('/api/auditoria', async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado. Somente administrador pode visualizar registros do sistema.' });
+  }
   const companyId = (req.user && req.user.empresa_id) || '001';
   try {
-    const list = await db('auditoria_logs')
-      .where({ empresa_id: companyId })
-      .orderBy('id', 'desc');
+    const auditRows = await db('auditoria_logs as a')
+      .leftJoin('usuarios as u', 'a.usuario_id', 'u.id')
+      .select(
+        'a.id', 'a.usuario_id', 'a.acao', 'a.detalhes', 'a.empresa_id', 'a.created_at',
+        'a.modulo', 'a.registro_id', 'a.dados_antes_json', 'a.dados_depois_json',
+        'u.name as usuario_nome', 'u.username as usuario_login'
+      )
+      .where(function() {
+        this.where('a.empresa_id', companyId).orWhereNull('a.empresa_id');
+      })
+      .orderBy('a.id', 'desc')
+      .limit(1000);
+
+    let deletionRows = [];
+    if (await db.schema.hasTable('historico_exclusoes')) {
+      deletionRows = await db('historico_exclusoes').orderBy('id', 'desc').limit(500);
+    }
+
+    const normalizeAudit = auditRows.map(row => ({
+      origem: 'auditoria',
+      id: `A-${row.id}`,
+      data: row.created_at,
+      usuario_id: row.usuario_id || '',
+      usuario_nome: row.usuario_nome || row.usuario_login || row.usuario_id || 'Usuário não localizado',
+      acao: row.acao || 'REGISTRO',
+      modulo: row.modulo || inferAuditModule(row.acao, row.detalhes),
+      registro_id: row.registro_id || '',
+      detalhes: row.detalhes || '',
+      empresa_id: row.empresa_id || companyId
+    }));
+
+    const normalizeDeletion = deletionRows.map(row => ({
+      origem: 'historico_exclusoes',
+      id: `E-${row.id}`,
+      data: row.created_at,
+      usuario_id: row.excluido_por || '',
+      usuario_nome: row.excluido_por || 'Administrador',
+      acao: 'EXCLUIU_REGISTRO',
+      modulo: row.modulo || 'Exclusão',
+      registro_id: row.registro_id || '',
+      detalhes: `Exclusão registrada. Criado por: ${row.criado_por || '-'}. Motivo: ${row.motivo || '-'}.`,
+      empresa_id: companyId
+    }));
+
+    const list = [...normalizeAudit, ...normalizeDeletion]
+      .sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0))
+      .slice(0, 1000);
+
     res.json(list);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao buscar logs de auditoria' });
+    res.status(500).json({ error: 'Erro ao buscar registros do sistema' });
   }
 });
+
+function inferAuditModule(acao = '', detalhes = '') {
+  const text = `${acao} ${detalhes}`.toLowerCase();
+  if (text.includes('prospec')) return 'Prospecção de Leads';
+  if (text.includes('cliente')) return 'Clientes';
+  if (text.includes('chamado')) return 'Chamados Mecânicos';
+  if (text.includes('despesa')) return 'Despesas de Campo';
+  if (text.includes('saldo')) return 'Solicitações de Saldo';
+  if (text.includes('movimenta') || text.includes('equipamento')) return 'Movimentação de Equipamentos';
+  if (text.includes('simula') || text.includes('troca')) return 'Simulador de Troca';
+  if (text.includes('usuario') || text.includes('usuário') || text.includes('permiss')) return 'Usuários e Permissões';
+  return 'Sistema';
+}
 // Function to get permitted seller IDs according to hierarchy and profile
 async function getPermittedSellerIds(user, dbInstance) {
   const companyId = user.empresa_id || '001';
@@ -4148,6 +4408,13 @@ app.delete('/api/chamados/:id', async (req, res) => {
     const existing = await db('chamados_tecnicos').where({ id: req.params.id }).first();
     if (!existing) return res.status(404).json({ error: 'Chamado não encontrado.' });
     await db('chamados_tecnicos').where({ id: req.params.id }).delete();
+    await registrarAuditoriaSistema(req, {
+      acao: 'EXCLUIU_CHAMADO_MECANICO',
+      modulo: 'Chamados Mecânicos',
+      registro_id: req.params.id,
+      detalhes: `${req.user.name || req.user.id} excluiu chamado mecânico #${req.params.id}.`,
+      dados_antes: existing
+    });
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir chamado:', err);
