@@ -2049,3 +2049,6 @@ select { text-overflow: ellipsis; }
     background: var(--bg-main) !important;
   }
 }
+
+/* Ajuste: seletor global de unidade oculto no topo, lógica interna preservada. */
+.global-unit-container { display: none !important; }

@@ -207,11 +207,20 @@ async function initDb() {
       table.string('seller_id').notNullable();
       table.string('cliente_codigo').notNullable();
       table.string('cliente_nome_fantasia').notNullable();
+      table.string('cliente_vendedor').nullable();
       table.decimal('total', 10, 2).notNullable().defaultTo(0);
       table.text('generated_message').nullable();
       table.timestamp('created_at').defaultTo(db.fn.now());
     });
     console.log('Database: Tabela exchange_simulations criada com sucesso.');
+  } else {
+    const hasClienteVendedor = await db.schema.hasColumn('exchange_simulations', 'cliente_vendedor');
+    if (!hasClienteVendedor) {
+      await db.schema.table('exchange_simulations', table => {
+        table.string('cliente_vendedor').nullable();
+      });
+      console.log('Database: Coluna cliente_vendedor adicionada à tabela exchange_simulations.');
+    }
   }
 
   // 5. Create exchange_simulation_items table
@@ -404,6 +413,8 @@ async function initDb() {
       table.string('fantasyName').nullable();
       table.string('city').nullable();
       table.string('address').nullable();
+      table.string('clientCode').nullable();
+      table.string('clientSeller').nullable();
       table.string('title').notNullable();
       table.string('priority').notNullable().defaultTo('Média');
       table.text('observations').nullable();
@@ -440,6 +451,8 @@ async function initDb() {
       fantasyName: t => t.string('fantasyName').nullable(),
       city: t => t.string('city').nullable(),
       address: t => t.string('address').nullable(),
+      clientCode: t => t.string('clientCode').nullable(),
+      clientSeller: t => t.string('clientSeller').nullable(),
       title: t => t.string('title').notNullable().defaultTo('Chamado mecânico'),
       priority: t => t.string('priority').notNullable().defaultTo('Média'),
       observations: t => t.text('observations').nullable(),
@@ -4068,6 +4081,8 @@ app.post('/api/chamados', async (req, res) => {
       fantasyName: body.fantasyName || '',
       city: body.city || '',
       address: body.address || '',
+      clientCode: body.clientCode || body.cliente_codigo || '',
+      clientSeller: body.clientSeller || body.cliente_vendedor || '',
       title: body.title || '',
       priority: body.priority || 'Média',
       observations: body.observations || '',
@@ -4302,7 +4317,7 @@ app.get('/api/exchange/products', async (req, res) => {
 
 // 3. Register a new exchange simulation
 app.post('/api/exchange/simulations', async (req, res) => {
-  const { cliente_codigo, cliente_nome_fantasia, total, generated_message, items } = req.body;
+  const { cliente_codigo, cliente_nome_fantasia, cliente_vendedor, total, generated_message, items } = req.body;
   const companyId = (req.user && req.user.empresa_id) || '001';
   const sellerId = (req.user && req.user.id) || 'demo_user';
 
@@ -4316,6 +4331,7 @@ app.post('/api/exchange/simulations', async (req, res) => {
       seller_id: sellerId,
       cliente_codigo,
       cliente_nome_fantasia,
+      cliente_vendedor: cliente_vendedor || '',
       total: parseFloat(total) || 0,
       generated_message,
       created_at: new Date().toISOString()
@@ -4406,7 +4422,7 @@ app.get('/api/exchange/simulations/:id', async (req, res) => {
 // 6. Update simulation - somente o próprio usuário ou administrador pode editar
 app.put('/api/exchange/simulations/:id', async (req, res) => {
   const { id } = req.params;
-  const { cliente_codigo, cliente_nome_fantasia, total, generated_message, items } = req.body;
+  const { cliente_codigo, cliente_nome_fantasia, cliente_vendedor, total, generated_message, items } = req.body;
   const companyId = (req.user && req.user.empresa_id) || '001';
   const userId = (req.user && req.user.id) || 'demo_user';
 
@@ -4432,6 +4448,7 @@ app.put('/api/exchange/simulations/:id', async (req, res) => {
       .update({
         cliente_codigo,
         cliente_nome_fantasia,
+        cliente_vendedor: cliente_vendedor || '',
         total: parseFloat(total) || 0,
         generated_message,
         updated_at: new Date().toISOString()

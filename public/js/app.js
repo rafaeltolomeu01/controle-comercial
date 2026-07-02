@@ -94,9 +94,28 @@ const App = {
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker registered', reg.scope))
+        const swUrl = './sw.js?v=' + encodeURIComponent(window.__APP_VERSION__ || Date.now());
+        navigator.serviceWorker.register(swUrl)
+          .then(reg => {
+            console.log('Service Worker registered', reg.scope);
+            reg.update().catch(() => {});
+            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            reg.addEventListener('updatefound', () => {
+              const worker = reg.installing;
+              if (!worker) return;
+              worker.addEventListener('statechange', () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                  worker.postMessage({ type: 'SKIP_WAITING' });
+                }
+              });
+            });
+          })
           .catch(err => console.error('Service Worker registration failed', err));
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (window.__ccReloadingForSw) return;
+          window.__ccReloadingForSw = true;
+          window.location.reload();
+        });
       });
     }
   },
@@ -1761,6 +1780,8 @@ const App = {
         const fantasyName = document.getElementById('ticket-open-fantasy').value.trim();
         const city = document.getElementById('ticket-open-city').value.trim();
         const address = document.getElementById('ticket-open-address').value.trim();
+        const clientCode = ((document.getElementById('ticket-open-client-code-hidden') || {}).value || (document.getElementById('ticket-open-client-code') || {}).value || '').trim();
+        const clientSeller = ((document.getElementById('ticket-open-client-seller-imported') || {}).value || '').trim();
         const title = document.getElementById('ticket-open-title').value.trim();
         const priority = document.getElementById('ticket-open-priority').value;
         const obs = document.getElementById('ticket-open-obs').value.trim();
@@ -1793,6 +1814,8 @@ const App = {
               fantasyName,
               city,
               address,
+              clientCode,
+              clientSeller,
               title,
               priority,
               defectPhoto: defectPhotoUrl,
@@ -5276,7 +5299,7 @@ const App = {
 
       const headers = [
         'ID', 'Data', 'Tipo de Solicitação', 'Empresa', 'Código do Cliente', 
-        'Nome Fantasia', 'Cidade', 'Endereço', 'Solicitante', 'Patrimônio Antigo', 
+        'Nome Fantasia', 'Cidade', 'Endereço', 'Vendedor do Cliente', 'Solicitante', 'Patrimônio Antigo', 
         'Modelo Antigo', 'Voltagem Antiga', 'Patrimônio Novo', 'Modelo Novo', 
         'Voltagem Nova', 'Quantidade', 'Detalhe Troca/Adição', 'Motivo Recolha', 
         'Observação', 'Status'
@@ -5294,6 +5317,7 @@ const App = {
           `"${(m.cliente_nome || '').replace(/"/g, '""')}"`,
           `"${(m.cliente_cidade || '').replace(/"/g, '""')}"`,
           `"${(m.cliente_endereco || '').replace(/"/g, '""')}"`,
+          `"${(m.cliente_vendedor || '').replace(/"/g, '""')}"`,
           `"${(m.vendedor_solicitante || '').replace(/"/g, '""')}"`,
           m.patrimonio || '',
           `"${(m.modelo || '').replace(/"/g, '""')}"`,
@@ -6116,7 +6140,7 @@ const App = {
 
       const headers = [
         'ID', 'Data', 'Tipo de Solicitação', 'Empresa', 'Código do Cliente', 
-        'Nome Fantasia', 'Cidade', 'Endereço', 'Solicitante', 'Patrimônio Antigo', 
+        'Nome Fantasia', 'Cidade', 'Endereço', 'Vendedor do Cliente', 'Solicitante', 'Patrimônio Antigo', 
         'Modelo Antigo', 'Voltagem Antiga', 'Patrimônio Novo', 'Modelo Novo', 
         'Voltagem Nova', 'Quantidade', 'Detalhe Troca/Adição', 'Motivo Recolha', 
         'Observação', 'Status'
@@ -6134,6 +6158,7 @@ const App = {
           `"${(m.cliente_nome || '').replace(/"/g, '""')}"`,
           `"${(m.cliente_cidade || '').replace(/"/g, '""')}"`,
           `"${(m.cliente_endereco || '').replace(/"/g, '""')}"`,
+          `"${(m.cliente_vendedor || '').replace(/"/g, '""')}"`,
           `"${(m.vendedor_solicitante || '').replace(/"/g, '""')}"`,
           m.patrimonio || '',
           `"${(m.modelo || '').replace(/"/g, '""')}"`,
@@ -6414,6 +6439,10 @@ App.showTicketDetails = function(id) {
     ${row('OS', ticket.id)}
     ${row('Data', ticket.date)}
     ${row('Cliente', ticket.client)}
+    ${row('Código do Cliente', ticket.clientCode || ticket.cliente_codigo)}
+    ${row('Vendedor do Cliente', ticket.clientSeller || ticket.cliente_vendedor)}
+    ${row('Cidade', ticket.city)}
+    ${row('Endereço', ticket.address)}
     ${row('Equipamento', ticket.equipmentSerial)}
     ${row('Chamado', ticket.title)}
     ${row('Prioridade', ticket.priority)}
@@ -6443,6 +6472,10 @@ App.generateTicketPdf = function(id) {
     equipmentType: ticket.equipmentType,
     equipmentSerial: ticket.equipmentSerial,
     client: ticket.client,
+    city: ticket.city,
+    address: ticket.address,
+    clientCode: ticket.clientCode || ticket.cliente_codigo,
+    clientSeller: ticket.clientSeller || ticket.cliente_vendedor,
     seller: UI.getUserName ? UI.getUserName(ticket.userId) : ticket.userId,
     unit: UI.getUnitName ? UI.getUnitName(ticket.unitId) : ticket.unitId,
     title: ticket.title,
@@ -6480,6 +6513,10 @@ App.generateTicketPdfFromForm = function() {
   const equipmentType = document.getElementById('ticket-eq-type-text')?.value || '';
   const equipmentSerial = document.getElementById('ticket-eq-serial')?.value || '';
   const client = document.getElementById('ticket-client-name')?.value || '';
+  const city = ticket.city || '';
+  const address = ticket.address || '';
+  const clientCode = ticket.clientCode || ticket.cliente_codigo || '';
+  const clientSeller = ticket.clientSeller || ticket.cliente_vendedor || '';
   const seller = document.getElementById('ticket-seller-text')?.value || '';
   const unit = document.getElementById('ticket-unit-text')?.value || '';
   const title = document.getElementById('ticket-title')?.value || '';
@@ -6535,6 +6572,10 @@ App.generateTicketPdfFromForm = function() {
     equipmentType,
     equipmentSerial,
     client,
+    city,
+    address,
+    clientCode,
+    clientSeller,
     seller,
     unit,
     title,
@@ -6753,16 +6794,36 @@ App.printTicketData = function(ticket) {
     </tr>
     <tr>
       <td style="width: 33%;">
+        <span class="label">Código do Cliente</span>
+        <span class="val">${esc(ticket.clientCode || ticket.cliente_codigo || '')}</span>
+      </td>
+      <td style="width: 33%;">
+        <span class="label">Vendedor do Cliente (Planilha)</span>
+        <span class="val">${esc(ticket.clientSeller || ticket.cliente_vendedor || '')}</span>
+      </td>
+      <td style="width: 34%;">
         <span class="label">Vendedor Responsável</span>
         <span class="val">${esc(ticket.seller)}</span>
       </td>
+    </tr>
+    <tr>
       <td style="width: 33%;">
         <span class="label">Prioridade da OS</span>
         <span class="val">${esc(ticket.priority)}</span>
       </td>
-      <td style="width: 34%;">
+      <td colspan="2">
         <span class="label">Situação após Atendimento</span>
         <span class="val">${esc(ticket.eqStatusAfter)}</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="width: 33%;">
+        <span class="label">Cidade</span>
+        <span class="val">${esc(ticket.city || '')}</span>
+      </td>
+      <td colspan="2">
+        <span class="label">Endereço</span>
+        <span class="val">${esc(ticket.address || '')}</span>
       </td>
     </tr>
     <tr>
@@ -6844,7 +6905,7 @@ App.printTicketData = function(ticket) {
  * Initializes the Exchange Simulator view and sets up event listeners
  */
 App.initSimuladorTroca = async function() {
-  window.CurrentExchange = window.CurrentExchange || { clientCode: '', clientName: '', items: [] };
+  window.CurrentExchange = window.CurrentExchange || { clientCode: '', clientName: '', clientSeller: '', items: [] };
   window.ExchangeCategories = window.ExchangeCategories || ['Açaí', 'Picolés', 'Copo', 'Linha especial', 'Outros'];
   
   // Switch to Nova Troca tab by default on load
@@ -6874,10 +6935,12 @@ App.initSimuladorTroca = async function() {
     e.preventDefault();
     const code = document.getElementById('exchange-client-code').value.trim();
     const name = document.getElementById('exchange-client-name').value.trim();
+    const clientSeller = ((document.getElementById('exchange-client-seller-imported') || {}).value || '').trim();
     if (!code || !name) return alert('Por favor, preencha todos os campos do cliente.');
     
     window.CurrentExchange.clientCode = code;
     window.CurrentExchange.clientName = name;
+    window.CurrentExchange.clientSeller = clientSeller;
     
     App.renderCurrentExchangeState();
   });
@@ -6889,6 +6952,7 @@ App.initSimuladorTroca = async function() {
     }
     window.CurrentExchange.clientCode = '';
     window.CurrentExchange.clientName = '';
+    window.CurrentExchange.clientSeller = '';
     window.CurrentExchange.items = [];
     App.renderCurrentExchangeState();
   });
@@ -6974,7 +7038,7 @@ App.initSimuladorTroca = async function() {
     App.copyExchangeMessageText('exchange-message-output');
   });
   document.getElementById('btn-exchange-new-simulation')?.addEventListener('click', () => {
-    window.CurrentExchange = { clientCode: '', clientName: '', items: [] };
+    window.CurrentExchange = { clientCode: '', clientName: '', clientSeller: '', items: [] };
     document.getElementById('exchange-client-form').reset();
     App.renderCurrentExchangeState();
   });
@@ -7064,7 +7128,7 @@ App.renderCurrentExchangeState = function() {
     receiptContainer?.classList.add('hidden');
     
     if (activeClientLabel) {
-      activeClientLabel.textContent = `CÓD: ${window.CurrentExchange.clientCode} | NOME: ${window.CurrentExchange.clientName.toUpperCase()}`;
+      activeClientLabel.textContent = `CÓD: ${window.CurrentExchange.clientCode} | NOME: ${window.CurrentExchange.clientName.toUpperCase()}${window.CurrentExchange.clientSeller ? ' | VEND.: ' + window.CurrentExchange.clientSeller.toUpperCase() : ''}`;
     }
     
     App.goBackToExchangeCategories();
@@ -7319,6 +7383,7 @@ App.finalizeExchange = async function() {
   const clientCode = window.CurrentExchange.clientCode;
   const clientName = window.CurrentExchange.clientName;
   const items = window.CurrentExchange.items;
+  const clientSeller = window.CurrentExchange.clientSeller || '';
   
   if (!clientCode || !clientName) {
     alert('Identificação do cliente inválida.');
@@ -7343,7 +7408,9 @@ App.finalizeExchange = async function() {
   msg += "SIMULADOR DE TROCA\n";
   msg += separator + "\n\n";
   msg += `CLIENTE: ${clientCode}\n`;
-  msg += `NOME: ${clientName.toUpperCase()}\n\n`;
+  msg += `NOME: ${clientName.toUpperCase()}\n`;
+  if (clientSeller) msg += `VENDEDOR CLIENTE: ${clientSeller.toUpperCase()}\n`;
+  msg += `\n`;
   msg += "PRODUTOS:\n\n";
   
   const moneyFormat = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -7373,6 +7440,7 @@ App.finalizeExchange = async function() {
       body: JSON.stringify({
         cliente_codigo: clientCode,
         cliente_nome_fantasia: clientName,
+        cliente_vendedor: clientSeller,
         total: totalGeral,
         generated_message: msg,
         items: items
@@ -7388,7 +7456,7 @@ App.finalizeExchange = async function() {
       document.getElementById('exchange-message-output').value = msg;
       
       // Reset in-memory cart and update UI
-      window.CurrentExchange = { clientCode: '', clientName: '', items: [] };
+      window.CurrentExchange = { clientCode: '', clientName: '', clientSeller: '', items: [] };
       UI.renderExchangeCart(window.CurrentExchange.items);
       
       // Refresh history list immediately

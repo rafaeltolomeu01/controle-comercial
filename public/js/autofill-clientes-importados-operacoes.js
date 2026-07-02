@@ -24,6 +24,7 @@
     style.textContent = `
       /* Remove o seletor antigo de vendedor da barra lateral, sem apagar dados nem lógica interna. */
       #seller-filter { display: none !important; }
+      .global-unit-container { display: none !important; }
 
       .cc-autofill-locked {
         background-color: rgba(255,255,255,0.035) !important;
@@ -177,6 +178,24 @@
     return `${main}${number}${complemento}${bairro}${cep}`.trim();
   }
 
+  function getImportedSellerName(row) {
+    if (!row) return '';
+    return String(row.vendedor || row.vendedorResponsavel || row.vendedor_responsavel || row.seller || '').trim();
+  }
+
+  function setHiddenValue(id, value) {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('input');
+      el.type = 'hidden';
+      el.id = id;
+      el.name = id;
+      const form = document.getElementById('ticket-open-form') || document.getElementById('exchange-client-form') || document.body;
+      form.appendChild(el);
+    }
+    el.value = value || '';
+  }
+
   function getLoggedUser() {
     try {
       return window.Store && typeof Store.getLoggedUser === 'function' ? (Store.getLoggedUser() || {}) : {};
@@ -325,8 +344,7 @@
     }
 
     const clientSeller = document.getElementById('mov-client-seller');
-    if (clientSeller) {
-      clientSeller.value = user.name || getFixedSellerName();
+    if (clientSeller && clientSeller.dataset.ccImportedLocked === '1') {
       setLocked(clientSeller, true);
     }
   }
@@ -338,14 +356,18 @@
     fixMovementIdentityFields();
 
     if (!code) {
-      unlockClientFields(['mov-client-name', 'mov-client-city', 'mov-client-address']);
+      unlockClientFields(['mov-client-name', 'mov-client-city', 'mov-client-address', 'mov-client-seller']);
+      const sellerManual = document.getElementById('mov-client-seller');
+      if (sellerManual) { delete sellerManual.dataset.ccImportedLocked; }
       setHint(input, 'mov-client-id-hint', '', 'Digite o código para buscar na base de clientes importados. Se não encontrar, preencha manualmente.');
       return;
     }
 
     const row = await findImportedClientByCode(code);
     if (!row) {
-      unlockClientFields(['mov-client-name', 'mov-client-city', 'mov-client-address']);
+      unlockClientFields(['mov-client-name', 'mov-client-city', 'mov-client-address', 'mov-client-seller']);
+      const sellerManual = document.getElementById('mov-client-seller');
+      if (sellerManual) { delete sellerManual.dataset.ccImportedLocked; }
       setHint(input, 'mov-client-id-hint', 'not-found', 'Código não encontrado. Você pode preencher os dados do cliente manualmente.');
       return;
     }
@@ -353,7 +375,10 @@
     setValue('mov-client-name', row.fantasia || '', true);
     setValue('mov-client-city', row.cidade || '', true);
     setValue('mov-client-address', buildAddress(row), true);
-    setValue('mov-client-seller', getFixedSellerName(), true);
+    const importedSeller = getImportedSellerName(row);
+    const movClientSeller = document.getElementById('mov-client-seller');
+    if (movClientSeller) movClientSeller.dataset.ccImportedLocked = '1';
+    setValue('mov-client-seller', importedSeller || getFixedSellerName(), true);
     setHint(input, 'mov-client-id-hint', 'found', 'Cliente localizado na base importada. Os dados automáticos ficaram bloqueados.');
   }
 
@@ -385,9 +410,24 @@
     return codeGroup.querySelector('#ticket-open-client-code');
   }
 
+  function ensureTicketImportedHiddenFields() {
+    const form = document.getElementById('ticket-open-form');
+    if (!form) return;
+    ['ticket-open-client-code-hidden', 'ticket-open-client-seller-imported'].forEach(id => {
+      if (!document.getElementById(id)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.id = id;
+        input.name = id;
+        form.appendChild(input);
+      }
+    });
+  }
+
   function fixTicketIdentityFields() {
     const form = document.getElementById('ticket-open-form');
     if (!form) return;
+    ensureTicketImportedHiddenFields();
 
     const user = getLoggedUser();
     const unitId = getFixedUnitId() || user.unitId || '';
@@ -415,6 +455,8 @@
 
     if (!code) {
       unlockClientFields(['ticket-open-client', 'ticket-open-fantasy', 'ticket-open-city', 'ticket-open-address']);
+      setHiddenValue('ticket-open-client-code-hidden', '');
+      setHiddenValue('ticket-open-client-seller-imported', '');
       setHint(input, 'ticket-open-client-code-hint', '', 'Digite o código para buscar na base importada. Se não encontrar, preencha manualmente.');
       return;
     }
@@ -422,6 +464,8 @@
     const row = await findImportedClientByCode(code);
     if (!row) {
       unlockClientFields(['ticket-open-client', 'ticket-open-fantasy', 'ticket-open-city', 'ticket-open-address']);
+      setHiddenValue('ticket-open-client-code-hidden', code);
+      setHiddenValue('ticket-open-client-seller-imported', '');
       setHint(input, 'ticket-open-client-code-hint', 'not-found', 'Código não encontrado. Você pode preencher os dados do cliente manualmente.');
       return;
     }
@@ -430,6 +474,8 @@
     setValue('ticket-open-fantasy', row.fantasia || '', true);
     setValue('ticket-open-city', row.cidade || '', true);
     setValue('ticket-open-address', buildAddress(row), true);
+    setHiddenValue('ticket-open-client-code-hidden', row.codigo || code);
+    setHiddenValue('ticket-open-client-seller-imported', getImportedSellerName(row));
     setHint(input, 'ticket-open-client-code-hint', 'found', 'Cliente localizado na base importada. Os dados automáticos ficaram bloqueados.');
   }
 
@@ -462,6 +508,7 @@
     const code = input.value.trim();
     if (!code) {
       setLocked(nameInput, false);
+      setHiddenValue('exchange-client-seller-imported', '');
       setHint(input, 'exchange-client-code-hint', '', 'Digite o código para buscar o nome fantasia automaticamente.');
       return;
     }
@@ -469,11 +516,13 @@
     const row = await findImportedClientByCode(code);
     if (!row) {
       setLocked(nameInput, false);
+      setHiddenValue('exchange-client-seller-imported', '');
       setHint(input, 'exchange-client-code-hint', 'not-found', 'Código não encontrado. Você pode digitar o nome fantasia normalmente.');
       return;
     }
 
     nameInput.value = row.fantasia || '';
+    setHiddenValue('exchange-client-seller-imported', getImportedSellerName(row));
     setLocked(nameInput, true);
     setHint(input, 'exchange-client-code-hint', 'found', 'Cliente localizado. Nome fantasia preenchido automaticamente e bloqueado.');
   }
@@ -493,6 +542,28 @@
       clearTimeout(timer);
       timer = setTimeout(() => fn.apply(this, arguments), wait);
     };
+  }
+
+  function bindSubmitSafeguards() {
+    const movementForm = document.getElementById('movement-form');
+    if (movementForm && movementForm.dataset.ccSubmitSafeguardBound !== '1') {
+      movementForm.dataset.ccSubmitSafeguardBound = '1';
+      movementForm.addEventListener('submit', () => {
+        // Garante que campos fixos/automáticos tenham valor antes do envio, inclusive em navegadores mobile/PWA.
+        fixMovementIdentityFields();
+        const tipo = document.getElementById('mov-tipo-solicitacao');
+        if (tipo) tipo.disabled = false;
+      }, true);
+    }
+
+    const ticketForm = document.getElementById('ticket-open-form');
+    if (ticketForm && ticketForm.dataset.ccSubmitSafeguardBound !== '1') {
+      ticketForm.dataset.ccSubmitSafeguardBound = '1';
+      ticketForm.addEventListener('submit', () => {
+        fixTicketIdentityFields();
+        ensureTicketImportedHiddenFields();
+      }, true);
+    }
   }
 
   function bindFormResetReapply() {
@@ -516,6 +587,7 @@
     bindMovementAutofill();
     bindTicketAutofill();
     bindExchangeAutofill();
+    bindSubmitSafeguards();
     bindFormResetReapply();
     fixMovementIdentityFields();
     fixTicketIdentityFields();

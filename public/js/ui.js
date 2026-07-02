@@ -1068,9 +1068,11 @@ const UI = {
               <tr>
                 <th style="text-align: left; width: 10%;">Código</th>
                 <th style="text-align: left; width: 30%;">Incidente Reportado</th>
-                <th style="text-align: left; width: 20%;">Cliente</th>
-                <th style="text-align: left; width: 15%;">Unidade</th>
-                <th style="text-align: left; width: 15%;">Vendedor</th>
+                <th style="text-align: left; width: 18%;">Cliente</th>
+                <th style="text-align: left; width: 10%;">Cód. Cliente</th>
+                <th style="text-align: left; width: 14%;">Vendedor Cliente</th>
+                <th style="text-align: left; width: 12%;">Unidade</th>
+                <th style="text-align: left; width: 12%;">Solicitante</th>
                 <th style="text-align: left; width: 10%;">Prioridade</th>
                 <th style="text-align: right; width: 10%;">Status</th>
               </tr>
@@ -1081,6 +1083,8 @@ const UI = {
                   <td>${t.id}</td>
                   <td style="font-weight: 600;">${t.title}</td>
                   <td>${t.client}</td>
+                  <td>${t.clientCode || t.cliente_codigo || '-'}</td>
+                  <td>${t.clientSeller || t.cliente_vendedor || '-'}</td>
                   <td>${UI.getUnitName(t.unitId)}</td>
                   <td>${UI.getUserName(t.userId)}</td>
                   <td>${t.priority}</td>
@@ -1191,9 +1195,12 @@ const UI = {
                 <th style="text-align: left;">ID</th>
                 <th style="text-align: left;">Data</th>
                 <th style="text-align: left;">Operação</th>
+                <th style="text-align: left;">Cód.</th>
                 <th style="text-align: left;">Cliente</th>
                 <th style="text-align: left;">Cidade</th>
-                <th style="text-align: left;">Vendedor</th>
+                <th style="text-align: left;">Endereço</th>
+                <th style="text-align: left;">Vendedor Cliente</th>
+                <th style="text-align: left;">Solicitante</th>
                 <th style="text-align: left;">Patrimônio</th>
                 <th style="text-align: left;">Modelo</th>
                 <th style="text-align: right;">Status</th>
@@ -1213,8 +1220,11 @@ const UI = {
                     <td>#${m.id}</td>
                     <td>${dataStr}</td>
                     <td style="text-transform: uppercase; font-weight: bold;">${m.tipo_solicitacao}</td>
+                    <td>${m.cliente_codigo || '-'}</td>
                     <td>${m.cliente_nome}</td>
                     <td>${m.cliente_cidade}</td>
+                    <td>${m.cliente_endereco || '-'}</td>
+                    <td>${m.cliente_vendedor || '-'}</td>
                     <td>${m.vendedor_solicitante}</td>
                     <td>${patrimonioStr}</td>
                     <td>${modeloStr}</td>

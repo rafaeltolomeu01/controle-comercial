@@ -718,7 +718,7 @@
     const form = document.getElementById('ticket-form');
     const hasForm = form && String(form.dataset.ticketId || '') === String(id);
     if (!hasForm) {
-      return { ...saved, seller: userName(saved.userId), unit: unitName(saved.unitId) };
+      return { ...saved, clientCode: saved.clientCode || saved.cliente_codigo || '', clientSeller: saved.clientSeller || saved.cliente_vendedor || '', seller: userName(saved.userId), unit: unitName(saved.unitId) };
     }
 
     const startDateVal = document.getElementById('ticket-start-date')?.value || '';
@@ -749,6 +749,10 @@
       equipmentType: document.getElementById('ticket-eq-type-text')?.value || saved.equipmentType || '',
       equipmentSerial: document.getElementById('ticket-eq-serial')?.value || saved.equipmentSerial || '',
       client: document.getElementById('ticket-client-name')?.value || saved.client || '',
+      city: saved.city || '',
+      address: saved.address || '',
+      clientCode: saved.clientCode || saved.cliente_codigo || '',
+      clientSeller: saved.clientSeller || saved.cliente_vendedor || '',
       seller: document.getElementById('ticket-seller-text')?.value || userName(saved.userId),
       unit: document.getElementById('ticket-unit-text')?.value || unitName(saved.unitId),
       title: document.getElementById('ticket-title')?.value || saved.title || '',
@@ -801,9 +805,15 @@
       fieldBox(doc, 75, y, 'Nº Patrimônio / Serial', ticket.equipmentSerial, 54);
       fieldBox(doc, 136, y, 'Cliente Vinculado', ticket.client, 54);
       y += 20;
-      fieldBox(doc, 14, y, 'Vendedor Responsável', ticket.seller || userName(ticket.userId), 54);
-      fieldBox(doc, 75, y, 'Prioridade', ticket.priority, 54);
-      fieldBox(doc, 136, y, 'Estado Pós Atendimento', ticket.eqStatusAfter, 54);
+      fieldBox(doc, 14, y, 'Código do Cliente', ticket.clientCode || ticket.cliente_codigo || '-', 54);
+      fieldBox(doc, 75, y, 'Vendedor do Cliente', ticket.clientSeller || ticket.cliente_vendedor || '-', 54);
+      fieldBox(doc, 136, y, 'Vendedor Solicitante', ticket.seller || userName(ticket.userId), 54);
+      y += 20;
+      fieldBox(doc, 14, y, 'Prioridade', ticket.priority, 54);
+      fieldBox(doc, 75, y, 'Estado Pós Atendimento', ticket.eqStatusAfter, 54);
+      y += 20;
+      fieldBox(doc, 14, y, 'Cidade', ticket.city || '-', 54);
+      fieldBox(doc, 75, y, 'Endereço', ticket.address || '-', 116);
       y += 20;
       y = textBlock(doc, y, 'Descrição Simplificada da Falha', ticket.title, title);
 
