@@ -393,6 +393,81 @@
         }
       }
 
+
+
+      /* Correção final: filtros do importador em 2 colunas no celular, como Clientes Cadastrados. */
+      @media (max-width: 900px) {
+        #clientes-importador-card .general-filter-bar {
+          padding:10px !important;
+          gap:8px !important;
+          border-radius:10px !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-row {
+          display:grid !important;
+          grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+          gap:9px 10px !important;
+          width:100% !important;
+          align-items:end !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-group,
+        #clientes-importador-card .clientes-importador-filter-group.search {
+          min-width:0 !important;
+          width:100% !important;
+          max-width:100% !important;
+          flex:none !important;
+          gap:4px !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-group.search {
+          grid-column:1 / -1 !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-group label {
+          font-size:.72rem !important;
+          line-height:1.15 !important;
+          white-space:normal !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-group input,
+        #clientes-importador-card .clientes-importador-filter-group select {
+          width:100% !important;
+          height:38px !important;
+          min-height:38px !important;
+          padding:0 10px !important;
+          font-size:.8rem !important;
+          border-radius:8px !important;
+        }
+        #clientes-importador-card .clientes-importador-actions {
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+          gap:8px !important;
+          width:100% !important;
+          padding-top:10px !important;
+          margin-top:2px !important;
+        }
+        #clientes-importador-card .clientes-importador-actions .btn,
+        #clientes-importador-card .clientes-importador-actions button {
+          width:100% !important;
+          min-height:38px !important;
+          height:38px !important;
+          padding:0 8px !important;
+          font-size:.78rem !important;
+          line-height:1.1 !important;
+        }
+        #btn-clientes-importador-export-all {
+          grid-column:1 / -1 !important;
+        }
+      }
+
+      @media (max-width: 380px) {
+        #clientes-importador-card .clientes-importador-filter-row {
+          grid-template-columns:1fr !important;
+        }
+        #clientes-importador-card .clientes-importador-actions {
+          grid-template-columns:1fr !important;
+        }
+        #btn-clientes-importador-export-all {
+          grid-column:auto !important;
+        }
+      }
+
       @media (max-width: 420px) {
         #clientes-importador-card .card-header {
           grid-template-columns:1fr !important;
@@ -407,6 +482,26 @@
           grid-column:auto !important;
         }
       }
+
+
+      /* Garante duas colunas de filtros também em celulares comuns de 390/414 px. */
+      @media (max-width: 420px) and (min-width: 381px) {
+        #clientes-importador-card .clientes-importador-filter-row {
+          display:grid !important;
+          grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+        }
+        #clientes-importador-card .clientes-importador-filter-group.search {
+          grid-column:1 / -1 !important;
+        }
+        #clientes-importador-card .clientes-importador-actions {
+          display:grid !important;
+          grid-template-columns:1fr 1fr !important;
+        }
+        #clientes-importador-card #btn-clientes-importador-export-all {
+          grid-column:1 / -1 !important;
+        }
+      }
+
     `;
     document.head.appendChild(style);
   }
