@@ -1619,10 +1619,45 @@ function mergeStoreArrays(...lists) {
 
 function canApproveClientsUser(user) {
   const profile = normalizeRole(user && user.profile);
-  const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeRole) : [];
+  let perms = [];
+  if (Array.isArray(user && user.permissions)) perms = user.permissions.map(normalizeRole);
+  else {
+    try { perms = JSON.parse((user && user.permissions) || '[]').map(normalizeRole); } catch (_) { perms = []; }
+  }
+  const joined = [profile, ...perms].join(' | ');
   const allowedRoles = ['administrador', 'admin', 'administrador sistema', 'administrador geral', 'supervisor', 'gerente', 'responsavel equipamentos', 'responsavel por equipamentos'];
-  const allowedPerms = ['administrador', 'admin', 'equipamentos', 'estoque', 'movimentacao', 'movimentacao de equipamentos', 'liberacao de equipamento', 'liberacao de equipamentos', 'aprovacao de clientes'];
-  return allowedRoles.includes(profile) || perms.some(p => allowedPerms.includes(p));
+  const allowedPerms = [
+    'administrador', 'admin', 'equipamentos', 'estoque',
+    'movimentacao', 'movimentacao de equipamentos', 'movimentacao equipamento',
+    'liberacao de equipamento', 'liberacao de equipamentos',
+    'aprovacao de clientes', 'aprovar clientes',
+    'liberacao de cadastro de clientes', 'liberacao cadastro clientes', 'liberacao de clientes', 'cadastro de clientes'
+  ];
+  return allowedRoles.includes(profile) || allowedPerms.some(p => joined.includes(p));
+}
+
+function getClientOwnerId(item) {
+  return String((item && (item.userId || item.user_id || item.vendedor_id || item.seller_id)) || '');
+}
+
+function isClientPendingCorrection(status) {
+  const s = normalizeRole(status);
+  return s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
+}
+
+function isClientVisibleToUser(item, user) {
+  if (!item) return false;
+  if (canApproveClientsUser(user)) return true;
+  const status = normalizeRole(item.status);
+  const owner = getClientOwnerId(item);
+  const userId = String((user && user.id) || '');
+  if (status.includes('aprov')) return true;
+  return owner && userId && owner === userId;
+}
+
+function filterClientsForUser(list, user) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(item => isClientVisibleToUser(item, user));
 }
 
 async function getMergedClientsStore(companyId) {
@@ -1677,7 +1712,7 @@ app.get('/api/store', async (req, res) => {
         payload[cleanKey] = parsed;
       }
     }
-    payload.clients = mergeStoreArrays(...clientLists);
+    payload.clients = filterClientsForUser(mergeStoreArrays(...clientLists), req.user);
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -1693,7 +1728,7 @@ app.get('/api/store/:key', async (req, res) => {
     const dbKey = getStoreKey(req, key);
     if (key === 'clients') {
       const clients = await getMergedClientsStore(companyId);
-      return res.json({ key, data: clients });
+      return res.json({ key, data: filterClientsForUser(clients, req.user) });
     }
     let row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     // Compatibilidade: versões anteriores salvaram o importador preso ao usuário.
@@ -1726,25 +1761,49 @@ app.post('/api/store/:key', async (req, res) => {
       const existingList = await getMergedClientsStore(companyId);
       previousMergedClientsForAudit = existingList;
       const canApprove = canApproveClientsUser(req.user);
+      const currentUserId = req.user && req.user.id ? String(req.user.id) : '';
       const incoming = data.map(item => ({ ...(item || {}) }));
       const existingByKey = new Map(existingList.map((item, idx) => [storeItemKey(item, idx, 'existing'), item]));
       const sanitizedIncoming = incoming.map((item, idx) => {
         const itemKey = storeItemKey(item, idx, 'incoming');
         const previous = existingByKey.get(itemKey);
         if (!canApprove) {
-          if (previous && String(previous.status || '') !== String(item.status || '')) {
-            item.status = previous.status || 'Pendente';
+          const owner = getClientOwnerId(previous) || getClientOwnerId(item) || currentUserId;
+          const isOwner = currentUserId && String(owner) === currentUserId;
+
+          // Usuário comum não pode alterar cadastro de outro vendedor.
+          if (previous && !isOwner) return previous;
+
+          // Novo cadastro de vendedor sempre entra pendente para aprovação.
+          if (!previous) {
+            item.userId = item.userId || currentUserId;
+            item.status = 'Pendente';
+            return item;
+          }
+
+          // Cadastro já aprovado não pode ser editado pelo vendedor por esta rota.
+          if (normalizeRole(previous.status).includes('aprov')) return previous;
+
+          const requestedStatus = String(item.status || '');
+          const previousStatus = String(previous.status || 'Pendente');
+          const resubmittingCorrection = isClientPendingCorrection(previousStatus) && normalizeRole(requestedStatus).includes('pendent');
+
+          // O vendedor só pode reenviar para Pendente quando o cadastro voltou para correção.
+          // Qualquer outra tentativa de mudar status é preservada como estava.
+          if (resubmittingCorrection) {
+            item.status = 'Pendente';
+            item.rejectionReason = '';
+          } else {
+            item.status = previousStatus;
             item.rejectionReason = previous.rejectionReason || item.rejectionReason || '';
           }
-          if (!previous && (!item.status || !['Pendente', 'Aguardando Ajuste'].includes(String(item.status)))) {
-            item.status = 'Pendente';
-          }
+          item.userId = previous.userId || previous.user_id || item.userId || currentUserId;
         }
         return item;
       });
       const mergedClients = mergeStoreArrays(existingList, sanitizedIncoming);
       const hardDeleteId = req.body && req.body.hardDeleteId ? String(req.body.hardDeleteId) : '';
-      const finalClients = hardDeleteId ? mergedClients.filter(c => String(c && c.id) !== hardDeleteId) : mergedClients;
+      const finalClients = (hardDeleteId && canApprove) ? mergedClients.filter(c => String(c && c.id) !== hardDeleteId) : mergedClients;
       dataJson = JSON.stringify(finalClients);
     }
     
@@ -1867,9 +1926,11 @@ app.post('/api/store/:key', async (req, res) => {
             const targets = await obterDestinatarios('NOVO_CLIENTE', req.user, companyId);
             await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title:'Novo cliente para análise', body:`${req.user.name || 'Usuário'} cadastrou um novo cliente para aprovação.` });
           } else if (prev && String(prev.status || '') !== status && owner) {
-            const title = normalizeRole(status).includes('reprov') ? 'Cliente reprovado' : (normalizeRole(status).includes('correc') || normalizeRole(status).includes('analise') ? 'Cliente enviado para correção/análise' : 'Cliente aprovado');
+            const stNorm = normalizeRole(status);
+            const title = stNorm.includes('reprov') ? 'Cliente reprovado' : ((stNorm.includes('correc') || stNorm.includes('analise') || stNorm.includes('ajuste')) ? 'Cadastro voltou para correção' : 'Cliente aprovado');
             const targets = await obterDestinatarios('CLIENTE_STATUS_ALTERADO', owner, companyId);
-            await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.` });
+            const reason = item.rejectionReason ? ` Motivo: ${item.rejectionReason}` : '';
+            await notifyUsers(targets, { empresa_id: companyId, module:'clientes', record_id:itemId, target_hash:'#clientes', title, body:`O cliente ${item.name || item.nome || item.fantasy_name || item.nomeFantasia || itemId} foi atualizado para: ${status}.${reason}` });
           }
         }
       } catch (notifErr) { console.warn('Falha ao gerar notificações de clientes:', notifErr.message); }
