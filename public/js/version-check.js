@@ -1,7 +1,7 @@
 /* Atualização automática do sistema após deploy. */
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20260702-0935-auditoria-sistema';
+  const CURRENT_VERSION = '20260702-1045-clientes-globais-aprovacao';
   const VERSION_KEY = 'controle_campo_app_version';
   window.__APP_VERSION__ = CURRENT_VERSION;
 

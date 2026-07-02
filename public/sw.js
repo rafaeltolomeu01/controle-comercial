@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260702-0935-auditoria-sistema';
+const CACHE_VERSION = '20260702-1045-clientes-globais-aprovacao';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

@@ -1582,7 +1582,7 @@ const ALLOWED_STORE_KEYS = new Set([
 ]);
 
 function getStoreKey(req, key) {
-  if (key === 'company_identity' || key === 'units' || key === 'clientes_importador_sistema') {
+  if (key === 'company_identity' || key === 'units' || key === 'clientes_importador_sistema' || key === 'clients') {
     return key;
   }
   const userId = req.user && req.user.id ? String(req.user.id) : 'global';
@@ -1597,6 +1597,50 @@ function safeParseStoreJson(value, fallback = null) {
   try { return JSON.parse(value || 'null'); } catch (_) { return fallback; }
 }
 
+
+function storeItemKey(item, index, prefix) {
+  if (!item || typeof item !== 'object') return `${prefix || 'item'}-${index}`;
+  return String(item.id || item.codigo || item.cnpj || item.cpf || item.name || item.fantasyName || `${prefix || 'item'}-${index}`);
+}
+
+function mergeStoreArrays(...lists) {
+  const map = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    list.forEach((item, index) => {
+      if (!item || typeof item !== 'object') return;
+      const key = storeItemKey(item, index, 'row');
+      const prev = map.get(key) || {};
+      map.set(key, { ...prev, ...item });
+    });
+  }
+  return Array.from(map.values());
+}
+
+function canApproveClientsUser(user) {
+  const profile = normalizeRole(user && user.profile);
+  const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeRole) : [];
+  const allowedRoles = ['administrador', 'admin', 'administrador sistema', 'administrador geral', 'supervisor', 'gerente', 'responsavel equipamentos', 'responsavel por equipamentos'];
+  const allowedPerms = ['administrador', 'admin', 'equipamentos', 'estoque', 'movimentacao', 'movimentacao de equipamentos', 'liberacao de equipamento', 'liberacao de equipamentos', 'aprovacao de clientes'];
+  return allowedRoles.includes(profile) || perms.some(p => allowedPerms.includes(p));
+}
+
+async function getMergedClientsStore(companyId) {
+  const rows = await db('app_kv_store')
+    .where({ company_id: companyId })
+    .andWhere(function() {
+      this.where('store_key', 'clients').orWhere('store_key', 'like', '%_clients');
+    });
+  const globalRows = [];
+  const scopedRows = [];
+  for (const row of rows) {
+    const parsed = safeParseStoreJson(row.data_json, []);
+    if (row.store_key === 'clients') globalRows.push(parsed);
+    else scopedRows.push(parsed);
+  }
+  return mergeStoreArrays(...scopedRows, ...globalRows);
+}
+
 app.get('/api/store', async (req, res) => {
   try {
     const companyId = getStoreCompanyId(req);
@@ -1607,13 +1651,24 @@ app.get('/api/store', async (req, res) => {
         this.where('store_key', 'company_identity')
             .orWhere('store_key', 'units')
             .orWhere('store_key', 'clientes_importador_sistema')
+            .orWhere('store_key', 'clients')
+            .orWhere('store_key', 'like', '%_clients')
             .orWhere('store_key', 'like', `${userId}_%`);
       });
     const payload = {};
+    const clientLists = [];
     for (const row of rows) {
       const isScoped = row.store_key.startsWith(`${userId}_`);
       const cleanKey = isScoped ? row.store_key.replace(`${userId}_`, '') : row.store_key;
       const parsed = safeParseStoreJson(row.data_json, null);
+
+      // Migração segura: todos os cadastros comerciais agora são globais da empresa.
+      // Também lê versões antigas salvas como usuario_clients para nenhum cadastro sumir.
+      if (row.store_key === 'clients' || row.store_key.endsWith('_clients')) {
+        if (Array.isArray(parsed)) clientLists.push(parsed);
+        continue;
+      }
+
       if (cleanKey === 'clientes_importador_sistema' && Object.prototype.hasOwnProperty.call(payload, cleanKey)) {
         const current = payload[cleanKey];
         const currentEmpty = !Array.isArray(current) || current.length === 0;
@@ -1622,6 +1677,7 @@ app.get('/api/store', async (req, res) => {
         payload[cleanKey] = parsed;
       }
     }
+    payload.clients = mergeStoreArrays(...clientLists);
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -1635,6 +1691,10 @@ app.get('/api/store/:key', async (req, res) => {
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
     const dbKey = getStoreKey(req, key);
+    if (key === 'clients') {
+      const clients = await getMergedClientsStore(companyId);
+      return res.json({ key, data: clients });
+    }
     let row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     // Compatibilidade: versões anteriores salvaram o importador preso ao usuário.
     // Se ainda não existir a base global, tenta ler a antiga para o admin migrar automaticamente.
@@ -1660,8 +1720,35 @@ app.post('/api/store/:key', async (req, res) => {
     const dbKey = getStoreKey(req, key);
     const data = Object.prototype.hasOwnProperty.call(req.body || {}, 'data') ? req.body.data : req.body;
     let dataJson = JSON.stringify(data == null ? null : data);
+    let previousMergedClientsForAudit = null;
+
+    if (key === 'clients' && Array.isArray(data)) {
+      const existingList = await getMergedClientsStore(companyId);
+      previousMergedClientsForAudit = existingList;
+      const canApprove = canApproveClientsUser(req.user);
+      const incoming = data.map(item => ({ ...(item || {}) }));
+      const existingByKey = new Map(existingList.map((item, idx) => [storeItemKey(item, idx, 'existing'), item]));
+      const sanitizedIncoming = incoming.map((item, idx) => {
+        const itemKey = storeItemKey(item, idx, 'incoming');
+        const previous = existingByKey.get(itemKey);
+        if (!canApprove) {
+          if (previous && String(previous.status || '') !== String(item.status || '')) {
+            item.status = previous.status || 'Pendente';
+            item.rejectionReason = previous.rejectionReason || item.rejectionReason || '';
+          }
+          if (!previous && (!item.status || !['Pendente', 'Aguardando Ajuste'].includes(String(item.status)))) {
+            item.status = 'Pendente';
+          }
+        }
+        return item;
+      });
+      const mergedClients = mergeStoreArrays(existingList, sanitizedIncoming);
+      const hardDeleteId = req.body && req.body.hardDeleteId ? String(req.body.hardDeleteId) : '';
+      const finalClients = hardDeleteId ? mergedClients.filter(c => String(c && c.id) !== hardDeleteId) : mergedClients;
+      dataJson = JSON.stringify(finalClients);
+    }
     
-    if (['clients', 'prospects', 'equipments'].includes(key) && Array.isArray(data)) {
+    if (['prospects', 'equipments'].includes(key) && Array.isArray(data)) {
       const existingRow = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
       if (existingRow) {
         let existingList = safeParseStoreJson(existingRow.data_json, []);
@@ -1707,7 +1794,7 @@ app.post('/api/store/:key', async (req, res) => {
 
     const now = new Date().toISOString();
     const existing = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
-    const previousData = existing ? safeParseStoreJson(existing.data_json, []) : [];
+    const previousData = previousMergedClientsForAudit || (existing ? safeParseStoreJson(existing.data_json, []) : []);
     if (existing) {
       await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).update({
         data_json: dataJson,
@@ -1732,8 +1819,6 @@ app.post('/api/store/:key', async (req, res) => {
     // Sincronização física com a tabela clientes
     if (key === 'clients' && Array.isArray(finalData)) {
       try {
-        const currentIds = finalData.map(c => String(c.id)).filter(Boolean);
-        await db('clientes').whereNotIn('id', currentIds).delete();
         for (const client of finalData) {
           if (!client.id) continue;
           const existingClient = await db('clientes').where({ id: client.id }).first();
