@@ -468,12 +468,12 @@ const Store = {
     
     // If user has the 'Administrador' profile, OR has the 'Administrador' permission (Acesso Total)
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#historico-exclusoes'];
+      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#tutorial','#historico-exclusoes'];
     }
     
     // Fallback if no permissions are set
     if (perms.length === 0) {
-      const allowed = ['#dashboard'];
+      const allowed = ['#dashboard', '#tutorial'];
       const profileRoutes = {
         'Supervisor': ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#relatorios', '#empresa', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#unidades', '#usuarios', '#simulador-troca'],
         'Financeiro': ['#dashboard', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios'],
@@ -491,7 +491,7 @@ const Store = {
     }
     
     // If perms.length > 0, we strictly map the checkboxes selected
-    const allowed = ['#dashboard'];
+    const allowed = ['#dashboard', '#tutorial'];
     
     if (perms.includes('Clientes')) {
       allowed.push('#clientes');
@@ -587,9 +587,9 @@ window.Store = Store;
     if (!user) return ['#dashboard'];
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#tutorial','#historico-exclusoes'];
     }
-    const allowed = ['#dashboard','#pdf'];
+    const allowed = ['#dashboard','#tutorial','#pdf'];
     const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });
     if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
     if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');

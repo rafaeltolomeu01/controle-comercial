@@ -1,0 +1,288 @@
+<div class="tutorial-page" data-page="tutorial">
+  <section class="tutorial-hero card">
+    <div class="tutorial-hero-text">
+      <span class="tutorial-badge">Central de treinamento</span>
+      <h2>Tutoriais do Sistema</h2>
+      <p>Passo a passo para a equipe consultar no celular ou no computador, mantendo o mesmo padrão visual do sistema.</p>
+    </div>
+    <div class="tutorial-hero-actions">
+      <input id="tutorial-search" class="tutorial-search" type="text" placeholder="Pesquisar tutorial: cliente, lead, chamado, despesa...">
+      <button class="btn btn-primary" type="button" onclick="document.getElementById('tutorial-cadastro-clientes')?.scrollIntoView({behavior:'smooth', block:'start'});">Começar</button>
+    </div>
+  </section>
+
+  <section class="tutorial-module-grid" aria-label="Módulos de tutorial">
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-cadastro-clientes')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">👥</span>
+      <strong>Cadastro de clientes</strong>
+      <small>Cadastrar cliente externo e conferir dados principais.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-importador-clientes')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">📥</span>
+      <strong>Clientes importador</strong>
+      <small>Importar planilha, mapear colunas e salvar no banco.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-prospeccao-leads')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">🎯</span>
+      <strong>Prospecção de leads</strong>
+      <small>Registrar oportunidade e acompanhar etapas.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-chamados-mecanicos')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">🔧</span>
+      <strong>Chamados mecânicos</strong>
+      <small>Abrir, acompanhar e fechar chamado.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-movimentacao-equipamentos')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">↔️</span>
+      <strong>Movimentação</strong>
+      <small>Registrar instalação, recolhimento ou troca.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-despesas-campo')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">💰</span>
+      <strong>Despesas</strong>
+      <small>Lançar despesa e anexar comprovante.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-aprovacoes')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">✅</span>
+      <strong>Aprovações</strong>
+      <small>Aprovar saldo, despesas e solicitações.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-simulador-troca')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">🔁</span>
+      <strong>Simulador de troca</strong>
+      <small>Relacionar troca para cliente e gerar resumo.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-exportacao')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">📤</span>
+      <strong>Exportações</strong>
+      <small>Filtrar mídias e exportar arquivos.</small>
+    </button>
+    <button class="tutorial-module-card" data-tutorial-card type="button" onclick="document.getElementById('tutorial-configuracoes')?.scrollIntoView({behavior:'smooth', block:'start'});">
+      <span class="tutorial-module-icon">⚙️</span>
+      <strong>Configurações</strong>
+      <small>Usuários, permissões, unidades e identidade.</small>
+    </button>
+  </section>
+
+  <section id="tutorial-cadastro-clientes" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 01</span>
+        <h3>Cadastro de Clientes Externos</h3>
+        <p>Use quando precisar cadastrar um cliente novo manualmente.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#clientes">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Entre em Clientes.</strong><span>No menu lateral, clique em “Clientes”.</span></li>
+        <li><strong>Clique em + Cadastrar Cliente.</strong><span>O formulário de cadastro será aberto.</span></li>
+        <li><strong>Preencha os dados obrigatórios.</strong><span>Informe nome, CNPJ/CPF, categoria, telefone, e-mail, unidade e vendedor.</span></li>
+        <li><strong>Confira antes de salvar.</strong><span>Revise se os dados estão corretos para evitar cadastro duplicado.</span></li>
+        <li><strong>Salve e acompanhe.</strong><span>Depois de salvo, o cliente aparece na lista ou na fila de aprovação, conforme a regra do sistema.</span></li>
+      </ol>
+      <div class="tutorial-visual">
+        <div class="tutorial-mock-window">
+          <div class="mock-tabs"><span class="active">Clientes Cadastrados</span><span>Fila de Aprovações</span></div>
+          <div class="mock-card-title">Cadastro de Clientes Externos</div>
+          <div class="mock-button">+ Cadastrar Cliente</div>
+          <div class="mock-line wide"></div><div class="mock-line"></div><div class="mock-line short"></div>
+        </div>
+        <div class="tutorial-video-slot">Espaço reservado para vídeo curto deste passo a passo.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tutorial-importador-clientes" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 02</span>
+        <h3>Clientes Importador do Sistema</h3>
+        <p>Use para importar clientes por planilha, com mapeamento seguro das colunas.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#clientes">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Entre em Clientes.</strong><span>Clique na guia “Clientes Importador do Sistema”.</span></li>
+        <li><strong>Clique em + Importar Clientes.</strong><span>Selecione o arquivo Excel ou CSV.</span></li>
+        <li><strong>Mapeie as colunas.</strong><span>Associe Código, Fantasia, CNPJ, CPF, Fone, Email, Cidade, Vendedor e Supervisor.</span></li>
+        <li><strong>Confira a prévia.</strong><span>Veja se os dados entraram no campo certo antes de confirmar.</span></li>
+        <li><strong>Confirme a importação.</strong><span>Linhas válidas são salvas no banco. Linhas com erro aparecem no relatório.</span></li>
+      </ol>
+      <div class="tutorial-visual">
+        <div class="tutorial-mock-window">
+          <div class="mock-tabs"><span>Clientes Cadastrados</span><span class="active">Clientes Importador</span></div>
+          <div class="mock-button full">+ Importar Clientes</div>
+          <div class="mock-table"><b>Código</b><b>Fantasia</b><b>CNPJ/CPF</b><b>Vendedor</b></div>
+          <div class="mock-row"></div><div class="mock-row"></div><div class="mock-row"></div>
+        </div>
+        <div class="tutorial-alert">Dica: cliente sem CNPJ pode ser importado com CPF.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tutorial-prospeccao-leads" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 03</span>
+        <h3>Prospecção de Leads</h3>
+        <p>Use para registrar e acompanhar oportunidades antes do cliente virar cadastro.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#prospeccao">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Acesse Prospecção.</strong><span>No menu lateral, clique em “Prospecção (Leads)”.</span></li>
+        <li><strong>Crie o lead.</strong><span>Informe nome do estabelecimento, contato, cidade, vendedor e observações.</span></li>
+        <li><strong>Anexe fotos quando necessário.</strong><span>Use fotos para comprovar fachada, freezer, ponto de venda ou visita.</span></li>
+        <li><strong>Atualize a etapa.</strong><span>Mova o lead conforme negociação, visita, pendência ou conversão.</span></li>
+        <li><strong>Converta para cliente.</strong><span>Quando aprovado, avance para o cadastro de cliente.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-kanban"><div>Novos</div><div>Em visita</div><div>Aprovados</div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-chamados-mecanicos" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 04</span>
+        <h3>Abertura e Fechamento de Chamado Mecânico</h3>
+        <p>Use para registrar manutenção corretiva, acompanhamento e finalização do serviço.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#chamados">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Clique em Chamados Mecânicos.</strong><span>Abra a tela de chamados.</span></li>
+        <li><strong>Clique em + Abrir Chamado Mecânico.</strong><span>Informe cliente, equipamento, problema, data e responsável.</span></li>
+        <li><strong>Anexe fotos ou informações do equipamento.</strong><span>Ajuda o mecânico a identificar o problema.</span></li>
+        <li><strong>Acompanhe a fila de ordens.</strong><span>Verifique chamados em aberto e em andamento.</span></li>
+        <li><strong>Feche o chamado.</strong><span>Informe solução, peças/serviços realizados, observações finais e fotos se necessário.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-card-title">Abertura de Chamado Corretivo / Mecânico</div><div class="mock-button full">+ Abrir Chamado Mecânico</div><div class="mock-line wide"></div><div class="mock-line wide"></div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-movimentacao-equipamentos" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 05</span>
+        <h3>Movimentação de Equipamentos</h3>
+        <p>Use para registrar instalação, troca, recolhimento ou movimentação de freezer/equipamento.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#movimentacao">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Abra Equipamentos.</strong><span>Entre em “Equipamentos” ou “Movimentação”.</span></li>
+        <li><strong>Clique em + Registrar Movimentação.</strong><span>Informe o cliente, equipamento, tipo de movimentação e vendedor.</span></li>
+        <li><strong>Inclua fotos obrigatórias.</strong><span>Quando o sistema pedir, anexe foto antes, depois, equipamento instalado ou recolhido.</span></li>
+        <li><strong>Revise as informações.</strong><span>Confira número de série, cliente e destino.</span></li>
+        <li><strong>Salve e acompanhe o histórico.</strong><span>A movimentação aparece no histórico do módulo.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-card-title">Registrar Movimentação de Equipamento</div><div class="mock-button full">+ Registrar Movimentação</div><div class="mock-photo-grid"><span>Foto antes</span><span>Foto depois</span></div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-despesas-campo" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 06</span>
+        <h3>Despesas de Campo</h3>
+        <p>Use para lançar gastos de rota, anexar notinhas e acompanhar saldo.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#despesas">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Entre em Despesas de Campo.</strong><span>Veja o saldo disponível e as despesas já registradas.</span></li>
+        <li><strong>Registre a despesa.</strong><span>Informe data, tipo, valor, descrição e unidade/vendedor.</span></li>
+        <li><strong>Anexe o comprovante.</strong><span>Foto da nota ou cupom fiscal é importante para conferência.</span></li>
+        <li><strong>Salve a despesa.</strong><span>A despesa entra para análise ou fechamento conforme regra da empresa.</span></li>
+        <li><strong>Acompanhe o status.</strong><span>Verifique se foi aprovada, reprovada ou está pendente.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-cards"><div>Total Disponível<br><b>R$ 0,00</b></div><div>Total Utilizado<br><b>R$ 0,00</b></div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-aprovacoes" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 07</span>
+        <h3>Aprovação de Despesas, Saldo e Cadastros</h3>
+        <p>Área para supervisores/administradores conferirem pendências.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#despesas-dashboard">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Acesse a área de aprovação.</strong><span>Use “Fila de Aprovações” em Clientes ou “Dashboard de Despesas”.</span></li>
+        <li><strong>Abra a solicitação.</strong><span>Confira dados, valores, comprovantes e responsável.</span></li>
+        <li><strong>Aprove ou reprove.</strong><span>Quando reprovar, informe o motivo para orientar o usuário.</span></li>
+        <li><strong>Acompanhe pendências.</strong><span>As pendências aparecem no painel e nas notificações.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-table"><b>Solicitante</b><b>Valor</b><b>Status</b></div><div class="mock-row success"></div><div class="mock-row warning"></div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-simulador-troca" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 08</span>
+        <h3>Simulador de Troca de Mercadoria</h3>
+        <p>Use para relacionar troca ao cliente, selecionar produtos e gerar resumo.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#simulador-troca">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Clique em Nova Troca.</strong><span>Abra o formulário do simulador.</span></li>
+        <li><strong>Informe o cliente.</strong><span>Preencha código e fantasia do cliente.</span></li>
+        <li><strong>Inicie a seleção dos produtos.</strong><span>Adicione produtos, quantidade e confira os totais.</span></li>
+        <li><strong>Copie a mensagem gerada.</strong><span>Use o resumo para encaminhar a solicitação ou registrar a operação.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-tabs"><span class="active">Nova Troca</span><span>Histórico</span></div><div class="mock-button full">Iniciar Seleção de Produtos</div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-exportacao" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 09</span>
+        <h3>Exportação de Arquivos e Relatórios</h3>
+        <p>Use para consultar mídias, comprovantes, fotos e exportar planilhas.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#exportacao-arquivos">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Entre em Exportação de Arquivos.</strong><span>Abra a central de mídias e documentos.</span></li>
+        <li><strong>Aplique os filtros.</strong><span>Filtre por período, tipo, módulo, cliente, vendedor ou unidade.</span></li>
+        <li><strong>Confira a lista.</strong><span>Veja os arquivos encontrados antes de exportar.</span></li>
+        <li><strong>Exporte o Excel.</strong><span>Baixe a planilha com links e informações dos arquivos.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-button success full">Exportar Excel</div><div class="mock-table"><b>Módulo</b><b>Arquivo</b><b>Data</b></div></div></div>
+    </div>
+  </section>
+
+  <section id="tutorial-configuracoes" class="tutorial-section card" data-tutorial-section>
+    <div class="tutorial-section-header">
+      <div>
+        <span class="tutorial-badge">Módulo 10</span>
+        <h3>Configurações, Usuários e Permissões</h3>
+        <p>Use para organizar categorias, usuários, unidades e identidade da empresa.</p>
+      </div>
+      <a class="btn btn-secondary tutorial-go-btn" href="#configuracoes">Abrir tela</a>
+    </div>
+    <div class="tutorial-content-grid">
+      <ol class="tutorial-step-list">
+        <li><strong>Acesse Configurações.</strong><span>Somente usuários com permissão devem alterar esta área.</span></li>
+        <li><strong>Revise categorias e motivos.</strong><span>Mantenha categorias de clientes, despesas e motivos atualizados.</span></li>
+        <li><strong>Gerencie usuários.</strong><span>Crie acessos, ajuste perfil, permissões e unidade vinculada.</span></li>
+        <li><strong>Atualize identidade da empresa.</strong><span>Logo, nome e dados aparecem no sistema e documentos.</span></li>
+      </ol>
+      <div class="tutorial-visual"><div class="tutorial-mock-window"><div class="mock-table"><b>Usuário</b><b>Perfil</b><b>Unidade</b></div><div class="mock-row"></div><div class="mock-row"></div></div></div>
+    </div>
+  </section>
+</div>

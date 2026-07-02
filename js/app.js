@@ -315,6 +315,8 @@ const App = {
         this.initSimuladorTroca();
       } else if (pageName === 'solicitacao-despesas') {
         this.initSolicitacaoForm();
+      } else if (pageName === 'tutorial') {
+        if (window.TutorialModule && TutorialModule.init) TutorialModule.init();
       }
       
       // Re-run identity settings in case page contains brand images/logos
@@ -451,6 +453,10 @@ const App = {
         if (window.FiltersManager && FiltersManager.renderExportacaoArquivosPage) {
           FiltersManager.renderExportacaoArquivosPage();
         }
+        break;
+      case '#tutorial':
+        headerTitle.textContent = 'Tutoriais do Sistema';
+        if (window.TutorialModule && TutorialModule.init) TutorialModule.init();
         break;
       case '#relatorios':
         headerTitle.textContent = 'Relatórios Gerenciais';

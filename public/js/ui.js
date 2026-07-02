@@ -110,6 +110,7 @@ const UI = {
       '#chamados': 'menu-chamados',
       '#despesas': 'menu-despesas',
       '#relatorios': 'menu-relatorios',
+      '#tutorial': 'menu-tutorial',
       '#configuracoes': 'menu-configuracoes',
       '#simulador-troca': 'menu-simulador-troca',
       '#historico-exclusoes': 'menu-historico-exclusoes'
