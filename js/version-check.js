@@ -1,7 +1,7 @@
 /* Atualização automática do sistema após deploy. */
 (function () {
   'use strict';
-  const CURRENT_VERSION = '20260702-1045-clientes-globais-aprovacao';
+  const CURRENT_VERSION = '20260702-1110-paginacao-performance-listas';
   const VERSION_KEY = 'controle_campo_app_version';
   window.__APP_VERSION__ = CURRENT_VERSION;
 
