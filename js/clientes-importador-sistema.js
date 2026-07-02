@@ -502,6 +502,39 @@
         }
       }
 
+
+      /* Correção mobile: o card de detalhes do cliente não deve cobrir o cabeçalho fixo. */
+      @media (max-width: 900px) {
+        #modal-clientes-importador-detail.clientes-importador-modal-overlay {
+          top:74px !important;
+          right:0 !important;
+          bottom:0 !important;
+          left:0 !important;
+          height:auto !important;
+          min-height:0 !important;
+          padding:8px 6px 10px !important;
+          align-items:flex-start !important;
+          justify-content:center !important;
+          overflow-y:auto !important;
+          overscroll-behavior:contain !important;
+        }
+        #modal-clientes-importador-detail .clientes-importador-detail-modal {
+          width:calc(100vw - 12px) !important;
+          max-height:calc(100dvh - 92px) !important;
+          margin:0 auto 12px !important;
+        }
+      }
+
+      @media (max-width: 420px) {
+        #modal-clientes-importador-detail.clientes-importador-modal-overlay {
+          top:70px !important;
+          padding:7px 6px 10px !important;
+        }
+        #modal-clientes-importador-detail .clientes-importador-detail-modal {
+          max-height:calc(100dvh - 86px) !important;
+        }
+      }
+
     `;
     document.head.appendChild(style);
   }
