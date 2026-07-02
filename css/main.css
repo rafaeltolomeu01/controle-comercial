@@ -1673,9 +1673,10 @@ select { text-overflow: ellipsis; }
   }
 }
 
-/* =============================================================
-   Central de Tutoriais - módulo isolado
-   ============================================================= */
+/* =========================================================
+   MODULO TUTORIAIS - CENTRAL DE TREINAMENTO
+   Adicionado isoladamente para não alterar funções existentes
+   ========================================================= */
 .tutorial-page {
   display: flex;
   flex-direction: column;

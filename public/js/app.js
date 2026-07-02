@@ -201,7 +201,7 @@ const App = {
         this.validateSessionStatus();
         const user = Store.getLoggedUser();
         const allowedHashes = Store.getUserAllowedRoutes(user);
-        if (!allowedHashes.includes(hash) && hash !== '#pdf' && hash !== '#notificacoes') {
+        if (!allowedHashes.includes(hash) && hash !== '#pdf' && hash !== '#notificacoes' && hash !== '#tutorial') {
           window.location.hash = '#dashboard';
           return;
         }

@@ -424,12 +424,12 @@ const Store = {
     
     // If user has the 'Administrador' profile, OR has the 'Administrador' permission (Acesso Total)
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#tutorial','#historico-exclusoes'];
+      return ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#equipamentos', '#movimentacao', '#chamados', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios', '#unidades', '#usuarios', '#empresa', '#configuracoes', '#pdf', '#simulador-troca','#historico-exclusoes'];
     }
     
     // Fallback if no permissions are set
     if (perms.length === 0) {
-      const allowed = ['#dashboard', '#tutorial'];
+      const allowed = ['#dashboard'];
       const profileRoutes = {
         'Supervisor': ['#dashboard', '#prospeccao', '#clientes', '#aprovacao', '#relatorios', '#empresa', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#unidades', '#usuarios', '#simulador-troca'],
         'Financeiro': ['#dashboard', '#despesas', '#solicitacao-despesas', '#despesas-dashboard', '#relatorios'],
@@ -447,7 +447,7 @@ const Store = {
     }
     
     // If perms.length > 0, we strictly map the checkboxes selected
-    const allowed = ['#dashboard', '#tutorial'];
+    const allowed = ['#dashboard'];
     
     if (perms.includes('Clientes')) {
       allowed.push('#clientes');
@@ -543,9 +543,9 @@ window.Store = Store;
     if (!user) return ['#dashboard'];
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#tutorial','#historico-exclusoes'];
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
     }
-    const allowed = ['#dashboard','#tutorial','#pdf'];
+    const allowed = ['#dashboard','#pdf'];
     const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });
     if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
     if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
@@ -560,4 +560,17 @@ window.Store = Store;
     if (perms.includes('Configurações') || perms.includes('Configurações Gerais')) add('#configuracoes','#empresa','#unidades');
     return allowed;
   };
+})();
+
+// Acesso universal ao módulo Tutoriais.
+// Mantém todas as permissões existentes e apenas garante que #tutorial esteja disponível para qualquer usuário logado.
+(function(){
+  if (!window.Store || !Store.getUserAllowedRoutes || Store.__tutorialUniversalAccess) return;
+  const originalGetUserAllowedRoutes = Store.getUserAllowedRoutes.bind(Store);
+  Store.getUserAllowedRoutes = function(user) {
+    const routes = originalGetUserAllowedRoutes(user) || [];
+    if (user && !routes.includes('#tutorial')) routes.push('#tutorial');
+    return routes;
+  };
+  Store.__tutorialUniversalAccess = true;
 })();
