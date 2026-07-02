@@ -202,6 +202,12 @@
       .clientes-importador-detail-value { display:block; font-size:.86rem; color:var(--text-main); word-break:break-word; line-height:1.32; }
       .clientes-importador-detail-value.empty { color:var(--text-muted); }
       .clientes-importador-detail-wide { grid-column:1 / -1; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-row { cursor:default !important; transform:none !important; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-row:hover { background:transparent !important; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-cell { display:block !important; width:100% !important; padding:0 !important; text-align:left !important; border:0 !important; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-cell::before { content:none !important; display:none !important; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-row .clientes-importador-detail-modal { width:100% !important; max-height:none !important; margin:8px 0 2px !important; box-shadow:none !important; }
+      #clientes-importador-table-body .clientes-importador-inline-detail-row .clientes-importador-detail-head { position:sticky; top:0; z-index:2; background:var(--bg-card); }
       @media (max-width: 768px) {
         #view-clientes .view-tabs { overflow-x:auto; display:flex; flex-wrap:nowrap; padding-bottom:8px; }
         .clientes-importador-filter-group,
@@ -737,7 +743,7 @@
       if (!rowEl) return;
       const index = Number(rowEl.dataset.detailIndex);
       const row = state.currentDisplayRows[index];
-      if (row) openClientDetail(row);
+      if (row) openClientDetail(row, rowEl);
     });
 
     panel.querySelector('#clientes-importador-pagination')?.addEventListener('click', event => {
@@ -919,6 +925,8 @@
     const pageRows = rows.slice(startIndex, endIndex);
     state.currentDisplayRows = pageRows;
 
+    removeInlineClientDetail();
+
     if (!total) {
       tbody.innerHTML = `<tr><td colspan="${FIELDS.length}" style="text-align:center;color:var(--text-muted);padding:18px;cursor:default;">Nenhum cliente importado encontrado.</td></tr>`;
       renderPagination(0, 0, 0, 0, 0);
@@ -993,7 +1001,45 @@
     `;
   }
 
-  function openClientDetail(row) {
+  function removeInlineClientDetail() {
+    document.querySelectorAll('.clientes-importador-inline-detail-row').forEach(row => row.remove());
+  }
+
+  function shouldUseInlineDetail() {
+    return window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function openInlineClientDetail(anchorRow, titleText, subtitleText, bodyHtml) {
+    removeInlineClientDetail();
+    if (!anchorRow || !anchorRow.parentNode) return false;
+
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'clientes-importador-inline-detail-row';
+    detailRow.innerHTML = `
+      <td class="clientes-importador-inline-detail-cell" colspan="${FIELDS.length}">
+        <div class="clientes-importador-detail-modal" role="dialog" aria-modal="false" aria-label="Informações do Cliente">
+          <div class="clientes-importador-detail-head">
+            <div>
+              <h3 class="clientes-importador-detail-title"></h3>
+              <p class="clientes-importador-detail-subtitle"></p>
+            </div>
+            <button type="button" class="clientes-importador-close" aria-label="Fechar">×</button>
+          </div>
+          <div class="clientes-importador-inline-detail-body"></div>
+        </div>
+      </td>
+    `;
+
+    detailRow.querySelector('.clientes-importador-detail-title').textContent = titleText;
+    detailRow.querySelector('.clientes-importador-detail-subtitle').textContent = subtitleText;
+    detailRow.querySelector('.clientes-importador-inline-detail-body').innerHTML = bodyHtml;
+    detailRow.querySelector('.clientes-importador-close')?.addEventListener('click', removeInlineClientDetail);
+    anchorRow.insertAdjacentElement('afterend', detailRow);
+    setTimeout(() => detailRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 30);
+    return true;
+  }
+
+  function openClientDetail(row, anchorRow) {
     const panel = findClientesPanel();
     if (!panel || !row) return;
 
@@ -1053,6 +1099,14 @@
       </div>
     `;
 
+    if (shouldUseInlineDetail() && openInlineClientDetail(anchorRow, fantasia, subtitle.textContent, body.innerHTML)) {
+      modal.classList.remove('open');
+      document.documentElement.classList.remove('clientes-importador-modal-active');
+      document.body.classList.remove('clientes-importador-modal-active');
+      return;
+    }
+
+    removeInlineClientDetail();
     modal.classList.add('open');
     modal.scrollTop = 0;
     const detailModal = modal.querySelector('.clientes-importador-detail-modal');
@@ -1062,6 +1116,7 @@
   }
 
   function closeClientDetail() {
+    removeInlineClientDetail();
     const modal = document.getElementById('modal-clientes-importador-detail');
     modal?.classList.remove('open');
     document.documentElement.classList.remove('clientes-importador-modal-active');

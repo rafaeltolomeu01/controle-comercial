@@ -2033,3 +2033,19 @@ select { text-overflow: ellipsis; }
 @media (max-width: 420px) {
   .tutorial-module-grid { grid-template-columns: 1fr; }
 }
+
+
+/* CODEx ajuste clientes mobile: evita que abas fiquem sob o cabeçalho fixo. */
+@media (max-width: 900px) {
+  #view-clientes.active {
+    padding-top: 14px !important;
+  }
+
+  #view-clientes > .view-tabs {
+    margin-top: 10px !important;
+    margin-bottom: 14px !important;
+    position: relative !important;
+    z-index: 1 !important;
+    background: var(--bg-main) !important;
+  }
+}

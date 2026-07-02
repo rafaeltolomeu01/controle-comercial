@@ -48,7 +48,25 @@
     });
   }
 
-  window.TutorialModule = { init: initTutorialPage };
-  document.addEventListener('DOMContentLoaded', initTutorialPage);
-  window.addEventListener('hashchange', function(){ setTimeout(initTutorialPage, 60); });
+  function ensureTutorialAccess() {
+    if (window.Store && Store.getUserAllowedRoutes && !Store.__tutorialFinalAccess) {
+      const originalRoutes = Store.getUserAllowedRoutes.bind(Store);
+      Store.getUserAllowedRoutes = function(user) {
+        const routes = originalRoutes(user) || [];
+        if (user && !routes.includes('#tutorial')) routes.push('#tutorial');
+        return routes;
+      };
+      Store.__tutorialFinalAccess = true;
+    }
+
+    const user = window.Store && Store.getLoggedUser ? Store.getLoggedUser() : null;
+    const menu = document.getElementById('menu-tutorial');
+    if (user && menu) menu.style.display = 'flex';
+  }
+
+  window.TutorialModule = { init: initTutorialPage, ensureAccess: ensureTutorialAccess };
+  ensureTutorialAccess();
+  document.addEventListener('DOMContentLoaded', function(){ ensureTutorialAccess(); initTutorialPage(); });
+  window.addEventListener('hashchange', function(){ setTimeout(function(){ ensureTutorialAccess(); initTutorialPage(); }, 60); });
+  setTimeout(function(){ ensureTutorialAccess(); if (window.UI && UI.applyPermissions) UI.applyPermissions(); }, 120);
 })();
