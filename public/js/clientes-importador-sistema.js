@@ -8,6 +8,7 @@
 
   const STORAGE_KEY = 'controle_comercial_clientes_importador_sistema_v1';
   const STORE_KEY = 'clientes_importador_sistema';
+  const CENTRAL_STORAGE_KEY = 'controle_campo_db_global_' + STORE_KEY;
 
   const VISIBLE_FIELDS = [
     { key: 'codigo', label: 'Código', required: true, aliases: ['codigo', 'código', 'cod', 'cód', 'codigo cliente', 'codigo do cliente', 'cód cliente', 'cod cliente'] },
@@ -49,7 +50,9 @@
     errors: [],
     currentPage: 1,
     pageSize: 20,
-    currentDisplayRows: []
+    currentDisplayRows: [],
+    backendSyncInProgress: false,
+    lastBackendSyncAt: 0
   };
 
   function normalize(value) {
@@ -74,6 +77,97 @@
     return escapeHtml(value).replace(/`/g, '&#96;');
   }
 
+
+  function isAdminUser() {
+    try {
+      const user = window.Store && typeof Store.getLoggedUser === 'function' ? Store.getLoggedUser() : null;
+      const permissionText = Array.isArray(user?.permissions) ? user.permissions.join(' ') : '';
+      const roleText = normalize([user?.profile, user?.role, permissionText].filter(Boolean).join(' '));
+      return roleText.includes('administrador') || roleText.includes('admin');
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function readCentralRows() {
+    try {
+      const raw = localStorage.getItem(CENTRAL_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      console.warn('Falha ao ler clientes importados do cache central:', err);
+      return [];
+    }
+  }
+
+  function writeCentralRows(rows) {
+    try {
+      localStorage.setItem(CENTRAL_STORAGE_KEY, JSON.stringify(Array.isArray(rows) ? rows : []));
+    } catch (err) {
+      console.warn('Falha ao gravar cache central de clientes importados:', err);
+    }
+  }
+
+  function applyAdminVisibility(panel = findClientesPanel()) {
+    if (!panel) return;
+    const canImport = isAdminUser();
+    const openButton = panel.querySelector('#btn-clientes-importador-open');
+    if (openButton) {
+      openButton.style.display = canImport ? '' : 'none';
+      openButton.setAttribute('aria-hidden', canImport ? 'false' : 'true');
+      openButton.disabled = !canImport;
+    }
+  }
+
+  async function syncRowsFromBackend(force = false) {
+    if (!window.Store || typeof Store.backendRequest !== 'function' || !Store.getToken || !Store.getToken()) return false;
+    const now = Date.now();
+    if (state.backendSyncInProgress) return false;
+    if (!force && state.lastBackendSyncAt && (now - state.lastBackendSyncAt) < 12000) return false;
+
+    state.backendSyncInProgress = true;
+    try {
+      const localRows = getRows();
+      const response = await Store.backendRequest(`/api/store/${encodeURIComponent(STORE_KEY)}`);
+      const remoteRows = response && Array.isArray(response.data) ? response.data : [];
+
+      // Se o banco já tem dados, ele vence e todos os aparelhos recebem a mesma lista.
+      if (remoteRows.length) {
+        writeCentralRows(remoteRows);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteRows));
+        if (window.Store && typeof Store.saveList === 'function') {
+          // Atualiza o cache global do Store sem reenviar quando não for administrador.
+          const storageKey = 'controle_campo_db_global_' + STORE_KEY;
+          localStorage.setItem(storageKey, JSON.stringify(remoteRows));
+        }
+      // Se o banco ainda está vazio, não apaga os clientes que já existem no computador.
+      // Quando for admin, envia essa lista local para o banco para o celular e outros logins carregarem também.
+      } else if (localRows.length) {
+        writeCentralRows(localRows);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(localRows));
+        if (isAdminUser()) {
+          await Store.backendRequest(`/api/store/${encodeURIComponent(STORE_KEY)}`, {
+            method: 'POST',
+            body: JSON.stringify({ data: localRows })
+          });
+        }
+      } else {
+        writeCentralRows([]);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      }
+
+      state.lastBackendSyncAt = Date.now();
+      refreshFilterOptions();
+      renderTable();
+      return true;
+    } catch (err) {
+      console.warn('Não foi possível sincronizar clientes importados do banco:', err.message || err);
+      return false;
+    } finally {
+      state.backendSyncInProgress = false;
+    }
+  }
+
   function readLegacyRows() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -87,14 +181,21 @@
 
   function getRows() {
     try {
+      const centralRows = readCentralRows();
+      if (centralRows.length) return centralRows;
+
       if (window.Store && typeof Store.getList === 'function') {
         const rows = Store.getList(STORE_KEY, []);
-        if (Array.isArray(rows) && rows.length) return rows;
+        if (Array.isArray(rows) && rows.length) {
+          writeCentralRows(rows);
+          return rows;
+        }
 
         // Migração automática da primeira versão, que salvava somente no navegador.
         const legacy = readLegacyRows();
-        if (legacy.length && typeof Store.saveList === 'function') {
-          Store.saveList(STORE_KEY, legacy);
+        if (legacy.length) {
+          writeCentralRows(legacy);
+          if (typeof Store.saveList === 'function' && isAdminUser()) Store.saveList(STORE_KEY, legacy);
           return legacy;
         }
         return Array.isArray(rows) ? rows : [];
@@ -102,7 +203,8 @@
       return readLegacyRows();
     } catch (err) {
       console.warn('Falha ao ler clientes importados:', err);
-      return readLegacyRows();
+      const centralRows = readCentralRows();
+      return centralRows.length ? centralRows : readLegacyRows();
     }
   }
 
@@ -111,6 +213,7 @@
 
     // Backup local para não perder a importação caso a internet caia no meio.
     localStorage.setItem(STORAGE_KEY, JSON.stringify(safeRows));
+    writeCentralRows(safeRows);
 
     // Salva no armazenamento central do sistema e no banco PostgreSQL.
     if (window.Store && typeof Store.saveList === 'function') {
@@ -694,6 +797,7 @@
     }
 
     bindEvents(panel);
+    applyAdminVisibility(panel);
 
     // Renderiza apenas uma vez por montagem da tela para não gerar loop de MutationObserver.
     if (createdOrRebuilt || panel.dataset.clientesImportadorInitialRendered !== '1') {
@@ -701,6 +805,8 @@
       renderTable();
       panel.dataset.clientesImportadorInitialRendered = '1';
     }
+
+    syncRowsFromBackend(false);
 
     return true;
   }
@@ -789,8 +895,10 @@
     panel.querySelectorAll('.view-tabs .view-tab-btn').forEach(tab => tab.classList.remove('active'));
     if (show) {
       panel.querySelector('#tab-client-importador-sistema')?.classList.add('active');
+      applyAdminVisibility(panel);
       refreshFilterOptions();
       renderTable();
+      syncRowsFromBackend(true);
     } else {
       panel.querySelector('.view-tabs a[href="#clientes"]')?.classList.add('active');
     }
@@ -1124,6 +1232,10 @@
   }
 
   function openImportModal() {
+    if (!isAdminUser()) {
+      showToast('Somente administrador pode importar planilha de clientes.');
+      return;
+    }
     const panel = findClientesPanel();
     if (!panel) return;
     resetImportState();
@@ -1404,6 +1516,10 @@
   }
 
   async function confirmImport() {
+    if (!isAdminUser()) {
+      showToast('Somente administrador pode confirmar importação de clientes.');
+      return;
+    }
     updatePreviewAndValidation();
     const rowsForImport = state.validRows.length ? state.validRows : (state.errors.length ? [] : state.mappedRows);
     if (!rowsForImport.length) {

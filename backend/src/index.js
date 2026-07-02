@@ -1184,7 +1184,7 @@ function userHasRole(user, roles = []) {
 }
 
 function isAdminUser(user) {
-  return userHasRole(user, ['Administrador', 'Admin', 'Administrador Geral']);
+  return userHasRole(user, ['Administrador', 'Admin', 'Administrador Geral', 'Administrador Sistema', 'Administrador sistema']);
 }
 
 function isFinancialUser(user) {
@@ -1395,7 +1395,7 @@ const ALLOWED_STORE_KEYS = new Set([
 ]);
 
 function getStoreKey(req, key) {
-  if (key === 'company_identity' || key === 'units') {
+  if (key === 'company_identity' || key === 'units' || key === 'clientes_importador_sistema') {
     return key;
   }
   const userId = req.user && req.user.id ? String(req.user.id) : 'global';
@@ -1419,12 +1419,21 @@ app.get('/api/store', async (req, res) => {
       .andWhere(function() {
         this.where('store_key', 'company_identity')
             .orWhere('store_key', 'units')
+            .orWhere('store_key', 'clientes_importador_sistema')
             .orWhere('store_key', 'like', `${userId}_%`);
       });
     const payload = {};
     for (const row of rows) {
-      const cleanKey = row.store_key.replace(`${userId}_`, '');
-      payload[cleanKey] = safeParseStoreJson(row.data_json, null);
+      const isScoped = row.store_key.startsWith(`${userId}_`);
+      const cleanKey = isScoped ? row.store_key.replace(`${userId}_`, '') : row.store_key;
+      const parsed = safeParseStoreJson(row.data_json, null);
+      if (cleanKey === 'clientes_importador_sistema' && Object.prototype.hasOwnProperty.call(payload, cleanKey)) {
+        const current = payload[cleanKey];
+        const currentEmpty = !Array.isArray(current) || current.length === 0;
+        if (row.store_key === cleanKey || currentEmpty) payload[cleanKey] = parsed;
+      } else {
+        payload[cleanKey] = parsed;
+      }
     }
     res.json(payload);
   } catch (err) {
@@ -1439,7 +1448,13 @@ app.get('/api/store/:key', async (req, res) => {
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
     const companyId = getStoreCompanyId(req);
     const dbKey = getStoreKey(req, key);
-    const row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
+    let row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
+    // Compatibilidade: versões anteriores salvaram o importador preso ao usuário.
+    // Se ainda não existir a base global, tenta ler a antiga para o admin migrar automaticamente.
+    if (!row && key === 'clientes_importador_sistema') {
+      const userId = req.user && req.user.id ? String(req.user.id) : 'global';
+      row = await db('app_kv_store').where({ company_id: companyId, store_key: `${userId}_${key}` }).first();
+    }
     res.json({ key, data: row ? safeParseStoreJson(row.data_json, null) : null });
   } catch (err) {
     console.error('Erro ao carregar item da store:', err);
@@ -1451,6 +1466,9 @@ app.post('/api/store/:key', async (req, res) => {
   try {
     const key = req.params.key;
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
+    if (key === 'clientes_importador_sistema' && !isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Somente administrador pode importar clientes.' });
+    }
     const companyId = getStoreCompanyId(req);
     const dbKey = getStoreKey(req, key);
     const data = Object.prototype.hasOwnProperty.call(req.body || {}, 'data') ? req.body.data : req.body;
