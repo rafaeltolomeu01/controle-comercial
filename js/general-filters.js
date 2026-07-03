@@ -22,7 +22,7 @@
   const FiltersManager = {
     caches: {},
     configs: {
-      clientes: { renderMethod: 'renderClients', tbodyId: 'clients-table-body', fields: ['search','empresa','unitId','city','category','status','vendedor','supervisor'] },
+      clientes: { renderMethod: 'renderClients', tbodyId: 'clients-table-body', fields: ['search','empresa','unitId','city','category','status','vendedor','supervisor','period'] },
       aprovacao: { renderMethod: 'renderApprovals', tbodyId: 'approvals-table-body', fields: ['search','empresa','unitId','city','vendedor','supervisor','status'] },
       prospeccao: { renderMethod: 'renderProspects', tbodyId: 'prospects-table-body', fields: ['search','empresa','unitId','period','vendedor','supervisor','status','city'] },
       equipamentos: { renderMethod: 'renderEquipments', tbodyId: 'equipments-table-body', fields: ['search','empresa','unitId','type','model','serial','situation'] },
@@ -677,7 +677,7 @@
       fieldBox(doc, 14, y, 'Vendedor Solicitante', exp.vendedor || exp.vendedor_nome || expenseUser(exp), 80);
       fieldBox(doc, 108, y, 'Unidade Vinculada', unitName(exp.unitId || exp.unit_id || exp.unidade), 80);
       y += 20;
-      const finalidade = exp.finalidade === 'Outro' ? `Outro${exp.descreva ? ' - ' + exp.descreva : ''}` : (exp.finalidade || exp.category || exp.categoria);
+      const finalidade = (exp.finalidade === 'Outro' || exp.finalidade === 'Outros') ? `Outro${exp.descreva ? ' - ' + exp.descreva : ''}` : (exp.finalidade || exp.category || exp.categoria);
       fieldBox(doc, 14, y, 'Finalidade', finalidade, 80);
       fieldBox(doc, 108, y, 'Tipo de Operação', exp.operacao || exp.operation || exp.tipo_operacao, 80);
       y += 20;

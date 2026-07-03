@@ -2019,7 +2019,7 @@ const App = {
         if (expVal) { expVal.required = true; }
         if (expComprovanteImg) { expComprovanteImg.required = true; }
         if (expDate) { expDate.required = true; }
-      } else if (val === 'Outro') {
+      } else if (val === 'Outro' || val === 'Outros') {
         if (groupExpDescreva) groupExpDescreva.style.display = 'block';
         if (groupExpAbastecimento) groupExpAbastecimento.style.display = 'none';
         if (groupExpComuns) groupExpComuns.style.display = 'none';
@@ -2089,8 +2089,6 @@ const App = {
       if (!raw) return 0;
       if (raw.includes(',')) {
         raw = raw.replace(/\./g, '').replace(',', '.');
-      } else if (/^\d+$/.test(raw) && raw.length > 3) {
-        raw = String(Number(raw) / 100);
       }
       const parsed = parseFloat(raw);
       return Number.isFinite(parsed) ? parsed : 0;
@@ -2146,7 +2144,7 @@ const App = {
           let date = '';
           let observation = '';
 
-          if (finalidade === 'Outro') {
+          if (finalidade === 'Outro' || finalidade === 'Outros') {
             descreva = document.getElementById('exp-descreva').value;
             date = new Date().toISOString().split('T')[0];
           } else {

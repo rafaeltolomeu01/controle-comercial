@@ -5,8 +5,6 @@ function ccNum(v) {
   let raw = String(v).trim().replace(/[^0-9,.-]/g, '');
   // Formato brasileiro com vírgula decimal: 1.234,56 -> 1234.56
   if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
-  // Mascara monetaria sem separador pode chegar como centavos: 21762 -> 217.62
-  else if (/^\d+$/.test(raw) && raw.length > 3) raw = String(Number(raw) / 100);
   const n = parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
 }

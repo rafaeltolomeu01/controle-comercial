@@ -25,8 +25,6 @@ const UI = {
   expenseMoneyNumber(value) {
     const n = this.safeNumber(value);
     if (!Number.isFinite(n)) return 0;
-    // Registros antigos com mascara monetaria chegaram salvos em centavos.
-    if (Number.isInteger(n) && Math.abs(n) >= 1000) return n / 100;
     return n;
   },
 
@@ -821,7 +819,7 @@ const UI = {
       const dateTimeStr = `${formattedDate}${exp.time ? ' / ' + exp.time : ''}`;
 
       // Finalidade: Outro shows Outro (descreva)
-      const finalidadeStr = exp.finalidade === 'Outro' ? `Outro (${exp.descreva || ''})` : (exp.finalidade || '');
+      const finalidadeStr = (exp.finalidade === 'Outro' || exp.finalidade === 'Outros') ? `Outro (${exp.descreva || ''})` : (exp.finalidade || '');
 
       let photosHtml = '';
       if (exp.foto_comprovante) {

@@ -8,12 +8,14 @@
   const TARGETS = {
     despesas: { renderMethod: 'renderExpenses', tbodyId: 'expenses-table-body', storeMethod: 'getExpenses', label: 'despesas' },
     movimentacao: { renderMethod: 'renderMovements', tbodyId: 'movements-table-body', storeMethod: 'getMovements', label: 'movimentações' },
-    chamados: { renderMethod: 'renderTickets', tbodyId: 'tickets-table-body', storeMethod: 'getTickets', label: 'chamados' }
+    chamados: { renderMethod: 'renderTickets', tbodyId: 'tickets-table-body', storeMethod: 'getTickets', label: 'chamados' },
+    clientes: { renderMethod: 'renderClients', tbodyId: 'clients-table-body', storeMethod: 'getClients', label: 'clientes' }
   };
   const state = {
     despesas: { page: 1, signature: '', raw: [] },
     movimentacao: { page: 1, signature: '', raw: [] },
-    chamados: { page: 1, signature: '', raw: [] }
+    chamados: { page: 1, signature: '', raw: [] },
+    clientes: { page: 1, signature: '', raw: [] }
   };
   const baseRender = {};
 
@@ -195,7 +197,7 @@
       return;
     }
     body.innerHTML = pageItems.map(exp => {
-      const finalidade = exp.finalidade === 'Outro' ? `Outro (${exp.descreva || ''})` : (exp.finalidade || '-');
+      const finalidade = (exp.finalidade === 'Outro' || exp.finalidade === 'Outros') ? `Outro (${exp.descreva || ''})` : (exp.finalidade || '-');
       const id = String(exp.id || '').replace(/'/g, "\\'");
       return `<tr class="mobile-summary-row" onclick="window.__ccOpenExpenseDetails('${id}')">
         <td data-label="Data" style="white-space:nowrap;">${esc(dateTimeExpense(exp))}</td>
@@ -216,8 +218,9 @@
     if (!body) return;
     const { filtered, pageItems, start, end } = paginatedItems(moduleKey, raw);
     if (!pageItems.length) {
-      const colspan = moduleKey === 'chamados' ? 12 : 11;
-      const msg = moduleKey === 'chamados' ? 'Nenhum chamado mecânico encontrado.' : 'Nenhuma movimentação registrada.';
+      const colspan = moduleKey === 'chamados' ? 12 : (moduleKey === 'clientes' ? 10 : 11);
+      const msg = moduleKey === 'chamados' ? 'Nenhum chamado mecânico encontrado.' : 
+                  moduleKey === 'clientes' ? 'Nenhum cliente cadastrado.' : 'Nenhuma movimentação registrada.';
       body.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-muted); padding:18px;">${msg}</td></tr>`;
       renderPagination(moduleKey, filtered.length, 0, 0);
       return;
@@ -266,6 +269,7 @@
 
     if (!baseRender.movimentacao) baseRender.movimentacao = (UI._original_renderMovements || UI.renderMovements || function(){}).bind(UI);
     if (!baseRender.chamados) baseRender.chamados = (UI.renderTickets || UI._original_renderTickets || function(){}).bind(UI);
+    if (!baseRender.clientes) baseRender.clientes = (UI._original_renderClients || UI.renderClients || function(){}).bind(UI);
 
     UI.renderExpenses = function(data){
       const raw = Array.isArray(data) ? data : listFromStore('despesas');
@@ -282,6 +286,11 @@
       state.chamados.raw = raw;
       return renderWithBase('chamados', raw);
     };
+    UI.renderClients = function(data){
+      const raw = Array.isArray(data) ? data : listFromStore('clientes');
+      state.clientes.raw = raw;
+      return renderWithBase('clientes', raw);
+    };
 
     // Atualiza a tela atual quando o patch entra, sem mexer no banco.
     setTimeout(function(){
@@ -289,6 +298,7 @@
       if (hash.includes('despesas') && document.getElementById('expenses-table-body')) UI.renderExpenses(state.despesas.raw.length ? state.despesas.raw : listFromStore('despesas'));
       if (hash.includes('movimentacao') && document.getElementById('movements-table-body')) UI.renderMovements(state.movimentacao.raw.length ? state.movimentacao.raw : listFromStore('movimentacao'));
       if (hash.includes('chamados') && document.getElementById('tickets-table-body')) UI.renderTickets(state.chamados.raw.length ? state.chamados.raw : listFromStore('chamados'));
+      if (hash.includes('clientes') && document.getElementById('clients-table-body')) UI.renderClients(state.clientes.raw.length ? state.clientes.raw : listFromStore('clientes'));
     }, 250);
     return true;
   }

@@ -90,10 +90,10 @@
     const finalidade = document.getElementById('exp-finalidade')?.value || '';
     const groupOutro = document.getElementById('group-exp-descreva');
     const groupAbast = document.getElementById('group-exp-abastecimento');
-    if (groupOutro) groupOutro.style.display = finalidade === 'Outro' ? 'block' : 'none';
+    if (groupOutro) groupOutro.style.display = (finalidade === 'Outro' || finalidade === 'Outros') ? 'block' : 'none';
     if (groupAbast) groupAbast.style.display = finalidade === 'Abastecimento' ? 'block' : 'none';
     const desc = document.getElementById('exp-descreva');
-    if (desc) desc.required = finalidade === 'Outro';
+    if (desc) desc.required = (finalidade === 'Outro' || finalidade === 'Outros');
     const veiculo = document.getElementById('exp-veiculo');
     const km = document.getElementById('exp-km');
     const odo = document.getElementById('exp-odometro-img');
