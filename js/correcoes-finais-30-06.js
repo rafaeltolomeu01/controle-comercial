@@ -59,7 +59,9 @@
 
   // Injeta botão Excluir nas linhas de clientes (somente admin)
   function addDeleteButtonToClientRows() {
-    if (!window.App || !App.deleteClient) return;
+    return;
+  }
+  function _old_addDeleteButtonToClientRows() {
     var loggedUser = window.Store && Store.getLoggedUser ? Store.getLoggedUser() : null;
     var isAdmin = loggedUser && (loggedUser.profile === 'Administrador');
     if (!isAdmin) return;

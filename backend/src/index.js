@@ -801,6 +801,25 @@ app.get('/index.html', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
 });
 
+app.get('/api/system-diag', async (req, res) => {
+  try {
+    const dbType = db.client.config.client;
+    const migrations = await db('knex_migrations').select('*');
+    const sampleDespesas = await db('despesas_reembolsos').select('id', 'value', 'finalidade', 'date', 'status').limit(10);
+    res.json({
+      dbType,
+      migrations,
+      sampleDespesas,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];

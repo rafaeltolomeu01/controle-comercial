@@ -2052,3 +2052,9 @@ select { text-overflow: ellipsis; }
 
 /* Ajuste: seletor global de unidade oculto no topo, lógica interna preservada. */
 .global-unit-container { display: none !important; }
+
+@media (max-width: 768px) {
+  .mobile-hide {
+    display: none !important;
+  }
+}

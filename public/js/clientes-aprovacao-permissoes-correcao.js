@@ -164,13 +164,13 @@
       const delBtn = canDelete ? `<button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-left:4px;" onclick="event.stopPropagation(); App.deleteClientAdmin ? App.deleteClientAdmin('${esc(c.id)}') : App.deleteClient('${esc(c.id)}', event)">Apagar</button>` : '';
       return `<tr class="mobile-summary-row" onclick="App.showClientDetails('${esc(c.id)}')">
         <td data-label="Cliente" style="font-weight:600;">${esc(c.name || c.nomeFantasia || c.companyName || '-')}<div class="mobile-only-subtext" style="font-size:.75rem;color:var(--text-muted);font-weight:normal;margin-top:4px;">${esc(c.city || '')} ${c.date ? '• ' + esc(c.date) : ''}</div></td>
-        <td data-label="CNPJ">${esc(c.cnpj || '-')}</td>
-        <td data-label="Categoria">${esc(c.category || c.categoria || 'Não definida')}</td>
-        <td data-label="Telefone">${esc(c.phone || c.telefone || '-')}</td>
-        <td data-label="E-mail">${esc(c.email || '-')}</td>
-        <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:.7rem;font-weight:500;">${esc(unitName(c.unitId))}</span></td>
-        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c), c))}</span></td>
-        <td data-label="Score">${esc(scoreText(c))}</td>
+        <td data-label="CNPJ" class="mobile-hide">${esc(c.cnpj || '-')}</td>
+        <td data-label="Categoria" class="mobile-hide">${esc(c.category || c.categoria || 'Não definida')}</td>
+        <td data-label="Telefone" class="mobile-hide">${esc(c.phone || c.telefone || '-')}</td>
+        <td data-label="E-mail" class="mobile-hide">${esc(c.email || '-')}</td>
+        <td data-label="Unidade" class="mobile-hide"><span class="badge-status badge-primary" style="font-size:.7rem;font-weight:500;">${esc(unitName(c.unitId))}</span></td>
+        <td data-label="Vendedor" class="mobile-hide"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c), c))}</span></td>
+        <td data-label="Score" class="mobile-hide">${esc(scoreText(c))}</td>
         <td data-label="Status">${statusBadge(c)}</td>
         <td data-label="Ações"><button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;" onclick="event.stopPropagation(); App.showClientDetails('${esc(c.id)}')">Ver Ficha</button>${actionCorrection}${delBtn}</td>
       </tr>`;
