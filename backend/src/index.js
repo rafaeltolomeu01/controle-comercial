@@ -826,7 +826,7 @@ app.get('/api/system-diag', async (req, res) => {
       .select('id', 'value', 'finalidade', 'date', 'status', 'created_at')
       .orderBy('created_at', 'desc')
       .limit(50);
-    res.json({
+    const data = {
       dbType,
       migrations,
       sampleDespesas,
@@ -834,7 +834,9 @@ app.get('/api/system-diag', async (req, res) => {
         NODE_ENV: process.env.NODE_ENV,
         PORT: process.env.PORT
       }
-    });
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(data, null, 2));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
