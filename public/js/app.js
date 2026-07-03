@@ -464,6 +464,15 @@ const App = {
         break;
       case '#despesas':
         headerTitle.textContent = 'Despesas de Campo';
+        {
+          const expSeller = document.getElementById('exp-seller');
+          const loggedUser = Store.getLoggedUser();
+          if (expSeller && loggedUser) {
+            const name = loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado';
+            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${name}</option>`;
+            expSeller.disabled = true;
+          }
+        }
         this.loadExpenses();
         this.loadBalances();
         break;
@@ -1428,6 +1437,12 @@ const App = {
         if (formEl) {
           formEl.reset();
           UI.populateUnitDropdowns();
+          const loggedUser = Store.getLoggedUser();
+          const expSeller = document.getElementById('exp-seller');
+          if (expSeller && loggedUser) {
+            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado'}</option>`;
+            expSeller.disabled = true;
+          }
         }
         const previewCont = document.getElementById('prosp-photo-preview-container');
         if (previewCont) previewCont.style.display = 'none';
@@ -2022,15 +2037,15 @@ const App = {
       } else if (val === 'Outro' || val === 'Outros') {
         if (groupExpDescreva) groupExpDescreva.style.display = 'block';
         if (groupExpAbastecimento) groupExpAbastecimento.style.display = 'none';
-        if (groupExpComuns) groupExpComuns.style.display = 'none';
+        if (groupExpComuns) groupExpComuns.style.display = 'block';
 
         if (expDescreva) { expDescreva.required = true; }
         if (expVeiculo) { expVeiculo.required = false; }
         if (expKm) { expKm.required = false; }
         if (expOdometroImg) { expOdometroImg.required = false; }
-        if (expVal) { expVal.required = false; }
-        if (expComprovanteImg) { expComprovanteImg.required = false; }
-        if (expDate) { expDate.required = false; }
+        if (expVal) { expVal.required = true; }
+        if (expComprovanteImg) { expComprovanteImg.required = true; }
+        if (expDate) { expDate.required = true; }
       } else if (val === 'Hospedagem' || val === 'Refeição' || val === 'Reembolso') {
         if (groupExpDescreva) groupExpDescreva.style.display = 'none';
         if (groupExpAbastecimento) groupExpAbastecimento.style.display = 'none';
@@ -2146,7 +2161,14 @@ const App = {
 
           if (finalidade === 'Outro' || finalidade === 'Outros') {
             descreva = document.getElementById('exp-descreva').value;
-            date = new Date().toISOString().split('T')[0];
+            value = parseExpenseMoneyInput(document.getElementById('exp-val').value);
+            date = document.getElementById('exp-date').value;
+            observation = document.getElementById('exp-obs').value;
+
+            const fileComprovante = document.getElementById('exp-comprovante-img').files[0];
+            if (fileComprovante) {
+              foto_comprovante = await this.uploadFile(fileComprovante);
+            }
           } else {
             value = parseExpenseMoneyInput(document.getElementById('exp-val').value);
             date = document.getElementById('exp-date').value;
@@ -2225,6 +2247,11 @@ const App = {
           this.refreshAllLists();
           expenseForm.reset();
           UI.populateUnitDropdowns();
+          const expSeller = document.getElementById('exp-seller');
+          if (expSeller && loggedUser) {
+            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado'}</option>`;
+            expSeller.disabled = true;
+          }
           resetExpensePreviews();
           handleFinalidadeChange();
           const formContainer = document.getElementById('expense-form-container');

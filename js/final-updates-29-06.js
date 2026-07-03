@@ -166,7 +166,7 @@
         const users = await (window.App && App.fetchFromApi ? App.fetchFromApi('/api/usuarios').catch(()=>Store.getUsers ? Store.getUsers() : []) : Promise.resolve(Store.getUsers ? Store.getUsers() : []));
         const visibleIds = new Set(units.map(u => String(u.id)));
         const sellers = (users || []).filter(u => (u.status || 'LIBERADO') === 'LIBERADO' && (u.unitId === 'all' || visibleIds.has(String(u.unitId))) && ['Vendedor','Supervisor','Gerente'].includes(u.profile));
-        ['prosp-seller','client-seller','ticket-seller','exp-seller','bal-seller','ticket-open-seller'].forEach(id => {
+        ['prosp-seller','client-seller','ticket-seller','bal-seller','ticket-open-seller'].forEach(id => {
           const sel = document.getElementById(id); if (!sel) return;
           sel.innerHTML = '<option value="" selected disabled>Selecione...</option>' + sellers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
         });

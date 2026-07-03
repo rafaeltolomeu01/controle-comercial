@@ -43,7 +43,10 @@
   }
   function money(value){
     if (value === undefined || value === null || value === '') return '-';
-    const n = Number(String(value).replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+    if (typeof value === 'number') return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    let raw = String(value).replace(/[^0-9,.-]/g, '').trim();
+    if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
+    const n = Number(raw);
     if (!Number.isFinite(n)) return esc(value);
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
   }

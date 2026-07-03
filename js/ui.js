@@ -223,7 +223,7 @@ const UI = {
     }
 
     // Hide/Show seller select dropdown groups in forms based on profile
-    const sellerDropdownGroups = ['group-prosp-seller', 'group-client-seller', 'group-ticket-seller', 'group-exp-seller', 'group-bal-seller', 'group-ticket-open-seller'];
+    const sellerDropdownGroups = ['group-prosp-seller', 'group-client-seller', 'group-ticket-seller', 'group-bal-seller', 'group-ticket-open-seller'];
     sellerDropdownGroups.forEach(groupId => {
       const group = document.getElementById(groupId);
       if (group) {
@@ -1409,7 +1409,7 @@ const UI = {
         return isVendedor || isSupervisorWithPerm || anyUserWithPerm;
       });
 
-      const sellerSelects = ['prosp-seller', 'client-seller', 'ticket-seller', 'exp-seller', 'bal-seller', 'ticket-open-seller'];
+      const sellerSelects = ['prosp-seller', 'client-seller', 'ticket-seller', 'bal-seller', 'ticket-open-seller'];
       sellerSelects.forEach(id => {
         const select = document.getElementById(id);
         if (select) {

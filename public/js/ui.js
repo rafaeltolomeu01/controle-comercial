@@ -223,7 +223,7 @@ const UI = {
     }
 
     // Hide/Show seller select dropdown groups in forms based on profile
-    const sellerDropdownGroups = ['group-prosp-seller', 'group-client-seller', 'group-ticket-seller', 'group-exp-seller', 'group-bal-seller', 'group-ticket-open-seller'];
+    const sellerDropdownGroups = ['group-prosp-seller', 'group-client-seller', 'group-ticket-seller', 'group-bal-seller', 'group-ticket-open-seller'];
     sellerDropdownGroups.forEach(groupId => {
       const group = document.getElementById(groupId);
       if (group) {
@@ -655,7 +655,15 @@ const UI = {
     const listBody = document.getElementById('movements-table-body');
     if (!listBody) return;
     const user = Store.getLoggedUser();
-    const isAdmin = user && user.profile === 'Administrador';
+    const normalizeProfile = (value) => String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim();
+    const userProfile = normalizeProfile(user && user.profile);
+    const userPermissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeProfile) : [];
+    const isAdmin = user && (
+      ['administrador', 'administrador sistema'].includes(userProfile)
+      || userPermissions.some(p => ['administrador', 'administrador acesso total'].includes(p))
+    );
     document.querySelectorAll('.admin-only-movement-delete').forEach(el => el.style.display = isAdmin ? '' : 'none');
     const delBtn = document.getElementById('btn-delete-selected-movements');
     if (delBtn) delBtn.style.display = isAdmin ? 'inline-flex' : 'none';
@@ -1401,7 +1409,7 @@ const UI = {
         return isVendedor || isSupervisorWithPerm || anyUserWithPerm;
       });
 
-      const sellerSelects = ['prosp-seller', 'client-seller', 'ticket-seller', 'exp-seller', 'bal-seller', 'ticket-open-seller'];
+      const sellerSelects = ['prosp-seller', 'client-seller', 'ticket-seller', 'bal-seller', 'ticket-open-seller'];
       sellerSelects.forEach(id => {
         const select = document.getElementById(id);
         if (select) {

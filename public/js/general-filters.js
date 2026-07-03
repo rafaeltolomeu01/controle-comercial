@@ -397,7 +397,15 @@
 
   function pick(obj, keys) { for (const k of keys) { if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k]; } return ''; }
   function value(v) { return (v === undefined || v === null || v === '') ? '—' : v; }
-  function money(v) { const n = Number(String(v ?? '').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.')); return Number.isFinite(n) && n !== 0 ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : (v ? String(v) : '—'); }
+  function money(v) {
+    if (v === undefined || v === null || v === '') return '—';
+    if (typeof v === 'number') return new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v);
+    let raw = String(v).replace(/[^0-9,.-]/g,'').trim();
+    if (!raw) return '—';
+    if (raw.includes(',')) raw = raw.replace(/\./g,'').replace(',','.');
+    const n = Number(raw);
+    return Number.isFinite(n) ? new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(n) : String(v);
+  }
   function normalize(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
   function unitName(id) { if (!id) return ''; return (window.UI && UI.getUnitName && UI.getUnitName(id)) || id; }
   function userName(id) { if (!id) return ''; return (window.UI && UI.getUserName && UI.getUserName(id)) || id; }

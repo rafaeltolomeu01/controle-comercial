@@ -1905,6 +1905,11 @@ function canApproveClientsUser(user) {
   return allowedPerms.some(p => joined.includes(p));
 }
 
+function isSupervisorLikeUser(user) {
+  const profile = normalizeRole(user && (user.profile || user.role || user.perfil));
+  return profile.includes('supervisor') || profile.includes('gerente');
+}
+
 function getClientOwnerId(item) {
   return String((item && (
     item.userId || item.user_id || item.usuario_id || item.usuarioId ||
@@ -1951,6 +1956,26 @@ function isClientVisibleToUser(item, user) {
 function filterClientsForUser(list, user) {
   if (!Array.isArray(list)) return [];
   return list.filter(item => isClientVisibleToUser(item, user));
+}
+
+async function filterClientsForUserAsync(list, user) {
+  if (!Array.isArray(list)) return [];
+  const activeList = list.filter(item => !normalizeRole(item && item.status).includes('excl'));
+  if (isAdminUser(user)) return activeList;
+
+  if (isSupervisorLikeUser(user)) {
+    const permittedIds = (await getPermittedSellerIds(user, db)).map(String);
+    const userName = String((user && (user.name || user.username || user.email)) || '');
+    return activeList.filter(item => {
+      const owner = getClientOwnerId(item);
+      const ownerName = getClientOwnerName(item);
+      return (owner && permittedIds.includes(String(owner))) || sameNormalizedText(ownerName, userName);
+    });
+  }
+
+  if (canApproveClientsUser(user)) return activeList;
+
+  return activeList.filter(item => isClientVisibleToUser(item, user));
 }
 
 async function getClientStoreRows(companyId) {
@@ -2007,7 +2032,7 @@ async function updateClientInEveryStore(companyId, id, updated, actingUserId) {
 // Evita perder dados ao salvar listas grandes e garante notificação ao vendedor dono do cadastro.
 app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
   try {
-    if (!canApproveClientsUser(req.user)) {
+    if (!canApproveClientsUser(req.user) && !isSupervisorLikeUser(req.user)) {
       return res.status(403).json({ error: 'Sem permissão para aprovar ou reprovar cadastro de cliente.' });
     }
     const companyId = getStoreCompanyId(req);
@@ -2025,6 +2050,11 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
     if (idx < 0) return res.status(404).json({ error: 'Cadastro não encontrado na base de clientes.' });
 
     const before = previousData[idx] || {};
+    const visibleForReviewer = await filterClientsForUserAsync([before], req.user);
+    if (!visibleForReviewer.length) {
+      return res.status(403).json({ error: 'Cadastro fora da sua hierarquia de aprovação.' });
+    }
+
     const nowText = new Date().toISOString();
     const updated = {
       ...before,
@@ -2118,7 +2148,7 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
       });
     }
 
-    res.json({ success: true, client: updated, clients: filterClientsForUser(finalData, req.user) });
+    res.json({ success: true, client: updated, clients: await filterClientsForUserAsync(finalData, req.user) });
   } catch (err) {
     console.error('Erro ao atualizar aprovação de cliente:', err);
     res.status(500).json({ error: 'Erro ao salvar aprovação do cliente no banco.' });
@@ -2166,7 +2196,7 @@ app.get('/api/store', async (req, res) => {
       }
     }
     // Listas antigas por usuario entram primeiro; a lista global da empresa vence conflitos.
-    payload.clients = filterClientsForUser(mergeStoreArrays(...scopedClientLists, ...globalClientLists), req.user);
+    payload.clients = await filterClientsForUserAsync(mergeStoreArrays(...scopedClientLists, ...globalClientLists), req.user);
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -2182,7 +2212,7 @@ app.get('/api/store/:key', async (req, res) => {
     const dbKey = getStoreKey(req, key);
     if (key === 'clients') {
       const clients = await getMergedClientsStore(companyId);
-      return res.json({ key, data: filterClientsForUser(clients, req.user) });
+      return res.json({ key, data: await filterClientsForUserAsync(clients, req.user) });
     }
     let row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     // Compatibilidade: versões anteriores salvaram o importador preso ao usuário.
@@ -4923,11 +4953,22 @@ function normalizeChamado(row) {
   };
 }
 
+function canSeeAllMechanicalTickets(user) {
+  const profile = normalizeRole(user && (user.profile || user.role || user.perfil));
+  const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeRole) : [];
+  const joined = [profile, ...perms].join(' | ');
+  return isAdminUser(user)
+    || joined.includes('responsavel equipamentos')
+    || joined.includes('responsavel equipamento')
+    || joined.includes('gestor equipamentos')
+    || joined.includes('gestor de equipamentos')
+    || joined.includes('chamados mecanicos');
+}
+
 async function applyHierarchyScope(query, user, ownerColumn, companyColumn = 'empresa_id') {
   const actorPerms = user.permissions || [];
-  const isAdmin = user.profile === 'Administrador' || actorPerms.includes('Administrador');
   query.where(companyColumn, user.empresa_id || '001');
-  if (!isAdmin) {
+  if (!canSeeAllMechanicalTickets(user)) {
     const allowedIds = await getPermittedSellerIds(user, db);
     query.whereIn(ownerColumn, allowedIds);
   }
@@ -5043,7 +5084,7 @@ app.get('/api/chamados/:id', async (req, res) => {
     const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
     const allowedIds = await getPermittedSellerIds(req.user, db);
-    const staff = ['Administrador', 'Responsável Equipamentos', 'Mecânico'].includes(req.user.profile);
+    const staff = canSeeAllMechanicalTickets(req.user);
     if (!staff && !allowedIds.includes(chamado.userId)) return res.status(403).json({ error: 'Acesso negado ao chamado' });
     res.json(normalizeChamado(chamado));
   } catch (err) {
@@ -5059,7 +5100,7 @@ app.put('/api/chamados/:id/status', async (req, res) => {
     if (!allowedStatus.includes(status)) return res.status(400).json({ error: 'Status inválido' });
     const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
-    const staff = ['Administrador', 'Gerente', 'Supervisor', 'Responsável Equipamentos', 'Mecânico'].includes(req.user.profile);
+    const staff = canSeeAllMechanicalTickets(req.user) || ['Gerente', 'Supervisor', 'Mecânico'].includes(req.user.profile);
     const allowedIds = await getPermittedSellerIds(req.user, db);
     if (!staff && !allowedIds.map(String).includes(String(chamado.userId))) return res.status(403).json({ error: 'Acesso negado' });
     const updates = { status, updated_at: new Date().toISOString() };
@@ -5080,7 +5121,7 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
   try {
     const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
-    const staff = ['Administrador', 'Responsável Equipamentos', 'Mecânico'].includes(req.user.profile);
+    const staff = canSeeAllMechanicalTickets(req.user);
     if (!staff) return res.status(403).json({ error: 'Acesso negado: somente equipe técnica pode finalizar ficha.' });
     const b = req.body || {};
     await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({
@@ -5426,4 +5467,3 @@ const PORT = process.env.PORT || 3001;
     process.exit(1);
   }
 })();
-
