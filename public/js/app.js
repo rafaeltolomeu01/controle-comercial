@@ -2082,6 +2082,20 @@ const App = {
     previewImage('exp-odometro-img', 'preview-odometro', 'img-preview-odometro');
     previewImage('exp-comprovante-img', 'preview-comprovante', 'img-preview-comprovante');
 
+    const parseExpenseMoneyInput = (inputValue) => {
+      if (inputValue === null || inputValue === undefined || inputValue === '') return 0;
+      if (typeof inputValue === 'number') return Number.isFinite(inputValue) ? inputValue : 0;
+      let raw = String(inputValue).trim().replace(/[^0-9,.-]/g, '');
+      if (!raw) return 0;
+      if (raw.includes(',')) {
+        raw = raw.replace(/\./g, '').replace(',', '.');
+      } else if (/^\d+$/.test(raw) && raw.length > 3) {
+        raw = String(Number(raw) / 100);
+      }
+      const parsed = parseFloat(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
     const resetExpensePreviews = () => {
       const pOdo = document.getElementById('preview-odometro');
       const pComp = document.getElementById('preview-comprovante');
@@ -2136,7 +2150,7 @@ const App = {
             descreva = document.getElementById('exp-descreva').value;
             date = new Date().toISOString().split('T')[0];
           } else {
-            value = parseFloat(document.getElementById('exp-val').value);
+            value = parseExpenseMoneyInput(document.getElementById('exp-val').value);
             date = document.getElementById('exp-date').value;
             observation = document.getElementById('exp-obs').value;
 
@@ -2169,7 +2183,7 @@ const App = {
             km,
             foto_odometro,
             foto_comprovante,
-            value: Number(value) || 0,
+            value: value || 0,
             observation,
             unitId,
             userId,
@@ -2198,7 +2212,7 @@ const App = {
               km,
               foto_odometro,
               foto_comprovante,
-              value: Number(value) || 0,
+              value: value || 0,
               observation,
               unitId,
               userId,

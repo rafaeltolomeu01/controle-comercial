@@ -12,8 +12,26 @@ const UI = {
   },
 
   safeNumber(value) {
+    if (typeof value === 'string') {
+      let raw = value.trim().replace(/[^0-9,.-]/g, '');
+      if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
+      const parsed = parseFloat(raw);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
+  },
+
+  expenseMoneyNumber(value) {
+    const n = this.safeNumber(value);
+    if (!Number.isFinite(n)) return 0;
+    // Registros antigos com mascara monetaria chegaram salvos em centavos.
+    if (Number.isInteger(n) && Math.abs(n) >= 1000) return n / 100;
+    return n;
+  },
+
+  formatExpenseCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(this.expenseMoneyNumber(value));
   },
 
   formatClientScore(client) {
@@ -325,7 +343,7 @@ const UI = {
     // 1. Calculate values
     const pendingApprovals = clients.filter(c => c.status === 'Pendente').length;
     const openTickets = tickets.filter(t => t.status === 'Aberto' || t.status === 'Em Atendimento').length;
-    const pendingExpenses = expenses.filter(e => e.status === 'Pendente').reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
+    const pendingExpenses = expenses.filter(e => e.status === 'Pendente').reduce((acc, curr) => acc + UI.expenseMoneyNumber(curr.value), 0);
     const pendingBalances = balances.filter(b => b.status === 'Pendente').length;
 
     // 2. Set dashboard metrics tags
@@ -355,9 +373,9 @@ const UI = {
     };
     const money = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
     const expenseRows = [
-      { label: 'Pendentes', value: expenses.filter(e => e.status === 'Pendente').reduce((a, e) => a + (Number(e.value) || 0), 0) },
-      { label: 'Aprovadas', value: expenses.filter(e => (e.status || '').includes('Aprov')).reduce((a, e) => a + (Number(e.value) || 0), 0) },
-      { label: 'Reprovadas', value: expenses.filter(e => (e.status || '').includes('Reprov')).reduce((a, e) => a + (Number(e.value) || 0), 0) }
+      { label: 'Pendentes', value: expenses.filter(e => e.status === 'Pendente').reduce((a, e) => a + UI.expenseMoneyNumber(e.value), 0) },
+      { label: 'Aprovadas', value: expenses.filter(e => (e.status || '').includes('Aprov')).reduce((a, e) => a + UI.expenseMoneyNumber(e.value), 0) },
+      { label: 'Reprovadas', value: expenses.filter(e => (e.status || '').includes('Reprov')).reduce((a, e) => a + UI.expenseMoneyNumber(e.value), 0) }
     ];
     const balanceRows = [
       { label: 'Pendentes', value: balances.filter(b => b.status === 'Pendente').length },
@@ -816,7 +834,7 @@ const UI = {
 
       // Valor: Outro has no value, displays "-"
       const valorStr = (exp.value !== undefined && exp.value !== null && exp.value !== '') ?
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(exp.value) : '-';
+        UI.formatExpenseCurrency(exp.value) : '-';
 
       return `
         <tr class="mobile-summary-row" onclick="App.generateExpenseComprovantePdf('${exp.id}')">
@@ -1123,8 +1141,8 @@ const UI = {
         expenses = expenses.filter(e => e.status === filters.status);
       }
 
-      const total = expenses.reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
-      const approved = expenses.filter(e => e.status === 'Aprovado').reduce((acc, curr) => acc + UI.safeNumber(curr.value), 0);
+      const total = expenses.reduce((acc, curr) => acc + UI.expenseMoneyNumber(curr.value), 0);
+      const approved = expenses.filter(e => e.status === 'Aprovado').reduce((acc, curr) => acc + UI.expenseMoneyNumber(curr.value), 0);
 
       if (pdfMetaContainer) {
         pdfMetaContainer.innerHTML = `

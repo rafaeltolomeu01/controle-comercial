@@ -1,6 +1,7 @@
 {
-  "version": "20260702-1835-equipamentos-importados",
+  "version": "20260702..NaN",
   "updatedAt": "2026-07-02T21:54:45.986Z",
   "description": "Restringe fila de aprovação, corrige persistência de aprovar/reprovar e notifica vendedor para correção",
-  "build": "20260702-1835-equipamentos-importados"
+  "build": "20260702-1835-equipamentos-importados",
+  "buildDate": "2026-07-03T20:17:02.683Z"
 }

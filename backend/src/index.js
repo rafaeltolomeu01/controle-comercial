@@ -5,7 +5,8 @@ function ccNum(v) {
   let raw = String(v).trim().replace(/[^0-9,.-]/g, '');
   // Formato brasileiro com vírgula decimal: 1.234,56 -> 1234.56
   if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.');
-  // Formato numérico do banco/API: 1234.56 deve continuar 1234.56, não 123456
+  // Mascara monetaria sem separador pode chegar como centavos: 21762 -> 217.62
+  else if (/^\d+$/.test(raw) && raw.length > 3) raw = String(Number(raw) / 100);
   const n = parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
 }
@@ -518,13 +519,15 @@ async function initDb() {
 
 
   // 7C. Equipamentos importados para preenchimento automatico das movimentacoes.
-  if (!await db.schema.hasTable('equipamentos_importados')) {
+  const hasEquipamentosImportados = await db.schema.hasTable('equipamentos_importados');
+  if (!hasEquipamentosImportados) {
     await db.schema.createTable('equipamentos_importados', table => {
       table.increments('id').primary();
       table.string('empresa_id').notNullable().defaultTo('001');
       table.string('unitId').notNullable().defaultTo('all');
       table.string('codigo_equipamento').notNullable();
       table.string('nome_equipamento').notNullable();
+      table.string('empresa_nome').nullable();
       table.string('criado_por').nullable();
       table.string('atualizado_por').nullable();
       table.timestamp('created_at').defaultTo(db.fn.now());
@@ -532,6 +535,9 @@ async function initDb() {
       table.unique(['empresa_id', 'unitId', 'codigo_equipamento']);
     });
     console.log('Database: Tabela equipamentos_importados criada com sucesso.');
+  } else if (!await db.schema.hasColumn('equipamentos_importados', 'empresa_nome')) {
+    await db.schema.table('equipamentos_importados', table => table.string('empresa_nome').nullable());
+    console.log('Database: Coluna empresa_nome adicionada à tabela equipamentos_importados.');
   }
 
   // 8. Create app_kv_store table (cache central do frontend no PostgreSQL)
@@ -1415,15 +1421,76 @@ function normalizeEquipHeader(value) {
 }
 
 function pickImportedEquipmentColumns(row) {
-  const out = { code: '', name: '' };
+  const out = { code: '', name: '', empresa: '' };
   for (const [key, value] of Object.entries(row || {})) {
     const h = normalizeEquipHeader(key);
-    if (!out.code && (h.includes('codigo') || h.includes('patrimonio') || h === 'codigodoequipamento')) out.code = normalizeEquipCode(value);
+    if (!out.code && (h.includes('codigo') || h.includes('patrimonio') || h === 'numerodopatrimonio' || h === 'codigodoequipamento')) out.code = normalizeEquipCode(value);
     if (!out.name && (h.includes('nome') || h.includes('modelo') || h.includes('equipamento'))) {
-      if (!h.includes('codigo')) out.name = String(value == null ? '' : value).trim();
+      if (!h.includes('codigo') && !h.includes('patrimonio')) out.name = String(value == null ? '' : value).trim();
     }
+    if (!out.empresa && (h === 'empresa' || h.includes('empresa') || h.includes('cliente'))) out.empresa = String(value == null ? '' : value).trim();
   }
   return out;
+}
+
+function mapImportedEquipmentRow(row, mapping) {
+  const source = row || {};
+  const get = key => key ? source[key] : '';
+  return {
+    code: normalizeEquipCode(get(mapping && mapping.patrimonio)),
+    name: String(get(mapping && mapping.modelo) || '').trim(),
+    empresa: String(get(mapping && mapping.empresa) || '').trim()
+  };
+}
+
+function parseImportedEquipmentFile(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    let XLSX;
+    try { XLSX = require('xlsx'); } catch (_) { const err = new Error('Dependencia xlsx nao instalada. Rode npm install antes do deploy.'); err.statusCode = 500; throw err; }
+    const wb = XLSX.readFile(file.path, { cellText: true, cellDates: false });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  }
+  if (ext === '.csv' || ext === '.txt') {
+    const raw = fs.readFileSync(file.path, 'utf8').replace(/^\uFEFF/, '');
+    const lines = raw.split(/\r?\n/).filter(Boolean);
+    const delimiter = (lines[0] || '').includes(';') ? ';' : ',';
+    const headers = (lines.shift() || '').split(delimiter).map(h => h.trim());
+    return lines.map(line => {
+      const cols = line.split(delimiter);
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+      return obj;
+    });
+  }
+  const err = new Error('Formato invalido. Envie .xlsx ou .csv.');
+  err.statusCode = 400;
+  throw err;
+}
+
+async function saveImportedEquipmentRows({ rows, mapping, req }) {
+  const empresaId = req.user.empresa_id || '001';
+  const unitId = req.user.unitId && req.user.unitId !== 'all' ? req.user.unitId : (req.body.unitId || 'all');
+  let created = 0, updated = 0, ignored = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const picked = mapping ? mapImportedEquipmentRow(rows[i], mapping) : pickImportedEquipmentColumns(rows[i]);
+    const code = normalizeEquipCode(picked.code);
+    const name = String(picked.name || '').trim();
+    const empresaNome = String(picked.empresa || '').trim();
+    if (!code || !name) { ignored += 1; errors.push('Linha ' + (i + 2) + ': patrimonio ou modelo vazio.'); continue; }
+    const existing = await db('equipamentos_importados').where({ empresa_id: empresaId, unitId, codigo_equipamento: code }).first();
+    const payload = { nome_equipamento: name, empresa_nome: empresaNome, atualizado_por: req.user.id, updated_at: new Date().toISOString() };
+    if (existing) {
+      await db('equipamentos_importados').where({ id: existing.id }).update(payload);
+      updated += 1;
+    } else {
+      await db('equipamentos_importados').insert({ empresa_id: empresaId, unitId, codigo_equipamento: code, nome_equipamento: name, empresa_nome: empresaNome, criado_por: req.user.id, atualizado_por: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      created += 1;
+    }
+  }
+  return { success: true, created, updated, ignored, errors: errors.slice(0, 10) };
 }
 
 function isFinancialUser(user) {
@@ -1630,7 +1697,7 @@ app.get('/api/equipamentos-importados', async (req, res) => {
     else if (requestedUnit && requestedUnit !== 'all') query = query.where({ unitId: requestedUnit });
     if (qText) {
       query = query.andWhere(function() {
-        this.where('codigo_equipamento', 'like', '%' + qText + '%').orWhere('nome_equipamento', 'like', '%' + qText + '%');
+        this.where('codigo_equipamento', 'like', '%' + qText + '%').orWhere('nome_equipamento', 'like', '%' + qText + '%').orWhere('empresa_nome', 'like', '%' + qText + '%');
       });
     }
     const rows = await query.orderBy('codigo_equipamento', 'asc');
@@ -1656,56 +1723,40 @@ app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
   }
 });
 
-app.post('/api/equipamentos-importados/import', upload.single('file'), async (req, res) => {
+app.post('/api/equipamentos-importados/preview', upload.single('file'), async (req, res) => {
   try {
     if (!assertImportedEquipmentAccess(req, res)) return;
     if (!req.file) return res.status(400).json({ error: 'Arquivo nao enviado.' });
-    const ext = path.extname(req.file.originalname || '').toLowerCase();
-    let rows = [];
-    if (ext === '.xlsx' || ext === '.xls') {
-      let XLSX;
-      try { XLSX = require('xlsx'); } catch (_) { return res.status(500).json({ error: 'Dependencia xlsx nao instalada. Rode npm install antes do deploy.' }); }
-      const wb = XLSX.readFile(req.file.path, { cellText: true, cellDates: false });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-    } else if (ext === '.csv' || ext === '.txt') {
-      const raw = fs.readFileSync(req.file.path, 'utf8').replace(/^\uFEFF/, '');
-      const lines = raw.split(/\r?\n/).filter(Boolean);
-      const delimiter = (lines[0] || '').includes(';') ? ';' : ',';
-      const headers = (lines.shift() || '').split(delimiter).map(h => h.trim());
-      rows = lines.map(line => {
-        const cols = line.split(delimiter);
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
-        return obj;
-      });
-    } else {
-      return res.status(400).json({ error: 'Formato invalido. Envie .xlsx ou .csv.' });
-    }
-
-    const empresaId = req.user.empresa_id || '001';
-    const unitId = req.user.unitId && req.user.unitId !== 'all' ? req.user.unitId : (req.body.unitId || 'all');
-    let created = 0, updated = 0, ignored = 0;
-    const errors = [];
-    for (let i = 0; i < rows.length; i += 1) {
-      const picked = pickImportedEquipmentColumns(rows[i]);
-      const code = normalizeEquipCode(picked.code);
-      const name = String(picked.name || '').trim();
-      if (!code || !name) { ignored += 1; errors.push('Linha ' + (i + 2) + ': codigo ou nome vazio.'); continue; }
-      const existing = await db('equipamentos_importados').where({ empresa_id: empresaId, unitId, codigo_equipamento: code }).first();
-      if (existing) {
-        await db('equipamentos_importados').where({ id: existing.id }).update({ nome_equipamento: name, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
-        updated += 1;
-      } else {
-        await db('equipamentos_importados').insert({ empresa_id: empresaId, unitId, codigo_equipamento: code, nome_equipamento: name, criado_por: req.user.id, atualizado_por: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-        created += 1;
-      }
-    }
+    const rows = parseImportedEquipmentFile(req.file);
     fs.unlink(req.file.path, () => {});
-    res.json({ success: true, created, updated, ignored, errors: errors.slice(0, 10) });
+    const headers = Array.from(new Set(rows.flatMap(row => Object.keys(row || {}))));
+    res.json({ success: true, headers, rows, sample: rows.slice(0, 5) });
   } catch (err) {
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+    console.error('Erro ao ler previa de equipamentos:', err);
+    res.status(err.statusCode || 500).json({ error: err.message || 'Erro ao ler planilha.' });
+  }
+});
+
+app.post('/api/equipamentos-importados/import', upload.single('file'), async (req, res) => {
+  try {
+    if (!assertImportedEquipmentAccess(req, res)) return;
+    let rows = [];
+    let mapping = null;
+    if (req.body.rows_json) {
+      rows = JSON.parse(req.body.rows_json || '[]');
+      mapping = JSON.parse(req.body.mapping_json || 'null');
+    } else {
+      if (!req.file) return res.status(400).json({ error: 'Arquivo nao enviado.' });
+      rows = parseImportedEquipmentFile(req.file);
+    }
+    const result = await saveImportedEquipmentRows({ rows, mapping, req });
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+    res.json(result);
+  } catch (err) {
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
     console.error('Erro ao importar equipamentos:', err);
-    res.status(500).json({ error: 'Erro ao importar equipamentos.' });
+    res.status(err.statusCode || 500).json({ error: err.message || 'Erro ao importar equipamentos.' });
   }
 });
 
@@ -1714,8 +1765,9 @@ app.put('/api/equipamentos-importados/:id', async (req, res) => {
     if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode editar.' });
     const code = normalizeEquipCode(req.body.codigo_equipamento);
     const name = String(req.body.nome_equipamento || '').trim();
-    if (!code || !name) return res.status(400).json({ error: 'Codigo e nome sao obrigatorios.' });
-    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({ codigo_equipamento: code, nome_equipamento: name, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
+    const empresaNome = String(req.body.empresa_nome || '').trim();
+    if (!code || !name) return res.status(400).json({ error: 'Patrimonio e modelo sao obrigatorios.' });
+    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({ codigo_equipamento: code, nome_equipamento: name, empresa_nome: empresaNome, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao editar equipamento importado:', err);
@@ -4409,7 +4461,7 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
       km: km ? parseInt(km, 10) : null,
       foto_odometro: foto_odometro || '',
       foto_comprovante: foto_comprovante || '',
-      value: Number.isFinite(Number(value)) ? Number(value) : 0,
+      value: ccNum(value),
       observation: observation || '',
       status: 'Pendente',
       created_at: new Date().toISOString(),
