@@ -805,7 +805,10 @@ app.get('/api/system-diag', async (req, res) => {
   try {
     const dbType = db.client.config.client;
     const migrations = await db('knex_migrations').select('*');
-    const sampleDespesas = await db('despesas_reembolsos').select('id', 'value', 'finalidade', 'date', 'status').limit(10);
+    const sampleDespesas = await db('despesas_reembolsos')
+      .select('id', 'value', 'finalidade', 'date', 'status', 'created_at')
+      .orderBy('created_at', 'desc')
+      .limit(50);
     res.json({
       dbType,
       migrations,
