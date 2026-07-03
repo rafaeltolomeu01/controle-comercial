@@ -57,7 +57,8 @@ router.delete('/api/clientes/:id', async (req, res) => {
   try {
     const user = req.user || {};
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
-    const admin = user.profile === 'Administrador' || perms.includes('Administrador') || perms.includes('Administrador (Acesso Total)');
+    const profileNorm = String(user.profile || '').toLowerCase();
+    const admin = profileNorm.includes('admin') || perms.some(p => String(p).toLowerCase().includes('admin'));
     if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir clientes.' });
     const existing = await db('clientes').where({ id }).first();
 

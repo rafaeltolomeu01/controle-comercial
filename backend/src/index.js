@@ -2549,7 +2549,7 @@ app.post('/api/despesas', async (req, res) => {
 app.get('/api/despesas', async (req, res) => {
   try {
     const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const isActorAdmin = isAdminUser(req.user);
 
     let query = db('despesas_solicitacoes')
       .leftJoin('usuarios', 'despesas_solicitacoes.usuario_id', '=', 'usuarios.id')
@@ -4515,7 +4515,7 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
 app.get('/api/despesas-reembolsos', async (req, res) => {
   try {
     const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const isActorAdmin = isAdminUser(req.user);
 
     let query = db('despesas_reembolsos as dr');
 
@@ -4549,7 +4549,7 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const actorPerms = req.user.permissions || [];
-    const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const isActorAdmin = isAdminUser(req.user);
     let recordQuery = db('despesas_reembolsos').where({ id });
     if (!isActorAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
     const record = await recordQuery.first();
@@ -4577,7 +4577,7 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const actorPerms = req.user.permissions || [];
-    const isAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
+    const isAdmin = isAdminUser(req.user);
     let recordQuery = db('despesas_reembolsos').where({ id });
     if (!isAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
     const record = await recordQuery.first();
@@ -4978,9 +4978,7 @@ app.get('/api/chamados', async (req, res) => {
 // Delete chamado mecânico (somente administrador)
 app.delete('/api/chamados/:id', async (req, res) => {
   try {
-    const user = req.user || {};
-    const perms = Array.isArray(user.permissions) ? user.permissions : [];
-    const admin = user.profile === 'Administrador' || perms.includes('Administrador') || perms.includes('Administrador (Acesso Total)');
+    const admin = isAdminUser(req.user);
     if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir chamados.' });
     const existing = await db('chamados_tecnicos').where({ id: req.params.id }).first();
     if (!existing) return res.status(404).json({ error: 'Chamado não encontrado.' });
