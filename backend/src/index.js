@@ -197,7 +197,24 @@ async function initDb() {
       table.string('status').notNullable().defaultTo('Pendente');
       table.timestamps(true, true);
     });
-    console.log('Database: Tabela despesas_reembolsos criada com sucesso.');
+  }
+
+  // Forçar correção de valores em centavos para decimais na tabela despesas_reembolsos
+  try {
+    const rowsToFix = await db('despesas_reembolsos').select('id', 'value');
+    for (const row of rowsToFix) {
+      if (row.value !== null && row.value !== undefined) {
+        const val = Number(row.value);
+        if (Number.isInteger(val) && val >= 1000) {
+          await db('despesas_reembolsos')
+            .where('id', row.id)
+            .update({ value: val / 100 });
+          console.log(`Database: Corrigido valor da despesa ${row.id} de ${val} para ${val / 100}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Database: Erro ao forçar correção de valores de despesas:', err);
   }
 
   // 3. Create exchange_products table
