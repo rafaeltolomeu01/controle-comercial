@@ -47,14 +47,14 @@
       
       <form id="login-form">
         <div class="form-group" style="text-align: left;">
-          <label for="login-username">E-mail ou Usuário</label>
-          <input type="text" id="login-username" value="" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="Digite o e-mail ou usuário">
+          <label for="login-username">E-mail ou UsuÃ¡rio</label>
+          <input type="text" id="login-username" value="" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="Digite o e-mail ou usuÃ¡rio">
         </div>
         <div class="form-group" style="text-align: left; margin-bottom: 20px;">
           <label for="login-password">Senha de Acesso</label>
           <div style="position:relative; display:flex; align-items:center;">
             <input type="password" id="login-password" value="" autocomplete="new-password" placeholder="Digite a senha" style="letter-spacing: 0.1em; padding-right: 46px; width:100%;">
-            <button type="button" id="btn-toggle-login-password" aria-label="Mostrar senha" title="Mostrar senha" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:var(--text-muted); cursor:pointer; padding:8px; font-size:1.05rem; line-height:1;">👁️</button>
+            <button type="button" id="btn-toggle-login-password" aria-label="Mostrar senha" title="Mostrar senha" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent; color:var(--text-muted); cursor:pointer; padding:8px; font-size:1.05rem; line-height:1;">ðŸ‘ï¸</button>
           </div>
         </div>
         
@@ -89,7 +89,7 @@
         </a>
         <a id="menu-prospeccao" class="nav-link" href="#prospeccao">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-          Prospecção (Leads)
+          ProspecÃ§Ã£o (Leads)
         </a>
         <a id="menu-clientes" class="nav-link" href="#clientes">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -97,7 +97,7 @@
         </a>
         <a id="menu-aprovacao" class="nav-link" href="#aprovacao" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          Fila de Aprovações
+          Fila de AprovaÃ§Ãµes
         </a>
         <a id="menu-equipamentos" class="nav-link" href="#movimentacao">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
@@ -105,11 +105,11 @@
         </a>
         <a id="menu-movimentacao" class="nav-link" href="#movimentacao" style="display: none !important; padding-left: 28px; font-size: 0.82rem;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-          &nbsp;Movimentação
+          &nbsp;MovimentaÃ§Ã£o
         </a>
         <a id="menu-chamados" class="nav-link" href="#chamados">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-          Chamados Mecânicos
+          Chamados MecÃ¢nicos
         </a>
         <a id="menu-despesas" class="nav-link" href="#despesas">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
@@ -117,7 +117,7 @@
         </a>
         <a id="menu-solicitacao-despesas" class="nav-link" href="#solicitacao-despesas" style="display: none !important; padding-left: 28px; font-size: 0.82rem;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          &nbsp;Solicitação de Saldo
+          &nbsp;SolicitaÃ§Ã£o de Saldo
         </a>
         <a id="menu-despesas-dashboard" class="nav-link" href="#despesas-dashboard" style="display: none !important; padding-left: 28px; font-size: 0.82rem;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -125,7 +125,7 @@
         </a>
         <a id="menu-relatorios" class="nav-link" href="#relatorios">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Relatórios
+          RelatÃ³rios
         </a>
         <a id="menu-simulador-troca" class="nav-link" href="#simulador-troca" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 22v-6c0-1.1.9-2 2-2h10l-4-4"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 2v6c0 1.1-.9 2-2 2H9l4-4"/></svg>
@@ -137,7 +137,7 @@
         </a>
         <a id="menu-usuarios" class="nav-link config-nav-hidden" href="#usuarios" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          Usuários (Acesso)
+          UsuÃ¡rios (Acesso)
         </a>
         <a id="menu-tutorial" class="nav-link" href="#tutorial">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path><path d="M8 7h8"></path><path d="M8 11h6"></path></svg>
@@ -145,16 +145,16 @@
         </a>
         <a id="menu-exportacao-arquivos" class="nav-link" href="#exportacao-arquivos">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Exportação de Arquivos
+          ExportaÃ§Ã£o de Arquivos
         </a>
         <a id="menu-configuracoes" class="nav-link" href="#configuracoes">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          Configurações
+          ConfiguraÃ§Ãµes
         </a>
 
         <a id="menu-historico-exclusoes" class="nav-link config-nav-hidden" href="#historico-exclusoes" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-          Histórico de Exclusões
+          HistÃ³rico de ExclusÃµes
         </a>
         <a id="menu-empresa" class="nav-link config-nav-hidden" href="#empresa" style="display: none !important;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -167,7 +167,7 @@
           <div class="user-avatar">VD</div>
           <div class="user-info">
             <span class="user-name">Vendedor Externo</span>
-            <span class="user-role">Distribuição Geral</span>
+            <span class="user-role">DistribuiÃ§Ã£o Geral</span>
           </div>
         </div>
         <a id="sidebar-logout" class="nav-link" href="#login" style="padding: 6px 12px; margin-top: 4px; color: var(--danger);">
@@ -312,7 +312,7 @@
   <div id="modal-loss-reason" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2000; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center;">
     <div class="login-card" style="max-width: 400px;">
       <h3 style="font-family: var(--font-title); margin-bottom: 12px;">Justificar Perda de Lead</h3>
-      <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 16px;">Selecione o motivo da perda da prospecção comercial.</p>
+      <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 16px;">Selecione o motivo da perda da prospecÃ§Ã£o comercial.</p>
       <form id="modal-loss-form">
         <div class="form-group" style="text-align: left;">
           <label for="modal-loss-select">Motivo da Perda</label>
@@ -332,24 +332,24 @@
   <div id="modal-rejection-reason" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2000; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center;">
     <div class="login-card" style="max-width: 480px; width: 100%;">
       <h3 style="font-family: var(--font-title); margin-bottom: 4px; color: var(--danger);">Reprovar Cadastro</h3>
-      <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 16px;">Informe o motivo e, se necessário, solicite correção ao vendedor.</p>
+      <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 16px;">Informe o motivo e, se necessÃ¡rio, solicite correÃ§Ã£o ao vendedor.</p>
       <form id="modal-rejection-form">
         <div class="form-group" style="text-align: left;">
-          <label for="modal-rejection-select">Motivo Principal da Reprovação *</label>
+          <label for="modal-rejection-select">Motivo Principal da ReprovaÃ§Ã£o *</label>
           <select id="modal-rejection-select" required>
             <!-- Injected dynamically -->
           </select>
         </div>
         <div class="form-group" style="text-align: left; margin-top: 12px;">
-          <label for="modal-rejection-notes">Observação complementar (opcional)</label>
+          <label for="modal-rejection-notes">ObservaÃ§Ã£o complementar (opcional)</label>
           <textarea id="modal-rejection-notes" rows="3" style="resize: vertical;" placeholder="Detalhe o motivo ou instrua o vendedor sobre o que corrigir..."></textarea>
         </div>
         <div class="form-group" style="text-align: left; margin-top: 8px;">
           <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
             <input type="checkbox" id="modal-rejection-send-to-correction" style="width:16px; height:16px; margin:0;">
-            <span style="font-size:0.85rem;">Enviar para correção pelo vendedor (Mandar Ajuste)</span>
+            <span style="font-size:0.85rem;">Enviar para correÃ§Ã£o pelo vendedor (Mandar Ajuste)</span>
           </label>
-          <p style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; padding-left:24px;">Se marcado, o status ficará "Aguardando Ajuste" e o vendedor poderá corrigir e reenviar para análise.</p>
+          <p style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; padding-left:24px;">Se marcado, o status ficarÃ¡ "Aguardando Ajuste" e o vendedor poderÃ¡ corrigir e reenviar para anÃ¡lise.</p>
         </div>
         <div style="display: flex; gap: 12px; margin-top: 20px;">
           <button type="button" class="btn btn-secondary btn-block" onclick="document.getElementById('modal-rejection-reason').style.display='none'">Cancelar</button>
@@ -364,7 +364,7 @@
     <div class="login-card" style="max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
         <h3 id="details-modal-title" style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Ficha Comercial Completa do Cliente</h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-client-details').style.display='none'">✕</span>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-client-details').style.display='none'">âœ•</span>
       </div>
       
       <div id="client-details-content" style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
@@ -381,8 +381,8 @@
   <div id="modal-despesa-details" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2500; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 750px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 id="despesa-details-modal-title" style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Solicitação de Saldo #<span id="det-despesa-id"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-despesa-details').style.display='none'">✕</span>
+        <h3 id="despesa-details-modal-title" style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">SolicitaÃ§Ã£o de Saldo #<span id="det-despesa-id"></span></h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-despesa-details').style.display='none'">âœ•</span>
       </div>
 
       <div id="despesa-details-content" style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
@@ -390,7 +390,7 @@
           <div><strong>Empresa:</strong> <span id="det-despesa-empresa"></span></div>
           <div><strong>Solicitante:</strong> <span id="det-despesa-solicitante"></span></div>
           <div><strong>Data/Hora:</strong> <span id="det-despesa-data-hora"></span></div>
-          <div><strong>Placa do Veículo:</strong> <span id="det-despesa-placa"></span></div>
+          <div><strong>Placa do VeÃ­culo:</strong> <span id="det-despesa-placa"></span></div>
           <div style="grid-column: span 2;"><strong>Rota / Destino:</strong> <span id="det-despesa-rota"></span></div>
           <div style="grid-column: span 2;"><strong>Justificativa:</strong> <p id="det-despesa-justificativa" style="margin: 4px 0; padding: 8px; background: rgba(255,255,255,0.02); border-radius: 4px; border: 1px solid var(--border-color);"></p></div>
         </div>
@@ -400,7 +400,7 @@
           <table class="pdf-table" style="width: 100%; margin-bottom: 15px; font-size: 0.8rem;">
             <thead>
               <tr>
-                <th>Descrição</th>
+                <th>DescriÃ§Ã£o</th>
                 <th style="text-align: center; width: 70px;">Qtd Sol.</th>
                 <th style="text-align: center; width: 70px;">Qtd Apr.</th>
                 <th style="text-align: right; width: 95px;">Vl. Solicitado</th>
@@ -425,13 +425,13 @@
 
         <!-- Gerencial approvals status block -->
         <div id="det-despesa-aprovacoes-secao" style="margin-top: 15px; display: none;">
-          <h4 style="margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Histórico de Ações Gerenciais</h4>
+          <h4 style="margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">HistÃ³rico de AÃ§Ãµes Gerenciais</h4>
           <div id="det-despesa-aprovacoes-lista" style="display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
 
         <!-- Manager Approval Form panel (only visible if status is Pendente and user is manager) -->
         <div id="manager-approval-panel" style="margin-top: 20px; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(245,158,11,0.02); display: none;">
-          <h4 style="margin-bottom: 12px; color: var(--warning); border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">Avaliação de Itens da Solicitação</h4>
+          <h4 style="margin-bottom: 12px; color: var(--warning); border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">AvaliaÃ§Ã£o de Itens da SolicitaÃ§Ã£o</h4>
           
           <div id="manager-approval-items-list" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
             <!-- Dynamically populated in App.showDespesaDetails -->
@@ -443,8 +443,8 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 16px;">
-            <label for="review-obs">Observação / Parecer Geral</label>
-            <textarea id="review-obs" rows="2" placeholder="Digite uma observação geral para o solicitante (opcional)..."></textarea>
+            <label for="review-obs">ObservaÃ§Ã£o / Parecer Geral</label>
+            <textarea id="review-obs" rows="2" placeholder="Digite uma observaÃ§Ã£o geral para o solicitante (opcional)..."></textarea>
           </div>
           
           <div style="display: flex; gap: 8px;">
@@ -464,8 +464,8 @@
   <div id="modal-user-permissions" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2500; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Controle de Permissões: <span id="perm-user-name" style="color: var(--text-main);"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-user-permissions').style.display='none'">✕</span>
+        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Controle de PermissÃµes: <span id="perm-user-name" style="color: var(--text-main);"></span></h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-user-permissions').style.display='none'">âœ•</span>
       </div>
 
       <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
@@ -493,22 +493,22 @@
             <input type="text" id="perm-user-password" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
           </div>
           <div class="form-group">
-            <label for="perm-user-profile" style="font-weight: bold; margin-bottom: 6px; display: block;">Perfil do Usuário</label>
+            <label for="perm-user-profile" style="font-weight: bold; margin-bottom: 6px; display: block;">Perfil do UsuÃ¡rio</label>
             <select id="perm-user-profile" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
               <option value="Administrador">Administrador</option>
               <option value="Gerente">Gerente</option>
               <option value="Supervisor">Supervisor</option>
               <option value="Financeiro">Financeiro</option>
               <option value="Conferente">Conferente</option>
-              <option value="Responsável Equipamentos">Responsável Equipamentos</option>
-              <option value="Mecânico">Mecânico</option>
+              <option value="ResponsÃ¡vel Equipamentos">ResponsÃ¡vel Equipamentos</option>
+              <option value="MecÃ¢nico">MecÃ¢nico</option>
               <option value="Vendedor">Vendedor</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="perm-user-status" style="font-weight: bold; margin-bottom: 6px; display: block;">Status do Usuário</label>
+            <label for="perm-user-status" style="font-weight: bold; margin-bottom: 6px; display: block;">Status do UsuÃ¡rio</label>
             <select id="perm-user-status" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
-              <option value="AGUARDANDO LIBERAÇÃO">AGUARDANDO LIBERAÇÃO</option>
+              <option value="AGUARDANDO LIBERAÃ‡ÃƒO">AGUARDANDO LIBERAÃ‡ÃƒO</option>
               <option value="LIBERADO">LIBERADO</option>
               <option value="INATIVO">INATIVO</option>
             </select>
@@ -523,30 +523,30 @@
               <!-- Will be populated dynamically -->
             </select>
           </div>
-          <!-- Seção Vendedores Vinculados (apenas para Supervisor) -->
+          <!-- SeÃ§Ã£o Vendedores Vinculados (apenas para Supervisor) -->
           <div class="form-group hidden" id="perm-user-links-vendedores-container" style="grid-column: span 2;">
             <label style="font-weight: bold; margin-bottom: 6px; display: block;">Vendedores vinculados</label>
             <div id="perm-user-links-vendedores-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-input);">
               <!-- Populated dynamically with checkboxes -->
             </div>
           </div>
-          <!-- Seção Supervisores Vinculados (apenas para Gerente) -->
+          <!-- SeÃ§Ã£o Supervisores Vinculados (apenas para Gerente) -->
           <div class="form-group hidden" id="perm-user-links-supervisores-container" style="grid-column: span 2;">
             <label style="font-weight: bold; margin-bottom: 6px; display: block;">Supervisores vinculados</label>
             <div id="perm-user-links-supervisores-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-input);">
               <!-- Populated dynamically with checkboxes -->
             </div>
           </div>
-          <!-- Seção Vendedores Vinculados Diretamente (apenas para Gerente) -->
+          <!-- SeÃ§Ã£o Vendedores Vinculados Diretamente (apenas para Gerente) -->
           <div class="form-group hidden" id="perm-user-links-gerente-vendedores-container" style="grid-column: span 2;">
             <label style="font-weight: bold; margin-bottom: 6px; display: block;">Vendedores vinculados diretamente</label>
             <div id="perm-user-links-gerente-vendedores-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-input);">
               <!-- Populated dynamically with checkboxes -->
             </div>
           </div>
-          <!-- Seção Supervisor Responsável (apenas para Vendedor) -->
+          <!-- SeÃ§Ã£o Supervisor ResponsÃ¡vel (apenas para Vendedor) -->
           <div class="form-group hidden" id="perm-user-supervisor-container" style="grid-column: span 2;">
-            <label for="perm-user-supervisor-id" style="font-weight: bold; margin-bottom: 6px; display: block;">Supervisor Responsável *</label>
+            <label for="perm-user-supervisor-id" style="font-weight: bold; margin-bottom: 6px; display: block;">Supervisor ResponsÃ¡vel *</label>
             <select id="perm-user-supervisor-id" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
               <option value="">Selecione um Supervisor...</option>
             </select>
@@ -558,12 +558,12 @@
             </div>
             <div style="width: 60px; height: 60px; border-radius: 50%; overflow: hidden; background: var(--bg-input); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
               <img id="perm-user-photo-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-              <span id="perm-user-photo-placeholder" style="font-size: 1.5rem; color: var(--text-muted);">👤</span>
+              <span id="perm-user-photo-placeholder" style="font-size: 1.5rem; color: var(--text-muted);">ðŸ‘¤</span>
             </div>
           </div>
         </div>
 
-        <h4 style="margin-bottom: 12px; color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; font-size: 1rem;">Módulos e Acessos Permitidos</h4>
+        <h4 style="margin-bottom: 12px; color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; font-size: 1rem;">MÃ³dulos e Acessos Permitidos</h4>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; padding: 10px; background: rgba(255,255,255,0.01); border-radius: 6px; border: 1px solid var(--border-color);">
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
@@ -584,43 +584,43 @@
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
             <input type="checkbox" class="perm-checkbox" value="Chamados" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Chamados Mecânicos</span>
+            <span>Chamados MecÃ¢nicos</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
             <input type="checkbox" class="perm-checkbox" value="Financeiro" style="width: 18px; height: 18px; cursor: pointer;">
             <span>Financeiro</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Aprovação de Clientes" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Aprovação de Clientes</span>
+            <input type="checkbox" class="perm-checkbox" value="AprovaÃ§Ã£o de Clientes" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>AprovaÃ§Ã£o de Clientes</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Solicitação de Saldo" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Solicitação de Saldo</span>
+            <input type="checkbox" class="perm-checkbox" value="SolicitaÃ§Ã£o de Saldo" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>SolicitaÃ§Ã£o de Saldo</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Aprovação de Saldo" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Aprovação de Saldo</span>
+            <input type="checkbox" class="perm-checkbox" value="AprovaÃ§Ã£o de Saldo" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>AprovaÃ§Ã£o de Saldo</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
             <input type="checkbox" class="perm-checkbox" value="Despesas de Campo" style="width: 18px; height: 18px; cursor: pointer;">
             <span>Despesas de Campo</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Aprovação de Despesas" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Aprovação de Despesas</span>
+            <input type="checkbox" class="perm-checkbox" value="AprovaÃ§Ã£o de Despesas" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>AprovaÃ§Ã£o de Despesas</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Relatórios" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Relatórios</span>
+            <input type="checkbox" class="perm-checkbox" value="RelatÃ³rios" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>RelatÃ³rios</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Usuários e Permissões" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Usuários e Permissões</span>
+            <input type="checkbox" class="perm-checkbox" value="UsuÃ¡rios e PermissÃµes" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>UsuÃ¡rios e PermissÃµes</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0;">
-            <input type="checkbox" class="perm-checkbox" value="Configurações Gerais" style="width: 18px; height: 18px; cursor: pointer;">
-            <span>Configurações Gerais</span>
+            <input type="checkbox" class="perm-checkbox" value="ConfiguraÃ§Ãµes Gerais" style="width: 18px; height: 18px; cursor: pointer;">
+            <span>ConfiguraÃ§Ãµes Gerais</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0; grid-column: span 2; border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 12px;">
             <input type="checkbox" class="perm-checkbox" value="Administrador" style="width: 18px; height: 18px; cursor: pointer;">
@@ -631,7 +631,7 @@
 
       <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px; gap: 10px;">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-user-permissions').style.display='none'" style="width: 120px; font-size:0.85rem;">Cancelar</button>
-        <button type="button" class="btn btn-primary" onclick="App.saveUserPermissions()" style="width: 150px; font-size:0.85rem;">Salvar Alterações</button>
+        <button type="button" class="btn btn-primary" onclick="App.saveUserPermissions()" style="width: 150px; font-size:0.85rem;">Salvar AlteraÃ§Ãµes</button>
       </div>
     </div>
   </div>
@@ -640,8 +640,8 @@
   <div id="modal-report-filters" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2500; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 id="report-filter-modal-title" style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Opções do Relatório</h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-report-filters').style.display='none'">✕</span>
+        <h3 id="report-filter-modal-title" style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">OpÃ§Ãµes do RelatÃ³rio</h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-report-filters').style.display='none'">âœ•</span>
       </div>
 
       <input type="hidden" id="report-filter-type" value="">
@@ -688,7 +688,7 @@
               <select id="filter-prioridade">
                 <option value="">Todas as Prioridades</option>
                 <option value="Baixa">Baixa</option>
-                <option value="Média">Média</option>
+                <option value="MÃ©dia">MÃ©dia</option>
                 <option value="Alta">Alta</option>
                 <option value="Urgente">Urgente</option>
               </select>
@@ -719,18 +719,18 @@
               <input type="text" id="filter-mov-vendedor" placeholder="Ex: Carlos Silva">
             </div>
             <div class="form-group">
-              <label for="filter-mov-patrimonio">Patrimônio</label>
+              <label for="filter-mov-patrimonio">PatrimÃ´nio</label>
               <input type="text" id="filter-mov-patrimonio" placeholder="Ex: PAT-001">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="filter-mov-tipo">Tipo de Movimentação</label>
+              <label for="filter-mov-tipo">Tipo de MovimentaÃ§Ã£o</label>
               <select id="filter-mov-tipo">
                 <option value="">Todos os Tipos</option>
                 <option value="Troca">Troca</option>
-                <option value="Adição">Adição</option>
+                <option value="AdiÃ§Ã£o">AdiÃ§Ã£o</option>
                 <option value="Recolha">Recolha</option>
                 <option value="Adesivar">Adesivar</option>
               </select>
@@ -774,8 +774,8 @@
   <div id="modal-movimentacao-details" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2500; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Dossiê de Movimentação #<span id="dossie-mov-id"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-movimentacao-details').style.display='none'">✕</span>
+        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">DossiÃª de MovimentaÃ§Ã£o #<span id="dossie-mov-id"></span></h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-movimentacao-details').style.display='none'">âœ•</span>
       </div>
 
       <div id="dossie-mov-content" style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
@@ -783,7 +783,7 @@
         <!-- Status & Geral Header -->
         <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:10px 15px; border-radius:6px; border:1px solid var(--border-color); margin-bottom:15px;">
           <div>
-            <strong>Tipo de Operação:</strong> <span id="dossie-mov-tipo" style="font-weight:700; color:var(--primary-color); text-transform:uppercase;"></span>
+            <strong>Tipo de OperaÃ§Ã£o:</strong> <span id="dossie-mov-tipo" style="font-weight:700; color:var(--primary-color); text-transform:uppercase;"></span>
           </div>
           <div>
             <strong>Status:</strong> <span id="dossie-mov-status" class="badge-status"></span>
@@ -795,40 +795,40 @@
           <div class="card" style="margin-bottom:0; padding:12px; background:rgba(255,255,255,0.01); border:1px solid var(--border-color);">
             <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:4px; margin-bottom:8px; color:var(--primary-color);">Dados do Cliente</h5>
             <div style="display:flex; flex-direction:column; gap:6px;">
-              <div><strong>Código:</strong> <span id="dossie-cliente-codigo"></span></div>
+              <div><strong>CÃ³digo:</strong> <span id="dossie-cliente-codigo"></span></div>
               <div><strong>Nome Fantasia:</strong> <span id="dossie-cliente-nome"></span></div>
               <div><strong>Cidade:</strong> <span id="dossie-cliente-cidade"></span></div>
-              <div><strong>Endereço:</strong> <span id="dossie-cliente-endereco"></span></div>
+              <div><strong>EndereÃ§o:</strong> <span id="dossie-cliente-endereco"></span></div>
               <div><strong>Vendedor do Cliente:</strong> <span id="dossie-cliente-vendedor"></span></div>
             </div>
           </div>
 
-          <!-- Card 2: Identificação do Registro -->
+          <!-- Card 2: IdentificaÃ§Ã£o do Registro -->
           <div class="card" style="margin-bottom:0; padding:12px; background:rgba(255,255,255,0.01); border:1px solid var(--border-color);">
-            <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:4px; margin-bottom:8px; color:var(--primary-color);">Dados da Solicitação</h5>
+            <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:4px; margin-bottom:8px; color:var(--primary-color);">Dados da SolicitaÃ§Ã£o</h5>
             <div style="display:flex; flex-direction:column; gap:6px;">
               <div><strong>Empresa Base:</strong> <span id="dossie-sol-empresa"></span></div>
               <div><strong>Solicitante:</strong> <span id="dossie-sol-vendedor"></span></div>
-              <div><strong>Data de Criação:</strong> <span id="dossie-sol-data"></span></div>
-              <div><strong>Observações Gerais:</strong> <p id="dossie-sol-observacao" style="margin:4px 0; font-style:italic; font-size:0.8rem; color:var(--text-muted);"></p></div>
+              <div><strong>Data de CriaÃ§Ã£o:</strong> <span id="dossie-sol-data"></span></div>
+              <div><strong>ObservaÃ§Ãµes Gerais:</strong> <p id="dossie-sol-observacao" style="margin:4px 0; font-style:italic; font-size:0.8rem; color:var(--text-muted);"></p></div>
             </div>
           </div>
         </div>
 
         <!-- Card 3: Dados do(s) Equipamento(s) -->
         <div class="card" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.01); border:1px solid var(--border-color);">
-          <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:6px; margin-bottom:12px; color:var(--primary-color);">Especificações de Equipamento</h5>
+          <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:6px; margin-bottom:12px; color:var(--primary-color);">EspecificaÃ§Ãµes de Equipamento</h5>
           
           <div id="dossie-eq-troca-container" style="display:none; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:15px;">
             <div style="padding:10px; background:rgba(239,68,68,0.05); border:1px solid var(--border-color); border-radius:6px;">
               <strong style="color:var(--danger); display:block; margin-bottom:8px;">RETIRADO (Antigo)</strong>
-              <div><strong>Patrimônio:</strong> <span id="dossie-patrimonio-antigo" style="font-family:monospace; font-weight:700;"></span></div>
+              <div><strong>PatrimÃ´nio:</strong> <span id="dossie-patrimonio-antigo" style="font-family:monospace; font-weight:700;"></span></div>
               <div><strong>Modelo:</strong> <span id="dossie-modelo-antigo"></span></div>
               <div><strong>Voltagem:</strong> <span id="dossie-voltagem-antiga"></span> V</div>
             </div>
             <div style="padding:10px; background:rgba(16,185,129,0.05); border:1px solid var(--border-color); border-radius:6px;">
               <strong style="color:var(--success); display:block; margin-bottom:8px;">INSTALADO (Novo)</strong>
-              <div><strong>Patrimônio:</strong> <span id="dossie-patrimonio-novo" style="font-family:monospace; font-weight:700;"></span></div>
+              <div><strong>PatrimÃ´nio:</strong> <span id="dossie-patrimonio-novo" style="font-family:monospace; font-weight:700;"></span></div>
               <div><strong>Modelo:</strong> <span id="dossie-modelo-novo"></span></div>
               <div><strong>Voltagem:</strong> <span id="dossie-voltagem-nova"></span> V</div>
             </div>
@@ -836,7 +836,7 @@
 
           <div id="dossie-eq-padrao-container" style="display:flex; flex-direction:column; gap:6px;">
             <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
-              <div><strong>Patrimônio:</strong> <span id="dossie-patrimonio-padrao" style="font-family:monospace; font-weight:700;"></span></div>
+              <div><strong>PatrimÃ´nio:</strong> <span id="dossie-patrimonio-padrao" style="font-family:monospace; font-weight:700;"></span></div>
               <div><strong>Modelo:</strong> <span id="dossie-modelo-padrao"></span></div>
               <div><strong>Voltagem:</strong> <span id="dossie-voltagem-padrao"></span> V</div>
             </div>
@@ -847,45 +847,45 @@
               <strong>Motivo do Recolhimento:</strong> <p id="dossie-recolhimento-motivo" style="margin:4px 0; padding:8px; background:rgba(255,255,255,0.02); border-radius:4px; border:1px solid var(--border-color);"></p>
             </div>
             <div id="dossie-troca-detalhe-container" style="margin-top:6px; display:none;">
-              <strong>Detalhes da Troca/Adição:</strong> <p id="dossie-troca-detalhe" style="margin:4px 0; padding:8px; background:rgba(255,255,255,0.02); border-radius:4px; border:1px solid var(--border-color);"></p>
+              <strong>Detalhes da Troca/AdiÃ§Ã£o:</strong> <p id="dossie-troca-detalhe" style="margin:4px 0; padding:8px; background:rgba(255,255,255,0.02); border-radius:4px; border:1px solid var(--border-color);"></p>
             </div>
           </div>
 
           <div style="margin-top:10px;">
-            <a href="javascript:void(0)" id="btn-show-timeline-dossie" style="font-weight:600; color:var(--primary-color); text-decoration:underline;">Ver Linha do Tempo / Histórico Deste Equipamento</a>
+            <a href="javascript:void(0)" id="btn-show-timeline-dossie" style="font-weight:600; color:var(--primary-color); text-decoration:underline;">Ver Linha do Tempo / HistÃ³rico Deste Equipamento</a>
           </div>
         </div>
 
-        <!-- Card 4: Mídias de Campo -->
+        <!-- Card 4: MÃ­dias de Campo -->
         <div class="card" style="margin-bottom:20px; padding:15px; background:rgba(255,255,255,0.01); border:1px solid var(--border-color);">
-          <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:6px; margin-bottom:12px; color:var(--primary-color);">Comprovações de Mídia (Fotos e Vídeos)</h5>
+          <h5 style="margin-top:0; border-bottom:1px solid var(--border-color); padding-bottom:6px; margin-bottom:12px; color:var(--primary-color);">ComprovaÃ§Ãµes de MÃ­dia (Fotos e VÃ­deos)</h5>
           <div id="dossie-media-gallery" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
             <!-- Injected dynamically -->
           </div>
         </div>
 
-        <!-- Histórico de Auditoria / Reprovação se houver -->
+        <!-- HistÃ³rico de Auditoria / ReprovaÃ§Ã£o se houver -->
         <div id="dossie-reprovacao-secao" style="display:none; padding:15px; border: 1px solid var(--danger); border-radius:8px; background:rgba(239,68,68,0.03); margin-bottom:20px;">
-          <h5 style="margin-top:0; color:var(--danger); margin-bottom:6px;">Registro de Reprovação</h5>
+          <h5 style="margin-top:0; color:var(--danger); margin-bottom:6px;">Registro de ReprovaÃ§Ã£o</h5>
           <strong>Motivo:</strong> <p id="dossie-reprovacao-motivo" style="margin:4px 0; font-size:0.85rem;"></p>
         </div>
 
         <!-- Manager Action Panel -->
         <div id="dossie-manager-panel" style="display:none; padding:15px; border: 1px solid var(--warning); border-radius:8px; background:rgba(245,158,11,0.02); margin-top:20px;">
-          <h5 style="margin-top:0; color:var(--warning); margin-bottom:10px;">Decisão do Gestor de Equipamentos</h5>
+          <h5 style="margin-top:0; color:var(--warning); margin-bottom:10px;">DecisÃ£o do Gestor de Equipamentos</h5>
 
-          <!-- EQUIPAMENTO DE SUBSTITUIÇÃO — Só visível para Gestor ao analisar uma Troca -->
+          <!-- EQUIPAMENTO DE SUBSTITUIÃ‡ÃƒO â€” SÃ³ visÃ­vel para Gestor ao analisar uma Troca -->
           <div id="dossie-substituicao-block" style="display:none; margin-bottom:18px; padding:14px; border:1px solid var(--success); border-radius:8px; background:rgba(16,185,129,0.03);">
-            <h5 id="dossie-sub-titulo" style="margin-top:0; color:var(--success); margin-bottom:12px; font-family:var(--font-title); border-bottom:1px dashed var(--border-color); padding-bottom:6px;">🔄 EQUIPAMENTO CONFIRMADO PELO GESTOR</h5>
-            <p id="dossie-sub-ajuda" style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Preencha os dados do equipamento confirmado pelo gestor. Não use listas pré-definidas — preencha manualmente.</p>
+            <h5 id="dossie-sub-titulo" style="margin-top:0; color:var(--success); margin-bottom:12px; font-family:var(--font-title); border-bottom:1px dashed var(--border-color); padding-bottom:6px;">ðŸ”„ EQUIPAMENTO CONFIRMADO PELO GESTOR</h5>
+            <p id="dossie-sub-ajuda" style="font-size:0.78rem; color:var(--text-muted); margin-bottom:12px;">Preencha os dados do equipamento confirmado pelo gestor. NÃ£o use listas prÃ©-definidas â€” preencha manualmente.</p>
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:12px;">
               <div class="form-group" style="margin-bottom:0;">
-                <label for="dossie-sub-patrimonio">Número do Patrimônio Novo *</label>
+                <label for="dossie-sub-patrimonio">NÃºmero do PatrimÃ´nio Novo *</label>
                 <input type="text" id="dossie-sub-patrimonio" placeholder="Ex: PAT-00123" style="font-weight:600; font-family:monospace;">
               </div>
               <div class="form-group" style="margin-bottom:0;">
                 <label for="dossie-sub-modelo">Modelo do Equipamento Novo *</label>
-                <input type="text" id="dossie-sub-modelo" placeholder="Ex: Freezer V100 Dupla Ação">
+                <input type="text" id="dossie-sub-modelo" placeholder="Ex: Freezer V100 Dupla AÃ§Ã£o">
               </div>
               <div class="form-group" style="margin-bottom:0;">
                 <label for="dossie-sub-voltagem">Voltagem do Equipamento Novo *</label>
@@ -895,12 +895,12 @@
           </div>
 
           <div class="form-group" style="margin-bottom:12px;">
-            <label for="dossie-review-notes">Nota de Parecer / Justificativa (Obrigatório em caso de reprovação)</label>
-            <textarea id="dossie-review-notes" rows="2" placeholder="Escreva observações ou motivo da recusa..."></textarea>
+            <label for="dossie-review-notes">Nota de Parecer / Justificativa (ObrigatÃ³rio em caso de reprovaÃ§Ã£o)</label>
+            <textarea id="dossie-review-notes" rows="2" placeholder="Escreva observaÃ§Ãµes ou motivo da recusa..."></textarea>
           </div>
           <div style="display:flex; gap:8px;">
-            <button type="button" class="btn btn-success" onclick="App.submitMovementApproval('Aprovado')" style="flex:1;">Aprovar Movimentação</button>
-            <button type="button" class="btn btn-danger" onclick="App.submitMovementApproval('Reprovado')" style="flex:1;">Reprovar Movimentação</button>
+            <button type="button" class="btn btn-success" onclick="App.submitMovementApproval('Aprovado')" style="flex:1;">Aprovar MovimentaÃ§Ã£o</button>
+            <button type="button" class="btn btn-danger" onclick="App.submitMovementApproval('Reprovado')" style="flex:1;">Reprovar MovimentaÃ§Ã£o</button>
           </div>
         </div>
 
@@ -908,7 +908,7 @@
 
       <div style="display: flex; justify-content: flex-end; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px; gap:10px;">
         <button type="button" class="btn btn-primary" onclick="App.generateMovementDossierPdf()" style="width: 150px; font-size:0.85rem;">Gerar PDF</button>
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-movimentacao-details').style.display='none'" style="width: 150px; font-size:0.85rem;">Fechar Dossiê</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-movimentacao-details').style.display='none'" style="width: 150px; font-size:0.85rem;">Fechar DossiÃª</button>
       </div>
     </div>
   </div>
@@ -917,8 +917,8 @@
   <div id="modal-patrimonio-historico" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2600; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Histórico do Equipamento #<span id="timeline-patrimonio-id"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-patrimonio-historico').style.display='none'">✕</span>
+        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">HistÃ³rico do Equipamento #<span id="timeline-patrimonio-id"></span></h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-patrimonio-historico').style.display='none'">âœ•</span>
       </div>
 
       <div id="timeline-patrimonio-content" style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
@@ -939,7 +939,7 @@
           </div>
         </div>
 
-        <h4 style="margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--primary-color);">Linha do Tempo de Movimentações</h4>
+        <h4 style="margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--primary-color);">Linha do Tempo de MovimentaÃ§Ãµes</h4>
         
         <!-- Timeline Flow vertical container -->
         <div id="timeline-flow-container" style="position: relative; padding-left: 24px; display: flex; flex-direction: column; gap: 15px;">
@@ -957,45 +957,45 @@
     </div>
   </div>
 
-  <!-- MODAL: FICHA TÉCNICA DE MANUTENÇÃO (MECÂNICO) -->
+  <!-- MODAL: FICHA TÃ‰CNICA DE MANUTENÃ‡ÃƒO (MECÃ‚NICO) -->
   <div id="modal-ficha-tecnica" class="login-wrapper" style="display: none; position: fixed; top: 0; left: 0; z-index: 2500; background-color: rgba(0,0,0,0.6); width: 100vw; height: 100vh; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 10px;">
     <div class="login-card" style="max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
-        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Ficha Técnica de Manutenção - OS #<span id="ficha-ticket-id-title"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-ficha-tecnica').style.display='none'">✕</span>
+        <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Ficha TÃ©cnica de ManutenÃ§Ã£o - OS #<span id="ficha-ticket-id-title"></span></h3>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-ficha-tecnica').style.display='none'">âœ•</span>
       </div>
 
       <form id="ticket-form">
-        <!-- BLOCO 1: IDENTIFICAÇÃO DO ATENDIMENTO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:8px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">1. Identificação do Atendimento</h4>
+        <!-- BLOCO 1: IDENTIFICAÃ‡ÃƒO DO ATENDIMENTO -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:8px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">1. IdentificaÃ§Ã£o do Atendimento</h4>
         <div class="form-row">
           <div class="form-group">
-            <label for="ticket-mechanic">Mecânico Responsável</label>
+            <label for="ticket-mechanic">MecÃ¢nico ResponsÃ¡vel</label>
             <input type="text" id="ticket-mechanic" readonly placeholder="Preenchido automaticamente..." style="background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
-            <label for="ticket-start-date">Data de Início</label>
+            <label for="ticket-start-date">Data de InÃ­cio</label>
             <input type="date" id="ticket-start-date" required>
           </div>
           <div class="form-group">
-            <label for="ticket-start-time">Hora de Início</label>
+            <label for="ticket-start-time">Hora de InÃ­cio</label>
             <input type="time" id="ticket-start-time" required>
           </div>
           <div class="form-group">
-            <label for="ticket-end-time">Hora de Conclusão</label>
+            <label for="ticket-end-time">Hora de ConclusÃ£o</label>
             <input type="time" id="ticket-end-time">
           </div>
         </div>
 
         <!-- BLOCO 2: EQUIPAMENTO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">2. Identificação do Equipamento</h4>
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">2. IdentificaÃ§Ã£o do Equipamento</h4>
         <div class="form-row">
           <div class="form-group">
             <label for="ticket-eq-type-text">Tipo de Equipamento</label>
             <input type="text" id="ticket-eq-type-text" readonly style="background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
-            <label for="ticket-eq-serial">Nº Patrimônio / Serial</label>
+            <label for="ticket-eq-serial">NÂº PatrimÃ´nio / Serial</label>
             <input type="text" id="ticket-eq-serial" readonly style="background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
@@ -1003,7 +1003,7 @@
             <input type="text" id="ticket-client-name" readonly placeholder="Carregado automaticamente..." style="background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
-            <label for="ticket-seller-text">Vendedor Responsável</label>
+            <label for="ticket-seller-text">Vendedor ResponsÃ¡vel</label>
             <input type="text" id="ticket-seller-text" readonly style="background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
@@ -1014,103 +1014,103 @@
 
         <div class="form-row">
           <div class="form-group" style="grid-column: span 2;">
-            <label for="ticket-title">Descrição Simplificada da Falha *</label>
+            <label for="ticket-title">DescriÃ§Ã£o Simplificada da Falha *</label>
             <input type="text" id="ticket-title" required readonly placeholder="Carregado automaticamente..." style="height:44px; background-color: rgba(255,255,255,0.03);">
           </div>
           <div class="form-group">
-            <label for="ticket-priority-text">Nível de Prioridade *</label>
+            <label for="ticket-priority-text">NÃ­vel de Prioridade *</label>
             <input type="text" id="ticket-priority-text" readonly style="background-color: rgba(255,255,255,0.03);">
           </div>
         </div>
 
-        <!-- BLOCO 3: PEÇAS UTILIZADAS -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">3. Peças Utilizadas</h4>
-        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todas as peças usadas no atendimento. É possível selecionar múltiplas peças.</p>
+        <!-- BLOCO 3: PEÃ‡AS UTILIZADAS -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">3. PeÃ§as Utilizadas</h4>
+        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todas as peÃ§as usadas no atendimento. Ã‰ possÃ­vel selecionar mÃºltiplas peÃ§as.</p>
         <div id="ticket-parts-container" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
           <button type="button" class="btn-part-toggle" data-part="Compressor" onclick="App.togglePartBtn(this)">Compressor</button>
           <button type="button" class="btn-part-toggle" data-part="Capacitor" onclick="App.togglePartBtn(this)">Capacitor</button>
           <button type="button" class="btn-part-toggle" data-part="Filtro Secador" onclick="App.togglePartBtn(this)">Filtro Secador</button>
-          <button type="button" class="btn-part-toggle" data-part="Relé" onclick="App.togglePartBtn(this)">Relé</button>
+          <button type="button" class="btn-part-toggle" data-part="RelÃ©" onclick="App.togglePartBtn(this)">RelÃ©</button>
           <button type="button" class="btn-part-toggle" data-part="Mangueira de Dreno" onclick="App.togglePartBtn(this)">Mangueira de Dreno</button>
-          <button type="button" class="btn-part-toggle" data-part="Rodízio" onclick="App.togglePartBtn(this)">Rodízio</button>
-          <button type="button" class="btn-part-toggle" data-part="Lâmpada" onclick="App.togglePartBtn(this)">Lâmpada</button>
+          <button type="button" class="btn-part-toggle" data-part="RodÃ­zio" onclick="App.togglePartBtn(this)">RodÃ­zio</button>
+          <button type="button" class="btn-part-toggle" data-part="LÃ¢mpada" onclick="App.togglePartBtn(this)">LÃ¢mpada</button>
           <button type="button" class="btn-part-toggle" data-part="Timer" onclick="App.togglePartBtn(this)">Timer</button>
           <button type="button" class="btn-part-toggle" data-part="Termostato" onclick="App.togglePartBtn(this)">Termostato</button>
           <button type="button" class="btn-part-toggle" data-part="Micro Motor" onclick="App.togglePartBtn(this)">Micro Motor</button>
           <button type="button" class="btn-part-toggle" data-part="Cabo/Fio" onclick="App.togglePartBtn(this)">Cabo/Fio</button>
           <button type="button" class="btn-part-toggle" data-part="Condensador" onclick="App.togglePartBtn(this)">Condensador</button>
-          <button type="button" class="btn-part-toggle" data-part="Hélice" onclick="App.togglePartBtn(this)">Hélice</button>
-          <button type="button" class="btn-part-toggle" data-part="Resistência Degelo" onclick="App.togglePartBtn(this)">Resistência Degelo</button>
+          <button type="button" class="btn-part-toggle" data-part="HÃ©lice" onclick="App.togglePartBtn(this)">HÃ©lice</button>
+          <button type="button" class="btn-part-toggle" data-part="ResistÃªncia Degelo" onclick="App.togglePartBtn(this)">ResistÃªncia Degelo</button>
           <button type="button" class="btn-part-toggle" data-part="Interruptor da Porta" onclick="App.togglePartBtn(this)">Interruptor da Porta</button>
-          <button type="button" class="btn-part-toggle btn-part-outra" data-part="Outra Peça" onclick="App.toggleOtherPart(this)">+ Outra Peça</button>
+          <button type="button" class="btn-part-toggle btn-part-outra" data-part="Outra PeÃ§a" onclick="App.toggleOtherPart(this)">+ Outra PeÃ§a</button>
         </div>
         <div id="ticket-outra-peca-container" style="display:none; margin-bottom:12px;">
           <div class="form-group" style="margin-bottom:0;">
-            <label for="ticket-outra-peca">Descreva a outra peça utilizada</label>
-            <input type="text" id="ticket-outra-peca" placeholder="Nome da peça utilizada...">
+            <label for="ticket-outra-peca">Descreva a outra peÃ§a utilizada</label>
+            <input type="text" id="ticket-outra-peca" placeholder="Nome da peÃ§a utilizada...">
           </div>
         </div>
 
-        <!-- BLOCO 4: SERVIÇOS EXECUTADOS -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">4. Serviços Executados</h4>
-        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todos os serviços realizados no atendimento. É possível selecionar múltiplos serviços.</p>
+        <!-- BLOCO 4: SERVIÃ‡OS EXECUTADOS -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">4. ServiÃ§os Executados</h4>
+        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todos os serviÃ§os realizados no atendimento. Ã‰ possÃ­vel selecionar mÃºltiplos serviÃ§os.</p>
         <div id="ticket-services-container" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-          <button type="button" class="btn-part-toggle" data-service="Recarga de Gás" onclick="App.toggleServiceBtn(this)">Recarga de Gás</button>
-          <button type="button" class="btn-part-toggle" data-service="Troca de Peça" onclick="App.toggleServiceBtn(this)">Troca de Peça</button>
+          <button type="button" class="btn-part-toggle" data-service="Recarga de GÃ¡s" onclick="App.toggleServiceBtn(this)">Recarga de GÃ¡s</button>
+          <button type="button" class="btn-part-toggle" data-service="Troca de PeÃ§a" onclick="App.toggleServiceBtn(this)">Troca de PeÃ§a</button>
           <button type="button" class="btn-part-toggle" data-service="Limpeza Geral" onclick="App.toggleServiceBtn(this)">Limpeza Geral</button>
           <button type="button" class="btn-part-toggle" data-service="Regulagem" onclick="App.toggleServiceBtn(this)">Regulagem</button>
-          <button type="button" class="btn-part-toggle" data-service="Instalação" onclick="App.toggleServiceBtn(this)">Instalação</button>
+          <button type="button" class="btn-part-toggle" data-service="InstalaÃ§Ã£o" onclick="App.toggleServiceBtn(this)">InstalaÃ§Ã£o</button>
           <button type="button" class="btn-part-toggle" data-service="Soldagem" onclick="App.toggleServiceBtn(this)">Soldagem</button>
-          <button type="button" class="btn-part-toggle" data-service="Diagnóstico Elétrico" onclick="App.toggleServiceBtn(this)">Diagnóstico Elétrico</button>
-          <button type="button" class="btn-part-toggle" data-service="Desgelo Forçado" onclick="App.toggleServiceBtn(this)">Desgelo Forçado</button>
-          <button type="button" class="btn-part-toggle" data-service="Adesivação" onclick="App.toggleServiceBtn(this)">Adesivação</button>
+          <button type="button" class="btn-part-toggle" data-service="DiagnÃ³stico ElÃ©trico" onclick="App.toggleServiceBtn(this)">DiagnÃ³stico ElÃ©trico</button>
+          <button type="button" class="btn-part-toggle" data-service="Desgelo ForÃ§ado" onclick="App.toggleServiceBtn(this)">Desgelo ForÃ§ado</button>
+          <button type="button" class="btn-part-toggle" data-service="AdesivaÃ§Ã£o" onclick="App.toggleServiceBtn(this)">AdesivaÃ§Ã£o</button>
           <button type="button" class="btn-part-toggle" data-service="Reparo Estrutural" onclick="App.toggleServiceBtn(this)">Reparo Estrutural</button>
-          <button type="button" class="btn-part-toggle" data-service="Substituição de Motor" onclick="App.toggleServiceBtn(this)">Substituição de Motor</button>
-          <button type="button" class="btn-part-toggle btn-part-outra" data-service="Outro Serviço" onclick="App.toggleOtherService(this)">+ Outro Serviço</button>
+          <button type="button" class="btn-part-toggle" data-service="SubstituiÃ§Ã£o de Motor" onclick="App.toggleServiceBtn(this)">SubstituiÃ§Ã£o de Motor</button>
+          <button type="button" class="btn-part-toggle btn-part-outra" data-service="Outro ServiÃ§o" onclick="App.toggleOtherService(this)">+ Outro ServiÃ§o</button>
         </div>
         <div id="ticket-outro-servico-container" style="display:none; margin-bottom:12px;">
           <div class="form-group" style="margin-bottom:0;">
-            <label for="ticket-outro-servico">Descreva o outro serviço executado</label>
-            <input type="text" id="ticket-outro-servico" placeholder="Descreva o serviço executado...">
+            <label for="ticket-outro-servico">Descreva o outro serviÃ§o executado</label>
+            <input type="text" id="ticket-outro-servico" placeholder="Descreva o serviÃ§o executado...">
           </div>
         </div>
 
-        <!-- BLOCO 5: LAUDO TÉCNICO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">5. Laudo e Diagnóstico Técnico</h4>
+        <!-- BLOCO 5: LAUDO TÃ‰CNICO -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">5. Laudo e DiagnÃ³stico TÃ©cnico</h4>
         <div class="form-row">
           <div class="form-group" style="grid-column: span 2;">
-            <label for="ticket-fault-description">Descrição Detalhada do Problema Encontrado *</label>
-            <textarea id="ticket-fault-description" rows="3" required placeholder="Descreva detalhadamente o problema encontrado, causa provável, e condições do equipamento ao chegar..." style="resize:vertical;"></textarea>
+            <label for="ticket-fault-description">DescriÃ§Ã£o Detalhada do Problema Encontrado *</label>
+            <textarea id="ticket-fault-description" rows="3" required placeholder="Descreva detalhadamente o problema encontrado, causa provÃ¡vel, e condiÃ§Ãµes do equipamento ao chegar..." style="resize:vertical;"></textarea>
           </div>
           <div class="form-group" style="grid-column: span 2;">
-            <label for="ticket-solution-description">Solução Aplicada / Laudo Técnico *</label>
-            <textarea id="ticket-solution-description" rows="3" required placeholder="Descreva o que foi feito para resolver o problema, incluindo ajustes, substituições e verificações..." style="resize:vertical;"></textarea>
+            <label for="ticket-solution-description">SoluÃ§Ã£o Aplicada / Laudo TÃ©cnico *</label>
+            <textarea id="ticket-solution-description" rows="3" required placeholder="Descreva o que foi feito para resolver o problema, incluindo ajustes, substituiÃ§Ãµes e verificaÃ§Ãµes..." style="resize:vertical;"></textarea>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label for="ticket-eq-status-after">Estado do Equipamento Após Atendimento *</label>
+            <label for="ticket-eq-status-after">Estado do Equipamento ApÃ³s Atendimento *</label>
             <select id="ticket-eq-status-after" required>
               <option value="" disabled selected>Selecione...</option>
               <option value="Funcionando normalmente">Funcionando normalmente</option>
               <option value="Funcionando parcialmente">Funcionando parcialmente</option>
-              <option value="Aguardando peça">Aguardando peça</option>
+              <option value="Aguardando peÃ§a">Aguardando peÃ§a</option>
               <option value="Aguardando troca">Aguardando troca</option>
               <option value="Recolhido para reparo">Recolhido para reparo</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="ticket-gas-charge">Carga de Gás (gramas) — se aplicável</label>
+            <label for="ticket-gas-charge">Carga de GÃ¡s (gramas) â€” se aplicÃ¡vel</label>
             <input type="number" id="ticket-gas-charge" min="0" step="1" placeholder="Ex: 150">
           </div>
           <div class="form-group">
-            <label for="ticket-additional-notes">Observações Adicionais</label>
-            <input type="text" id="ticket-additional-notes" placeholder="Informações adicionais para o gestor...">
+            <label for="ticket-additional-notes">ObservaÃ§Ãµes Adicionais</label>
+            <input type="text" id="ticket-additional-notes" placeholder="InformaÃ§Ãµes adicionais para o gestor...">
           </div>
         </div>
 
-        <!-- BLOCO 6: FOTOS E VÍDEO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">6. Fotos e Vídeo da Visita</h4>
+        <!-- BLOCO 6: FOTOS E VÃDEO -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">6. Fotos e VÃ­deo da Visita</h4>
         <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
             <label for="ticket-foto-antes" style="font-weight:600; font-size:0.75rem;">Foto Antes do Reparo *</label>
@@ -1127,20 +1127,20 @@
             </div>
           </div>
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-            <label for="ticket-foto-plaqueta" style="font-weight:600; font-size:0.75rem;">Foto da Plaqueta de Identificação</label>
+            <label for="ticket-foto-plaqueta" style="font-weight:600; font-size:0.75rem;">Foto da Plaqueta de IdentificaÃ§Ã£o</label>
             <input type="file" id="ticket-foto-plaqueta" accept="image/*" style="font-size:0.75rem; margin-top:4px;">
             <div id="preview-ticket-foto-plaqueta" style="display:none; margin-top:6px;">
               <img id="preview-img-ticket-foto-plaqueta" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
             </div>
           </div>
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-            <label for="ticket-video" style="font-weight:600; font-size:0.75rem;">Vídeo do Atendimento (opcional)</label>
+            <label for="ticket-video" style="font-weight:600; font-size:0.75rem;">VÃ­deo do Atendimento (opcional)</label>
             <input type="file" id="ticket-video" accept="video/*" style="font-size:0.75rem; margin-top:4px;">
           </div>
         </div>
 
         <div style="display:flex; gap:12px; margin-top:24px;">
-          <button type="submit" class="btn btn-primary" style="flex:1; height:44px; font-weight:600; font-size:1rem;">Registrar Atendimento Técnico</button>
+          <button type="submit" class="btn btn-primary" style="flex:1; height:44px; font-weight:600; font-size:1rem;">Registrar Atendimento TÃ©cnico</button>
           <button type="button" id="btn-gerar-pdf-ficha" class="btn btn-secondary" onclick="App.generateTicketPdfFromForm()" style="width:150px; height:44px; font-weight:600; font-size:1rem; background-color:#2c3e50; color:#fff; border:1px solid #34495e;">Gerar PDF</button>
           <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-ficha-tecnica').style.display='none'" style="width:150px; height:44px; font-weight:600; font-size:1rem;">Cancelar</button>
         </div>
@@ -1152,7 +1152,7 @@
   <div id="modal-image-preview" style="display: none; position: fixed; top: 0; left: 0; z-index: 3000; background-color: rgba(0,0,0,0.85); width: 100vw; height: 100vh; align-items: center; justify-content: center;" onclick="this.style.display='none'">
     <div style="position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center;">
       <img id="modal-preview-img" src="" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 3px solid #fff; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <span style="color: #fff; font-size: 1rem; margin-top: 12px; cursor: pointer; background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px;">✕ Fechar Visualização</span>
+      <span style="color: #fff; font-size: 1rem; margin-top: 12px; cursor: pointer; background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px;">âœ• Fechar VisualizaÃ§Ã£o</span>
     </div>
   </div>
 
@@ -1181,7 +1181,7 @@
         </div>
         
         <div style="font-size: 1.1rem; font-weight: bold; margin-top: 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px;">
-          <span>Valor Unitário/Caixa:</span>
+          <span>Valor UnitÃ¡rio/Caixa:</span>
           <span id="exchange-modal-price-val">R$ 0,00</span>
         </div>
         
@@ -1206,14 +1206,14 @@
     <div class="login-card" style="max-width: 750px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
         <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Detalhes da Troca #<span id="det-exchange-id"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-exchange-details').style.display='none'">✕</span>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-exchange-details').style.display='none'">âœ•</span>
       </div>
 
       <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4;">
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 15px;">
           <div><strong>Vendedor:</strong> <span id="det-exchange-vendedor"></span></div>
           <div><strong>Data/Hora:</strong> <span id="det-exchange-data-hora"></span></div>
-          <div><strong>Cliente Código:</strong> <span id="det-exchange-cliente-codigo"></span></div>
+          <div><strong>Cliente CÃ³digo:</strong> <span id="det-exchange-cliente-codigo"></span></div>
           <div><strong>Cliente Nome Fantasia:</strong> <span id="det-exchange-cliente-nome"></span></div>
         </div>
 
@@ -1222,11 +1222,11 @@
           <table class="exchange-cart-table" style="width: 100%; margin-bottom: 15px; font-size: 0.8rem;">
             <thead>
               <tr>
-                <th>Código</th>
+                <th>CÃ³digo</th>
                 <th>Produto</th>
                 <th>Tipo</th>
                 <th style="text-align: center;">Quantidade</th>
-                <th style="text-align: right;">Preço Base</th>
+                <th style="text-align: right;">PreÃ§o Base</th>
                 <th style="text-align: right;">Total Item</th>
               </tr>
             </thead>
@@ -1256,6 +1256,6 @@
     </div>
   </div>
 
-  <!-- Correções finais: exclusão de clientes, filtro vendedor, datas BR, banner notificações -->
+  <!-- CorreÃ§Ãµes finais: exclusÃ£o de clientes, filtro vendedor, datas BR, banner notificaÃ§Ãµes -->
 </body>
 </html>
