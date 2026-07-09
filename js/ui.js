@@ -637,12 +637,12 @@ const UI = {
 
       return `
         <tr class="mobile-summary-row" onclick="App.openPatrimonioTimeline('${eq.serial}')" style="cursor: pointer;">
-          <td style="font-weight: 600;">${eq.name}</td>
-          <td style="font-family: monospace;">${eq.serial}</td>
-          <td>${eq.client}</td>
-          <td><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(eq.unitId)}</span></td>
-          <td><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(eq.userId)}</span></td>
-          <td><span class="badge-status ${statusClass}">${eq.status}</span></td>
+          <td data-label="Modelo" style="font-weight: 600;">${eq.name}</td>
+          <td data-label="Serial" style="font-family: monospace;">${eq.serial}</td>
+          <td data-label="Cliente">${eq.client}</td>
+          <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(eq.unitId)}</span></td>
+          <td data-label="Vendedor"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(eq.userId)}</span></td>
+          <td data-label="Status"><span class="badge-status ${statusClass}">${eq.status}</span></td>
         </tr>
       `;
     }).join('');
@@ -776,7 +776,7 @@ const UI = {
           <td data-label="Mecânico" style="font-size:0.78rem; color:var(--text-muted);">${ticket.mechanic || UI.getUserName(ticket.userId) || '—'}</td>
           <td data-label="Equipamento" style="font-family: monospace; font-size:0.8rem;">${ticket.equipmentSerial || '—'}</td>
           <td data-label="Cliente" style="font-size:0.8rem;">${ticket.client || '—'}</td>
-          <td data-label="Chamado" class="normal-wrap" style="font-weight: 600; max-width:160px; font-size:0.8rem;">${ticket.title}</td>
+          <td data-label="Título" class="normal-wrap" style="font-weight: 600; max-width:160px; font-size:0.8rem;">${ticket.title}</td>
           <td data-label="Peças" class="normal-wrap" style="max-width:180px;">${partsDisplay}</td>
           <td data-label="Serviços" class="normal-wrap" style="max-width:180px;">${servicesDisplay}</td>
           <td data-label="Situação" style="font-size:0.78rem; ${statusAfterClass}">${ticket.eqStatusAfter || '—'}</td>
