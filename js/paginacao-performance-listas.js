@@ -31,6 +31,14 @@
   function getActiveUnitId(){
     try { return window.Store && Store.getActiveUnitId ? Store.getActiveUnitId() : 'all'; } catch(_) { return 'all'; }
   }
+  function isAdminOrAllUnits(user){
+    const profile = normalize(user && user.profile);
+    const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalize) : [];
+    return String(user && user.unitId || '').toLowerCase() === 'all'
+      || profile.includes('admin')
+      || profile.includes('administrador')
+      || perms.some(p => p.includes('admin') || p.includes('administrador'));
+  }
   function unitName(id){
     if (!id) return '-';
     try { return window.UI && UI.getUnitName ? UI.getUnitName(id) : id; } catch(_) { return id; }
@@ -111,10 +119,10 @@
     const user = getUser();
     const activeUnitId = getActiveUnitId();
     let out = Array.isArray(list) ? list.slice() : [];
-    if ((moduleKey === 'despesas' || moduleKey === 'chamados') && activeUnitId && activeUnitId !== 'all') {
+    if ((moduleKey === 'despesas' || moduleKey === 'chamados') && !isAdminOrAllUnits(user) && activeUnitId && activeUnitId !== 'all') {
       out = out.filter(item => String(item.unitId || item.unit_id || '') === String(activeUnitId));
     }
-    if ((moduleKey === 'despesas' || moduleKey === 'chamados') && user && user.profile === 'Vendedor') {
+    if ((moduleKey === 'despesas' || moduleKey === 'chamados') && user && user.profile === 'Vendedor' && !isAdminOrAllUnits(user)) {
       out = out.filter(item => String(item.userId || item.user_id || item.usuario_id || '') === String(user.id));
     }
     return out;

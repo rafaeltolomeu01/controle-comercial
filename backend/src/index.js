@@ -5125,7 +5125,7 @@ app.get('/api/chamados', async (req, res) => {
   try {
     let query = db('chamados_tecnicos');
     await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
-    if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
+    if (!canSeeAllMechanicalTickets(req.user) && isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
     if (isFilterValValid(req.query.status)) query.where('status', req.query.status);
     if (isFilterValValid(req.query.patrimonio)) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
     const list = await query.orderBy('created_at', 'desc');

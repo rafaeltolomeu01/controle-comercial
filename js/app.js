@@ -1246,6 +1246,16 @@ const App = {
             }
           }
         });
+        const requiredPhotoSuffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02'];
+        const missingRequiredPhotos = requiredPhotoSuffixes.filter((suffix) => {
+          const fileInput = document.getElementById(`client-photo-${suffix}`);
+          return !(fileInput && fileInput.files && fileInput.files[0] && photoUrls[suffix]);
+        });
+        if (failedPhotos.length || missingRequiredPhotos.length) {
+          const missing = Array.from(new Set(failedPhotos.concat(missingRequiredPhotos))).join(', ');
+          alert('Cadastro nao foi salvo porque algumas fotos obrigatorias nao ficaram gravadas: ' + missing + '. Selecione as fotos novamente e envie o cadastro.');
+          return;
+        }
 
         const clients = Store.getClients();
         const cnpjLimpo = (cnpj || '').replace(/\D/g, '');
@@ -1253,6 +1263,8 @@ const App = {
           alert('Já existe cliente com este CNPJ nesta unidade.');
           return;
         }
+        const nowIso = new Date().toISOString();
+        const nowPtBr = new Date().toLocaleDateString('pt-BR');
         const newClient = {
           id: 'CL-' + Math.floor(100 + Math.random() * 900),
           name,
@@ -1267,7 +1279,10 @@ const App = {
           seller_id: userId,
           vendedor_nome: (loggedUser && loggedUser.profile === 'Vendedor') ? loggedUser.name : (UI.getUserName ? UI.getUserName(userId) : ''),
           sellerName: (loggedUser && loggedUser.profile === 'Vendedor') ? loggedUser.name : (UI.getUserName ? UI.getUserName(userId) : ''),
-          date: new Date().toLocaleDateString('pt-BR'),
+          date: nowPtBr,
+          data_cadastro: nowPtBr,
+          createdAt: nowIso,
+          created_at: nowIso,
           category,
           companyName,
           ie,

@@ -228,6 +228,7 @@
     document.addEventListener('submit', async function(ev){
       var form = ev.target;
       if (!form || form.id !== 'client-form' || !form.dataset.editingId) return;
+      if (window.__ccFinalClientEditActive) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
       if (!isAdmin()) return alert('Somente administrador pode editar clientes.');
