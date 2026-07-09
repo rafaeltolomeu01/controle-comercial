@@ -3871,16 +3871,16 @@ const App = {
       return `
         <tr data-id="${req.id}">
           ${checkboxCol}
-          <td style="font-family: monospace; font-size: 0.75rem;">#${req.id}</td>
-          <td>${safeDateBR(req.data_solicitacao || req.created_at || req.createdAt)}</td>
-          <td style="font-weight: 600;">${req.solicitante}</td>
-          <td style="font-family: monospace;">${req.placa_veiculo || '-'}</td>
-          <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${req.rota_destino}</td>
-          <td style="text-align: right;">${fmt(valorHotelExibicao)}</td>
-          <td style="text-align: right;">${fmt(valorAbastecimentoExibicao)}</td>
-          <td style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(totalGeralExibicao)}</td>
-          <td><span class="badge-status ${statusClass}">${req.status}</span></td>
-          <td>
+          <td data-label="ID" style="font-family: monospace; font-size: 0.75rem;">#${req.id}</td>
+          <td data-label="Data">${safeDateBR(req.data_solicitacao || req.created_at || req.createdAt)}</td>
+          <td data-label="Responsável" style="font-weight: 600;">${req.solicitante}</td>
+          <td data-label="Placa" style="font-family: monospace;">${req.placa_veiculo || '-'}</td>
+          <td data-label="Rota" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${req.rota_destino}</td>
+          <td data-label="Hotel/Alimentação" style="text-align: right;">${fmt(valorHotelExibicao)}</td>
+          <td data-label="Abastecimento" style="text-align: right;">${fmt(valorAbastecimentoExibicao)}</td>
+          <td data-label="Total" style="text-align: right; font-weight: bold; color: var(--primary-color);">${fmt(totalGeralExibicao)}</td>
+          <td data-label="Status"><span class="badge-status ${statusClass}">${req.status}</span></td>
+          <td data-label="Ações">
             <div style="display: flex; gap: 4px; justify-content: center;">
               <button class="btn btn-primary btn-sm" onclick="App.showDespesaDetails('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">Ver</button>
               <button class="btn btn-success btn-sm" onclick="App.generateExpensePdf('${req.id}')" style="padding: 2px 6px; font-size: 0.7rem;">PDF</button>

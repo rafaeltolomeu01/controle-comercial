@@ -1,4 +1,4 @@
-﻿/*
+/*
  * mobile.css — Sistema de Cards Mobile Premium
  * Carregado APOS main.css e components.css para sobrescrever estilos existentes.
  * Usa seletores td[data-label="..."] para confiabilidade maxima.
@@ -21,11 +21,52 @@
 }
 
 /* ============================================================
-   2. SISTEMA BASE DE CARDS
+   2. SISTEMA BASE DE CARDS — escopo restrito aos IDs gerenciados
    ============================================================ */
 @media (max-width: 900px) {
 
-  .table-responsive {
+  /* Compensa padding do page-body para fluir naturalmente */
+  .page-body {
+    padding: 12px !important;
+    margin-top: 0 !important;
+  }
+
+  /* Listas em bloco vertical */
+  #clients-table-body,
+  #movements-table-body,
+  #tickets-table-body,
+  #expenses-table-body,
+  #equipments-table-body,
+  #approvals-table-body,
+  #balances-table-body,
+  #despesas-solicitacoes-table-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--mobile-card-gap) !important;
+    padding: 0 !important;
+  }
+
+  /* Esconde cabeçalho das tabelas gerenciadas */
+  .table-responsive:has(#clients-table-body) thead,
+  .table-responsive:has(#movements-table-body) thead,
+  .table-responsive:has(#tickets-table-body) thead,
+  .table-responsive:has(#expenses-table-body) thead,
+  .table-responsive:has(#equipments-table-body) thead,
+  .table-responsive:has(#approvals-table-body) thead,
+  .table-responsive:has(#balances-table-body) thead,
+  .table-responsive:has(#despesas-solicitacoes-table-body) thead {
+    display: none !important;
+  }
+
+  /* Remove bordas/fundo do container da tabela gerenciada */
+  .table-responsive:has(#clients-table-body),
+  .table-responsive:has(#movements-table-body),
+  .table-responsive:has(#tickets-table-body),
+  .table-responsive:has(#expenses-table-body),
+  .table-responsive:has(#equipments-table-body),
+  .table-responsive:has(#approvals-table-body),
+  .table-responsive:has(#balances-table-body),
+  .table-responsive:has(#despesas-solicitacoes-table-body) {
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
@@ -33,23 +74,27 @@
     box-shadow: none !important;
   }
 
-  .table-responsive table {
+  .table-responsive:has(#clients-table-body) table,
+  .table-responsive:has(#movements-table-body) table,
+  .table-responsive:has(#tickets-table-body) table,
+  .table-responsive:has(#expenses-table-body) table,
+  .table-responsive:has(#equipments-table-body) table,
+  .table-responsive:has(#approvals-table-body) table,
+  .table-responsive:has(#balances-table-body) table,
+  .table-responsive:has(#despesas-solicitacoes-table-body) table {
     display: block !important;
     width: 100% !important;
   }
 
-  .table-responsive thead {
-    display: none !important;
-  }
-
-  .table-responsive tbody {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: var(--mobile-card-gap) !important;
-    padding: 0 !important;
-  }
-
-  .table-responsive tbody tr {
+  /* Linha individual da tabela transformada em Card */
+  #clients-table-body tr,
+  #movements-table-body tr,
+  #tickets-table-body tr,
+  #expenses-table-body tr,
+  #equipments-table-body tr,
+  #approvals-table-body tr,
+  #balances-table-body tr,
+  #despesas-solicitacoes-table-body tr {
     display: block !important;
     position: relative !important;
     background: var(--bg-card) !important;
@@ -66,17 +111,56 @@
     will-change: transform;
   }
 
-  .table-responsive tbody tr:active {
+  /* Click feedback */
+  #clients-table-body tr:active,
+  #movements-table-body tr:active,
+  #tickets-table-body tr:active,
+  #expenses-table-body tr:active,
+  #equipments-table-body tr:active,
+  #approvals-table-body tr:active,
+  #balances-table-body tr:active,
+  #despesas-solicitacoes-table-body tr:active {
     transform: scale(0.985) !important;
     box-shadow: 0 1px 5px rgba(0,0,0,0.15) !important;
   }
 
-  .table-responsive tbody tr:has(.badge-success)  { border-left-color: var(--success) !important; }
-  .table-responsive tbody tr:has(.badge-danger)   { border-left-color: var(--danger) !important; }
-  .table-responsive tbody tr:has(.badge-warning)  { border-left-color: #f59e0b !important; }
-  .table-responsive tbody tr:has(.badge-primary)  { border-left-color: var(--primary-color) !important; }
+  /* Cores por status na borda esquerda */
+  #clients-table-body tr:has(.badge-success),
+  #movements-table-body tr:has(.badge-success),
+  #tickets-table-body tr:has(.badge-success),
+  #expenses-table-body tr:has(.badge-success),
+  #equipments-table-body tr:has(.badge-success),
+  #approvals-table-body tr:has(.badge-success),
+  #balances-table-body tr:has(.badge-success),
+  #despesas-solicitacoes-table-body tr:has(.badge-success) { border-left-color: var(--success) !important; }
 
-  .table-responsive tbody td {
+  #clients-table-body tr:has(.badge-danger),
+  #movements-table-body tr:has(.badge-danger),
+  #tickets-table-body tr:has(.badge-danger),
+  #expenses-table-body tr:has(.badge-danger),
+  #equipments-table-body tr:has(.badge-danger),
+  #approvals-table-body tr:has(.badge-danger),
+  #balances-table-body tr:has(.badge-danger),
+  #despesas-solicitacoes-table-body tr:has(.badge-danger) { border-left-color: var(--danger) !important; }
+
+  #clients-table-body tr:has(.badge-warning),
+  #movements-table-body tr:has(.badge-warning),
+  #tickets-table-body tr:has(.badge-warning),
+  #expenses-table-body tr:has(.badge-warning),
+  #equipments-table-body tr:has(.badge-warning),
+  #approvals-table-body tr:has(.badge-warning),
+  #balances-table-body tr:has(.badge-warning),
+  #despesas-solicitacoes-table-body tr:has(.badge-warning) { border-left-color: #f59e0b !important; }
+
+  /* Esconde todas as células das tabelas gerenciadas */
+  #clients-table-body td,
+  #movements-table-body td,
+  #tickets-table-body td,
+  #expenses-table-body td,
+  #equipments-table-body td,
+  #approvals-table-body td,
+  #balances-table-body td,
+  #despesas-solicitacoes-table-body td {
     display: none !important;
     border: none !important;
     background: none !important;
@@ -84,12 +168,28 @@
     margin: 0 !important;
   }
 
-  .table-responsive tbody td::before {
+  /* Remove pseudo-content padrão */
+  #clients-table-body td::before,
+  #movements-table-body td::before,
+  #tickets-table-body td::before,
+  #expenses-table-body td::before,
+  #equipments-table-body td::before,
+  #approvals-table-body td::before,
+  #balances-table-body td::before,
+  #despesas-solicitacoes-table-body td::before {
     display: none !important;
     content: none !important;
   }
 
-  .table-responsive tbody tr td[colspan] {
+  /* Linha sem dados (Empty state) */
+  #clients-table-body td[colspan],
+  #movements-table-body td[colspan],
+  #tickets-table-body td[colspan],
+  #expenses-table-body td[colspan],
+  #equipments-table-body td[colspan],
+  #approvals-table-body td[colspan],
+  #balances-table-body td[colspan],
+  #despesas-solicitacoes-table-body td[colspan] {
     display: block !important;
     text-align: center;
     padding: 24px 16px !important;
@@ -97,17 +197,21 @@
     font-size: 0.85rem;
   }
 
+  /* Animação suave para os cards */
   @keyframes mcCardIn {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-
-  .table-responsive tbody tr { animation: mcCardIn 0.22s ease forwards; }
-  .table-responsive tbody tr:nth-child(1) { animation-delay:   0ms; }
-  .table-responsive tbody tr:nth-child(2) { animation-delay:  30ms; }
-  .table-responsive tbody tr:nth-child(3) { animation-delay:  60ms; }
-  .table-responsive tbody tr:nth-child(4) { animation-delay:  90ms; }
-  .table-responsive tbody tr:nth-child(5) { animation-delay: 120ms; }
+  #clients-table-body tr,
+  #movements-table-body tr,
+  #tickets-table-body tr,
+  #expenses-table-body tr,
+  #equipments-table-body tr,
+  #approvals-table-body tr,
+  #balances-table-body tr,
+  #despesas-solicitacoes-table-body tr {
+    animation: mcCardIn 0.2s ease forwards;
+  }
 }
 
 /* ============================================================
@@ -677,22 +781,28 @@
 }
 
 /* ============================================================
-   9. SALDOS
+   9. SALDOS / SOLICITAÇÕES DE DESPESA
    ============================================================ */
 @media (max-width: 900px) {
 
-  #balances-table-body td[data-label="Solicitante"],
-  #despesas-solicitacoes-table-body td[data-label="Solicitante"] {
+  /* Titulo: Responsável (nome do solicitante) */
+  #balances-table-body td[data-label="Responsavel"],
+  #balances-table-body td[data-label="Responsável"],
+  #despesas-solicitacoes-table-body td[data-label="Responsavel"],
+  #despesas-solicitacoes-table-body td[data-label="Responsável"] {
     display: block !important;
     font-size: var(--mobile-title-size) !important;
     font-weight: 700 !important;
     color: var(--text-main) !important;
     padding-right: 95px !important;
     margin-bottom: 6px !important;
+    white-space: normal !important;
+    overflow: visible !important;
   }
 
-  #balances-table-body td[data-label="Valor"],
-  #despesas-solicitacoes-table-body td[data-label="Valor"] {
+  /* Valor total em destaque */
+  #balances-table-body td[data-label="Total"],
+  #despesas-solicitacoes-table-body td[data-label="Total"] {
     display: inline-flex !important;
     align-items: center; gap: 5px;
     font-size: 1.05rem !important;
@@ -700,22 +810,22 @@
     color: var(--success) !important;
     margin: 2px 0 8px !important;
   }
-  #balances-table-body td[data-label="Valor"]::before,
-  #despesas-solicitacoes-table-body td[data-label="Valor"]::before {
-    display: inline !important; content: "R$ " !important; font-weight:600; font-size:0.8rem; opacity:0.65;
+  #balances-table-body td[data-label="Total"]::before,
+  #despesas-solicitacoes-table-body td[data-label="Total"]::before {
+    display: inline !important; content: "Total: " !important; font-weight:600; font-size:0.8rem; opacity:0.65;
   }
 
   #balances-table-body td[data-label="Status"],
   #despesas-solicitacoes-table-body td[data-label="Status"] {
     display: block !important;
     position: absolute !important;
-    top: 14px !important;
-    right: 14px !important;
+    top: 14px !important; right: 14px !important;
     padding: 0 !important;
   }
 
-  #balances-table-body td[data-label="Finalidade"],
-  #despesas-solicitacoes-table-body td[data-label="Finalidade"] {
+  /* Data */
+  #balances-table-body td[data-label="Data"],
+  #despesas-solicitacoes-table-body td[data-label="Data"] {
     display: inline-flex !important;
     align-items: center; gap: 4px;
     background: rgba(255,255,255,0.05);
@@ -725,9 +835,51 @@
     font-size: var(--mobile-detail-size);
     color: var(--text-muted);
     margin: 0 4px 4px 0 !important;
-    max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    white-space: nowrap;
+  }
+  #balances-table-body td[data-label="Data"]::before,
+  #despesas-solicitacoes-table-body td[data-label="Data"]::before {
+    display: inline !important; content: "Data: " !important; font-weight:700; font-size:0.68rem; opacity:0.65;
   }
 
+  /* Rota */
+  #balances-table-body td[data-label="Rota"],
+  #despesas-solicitacoes-table-body td[data-label="Rota"] {
+    display: inline-flex !important;
+    align-items: center; gap: 4px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--mobile-chip-radius);
+    padding: var(--mobile-chip-pad);
+    font-size: var(--mobile-detail-size);
+    color: var(--text-muted);
+    margin: 0 4px 4px 0 !important;
+    max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #balances-table-body td[data-label="Rota"]::before,
+  #despesas-solicitacoes-table-body td[data-label="Rota"]::before {
+    display: inline !important; content: "Rota: " !important; font-weight:700; font-size:0.68rem; opacity:0.65;
+  }
+
+  /* Placa */
+  #balances-table-body td[data-label="Placa"],
+  #despesas-solicitacoes-table-body td[data-label="Placa"] {
+    display: inline-flex !important;
+    align-items: center; gap: 4px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--mobile-chip-radius);
+    padding: var(--mobile-chip-pad);
+    font-size: var(--mobile-detail-size);
+    color: var(--text-muted);
+    margin: 0 4px 4px 0 !important;
+  }
+  #balances-table-body td[data-label="Placa"]::before,
+  #despesas-solicitacoes-table-body td[data-label="Placa"]::before {
+    display: inline !important; content: "Placa: " !important; font-weight:700; font-size:0.68rem; opacity:0.65;
+  }
+
+  /* Ações em largura total */
   #balances-table-body td[data-label="Acoes"],
   #balances-table-body td[data-label="Ações"],
   #despesas-solicitacoes-table-body td[data-label="Acoes"],
@@ -737,6 +889,7 @@
     padding-top: 10px !important;
     border-top: 1px solid rgba(255,255,255,0.06) !important;
   }
+
   #balances-table-body td[data-label="Acoes"] button,
   #balances-table-body td[data-label="Ações"] button,
   #despesas-solicitacoes-table-body td[data-label="Acoes"] button,
@@ -750,7 +903,150 @@
 }
 
 /* ============================================================
-   10. FORMULARIOS, HEADER, DASHBOARD, SIDEBAR, UTILITARIOS
+   10. CONFIGURAÇÕES — BOTÃO EXCLUIR PEQUENO NO CANTO
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Lista de configurações */
+  #config-client-categories-list li,
+  #config-eq-types-list li,
+  #config-exp-categories-list li,
+  ul[id^="config-"] li {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    margin-bottom: 5px !important;
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    gap: 12px !important;
+  }
+
+  /* Nome do item */
+  #config-client-categories-list li span,
+  #config-eq-types-list li span,
+  #config-exp-categories-list li span,
+  ul[id^="config-"] li span {
+    font-size: 0.84rem !important;
+    color: var(--text-main) !important;
+    flex: 1 !important;
+  }
+
+  /* Botão excluir pequeno nas listas de configurações */
+  #config-client-categories-list li .btn-danger,
+  #config-eq-types-list li .btn-danger,
+  #config-exp-categories-list li .btn-danger,
+  ul[id^="config-"] li .btn-danger,
+  ul[id^="config-"] li button {
+    width: auto !important;
+    min-width: 72px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
+    padding: 2px 8px !important;
+    font-size: 0.72rem !important;
+    line-height: 1 !important;
+    border-radius: 5px !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+}
+
+/* ============================================================
+   11. CLIENTES IMPORTADOS (SISTEMA DE EXPORTAÇÃO)
+   Nome Fantasia em destaque, vendedor, cidade e empresa base pequenos
+   ============================================================ */
+@media (max-width: 900px) {
+  #clientes-importador-table-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--mobile-card-gap) !important;
+    padding: 0 !important;
+  }
+
+  .table-responsive:has(#clientes-importador-table-body) thead {
+    display: none !important;
+  }
+
+  .table-responsive:has(#clientes-importador-table-body) {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .table-responsive:has(#clientes-importador-table-body) table {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Card base para clientes importados */
+  #clientes-importador-table-body tr {
+    display: block !important;
+    position: relative !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-left: var(--mobile-border-left-w) solid var(--primary-color) !important;
+    border-radius: var(--mobile-card-radius) !important;
+    padding: var(--mobile-card-pad) !important;
+    margin: 0 !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15) !important;
+    cursor: pointer;
+    contain: layout style;
+  }
+
+  /* Esconde tds não essenciais */
+  #clientes-importador-table-body td {
+    display: none !important;
+  }
+
+  /* Nome Fantasia (Título do Card) */
+  #clientes-importador-table-body td[data-label="Fantasia"] {
+    display: block !important;
+    font-size: var(--mobile-title-size) !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    line-height: 1.3 !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* Vendedor, Cidade e Empresa Responsável como chips pequenos */
+  #clientes-importador-table-body td[data-label="Vendedor"],
+  #clientes-importador-table-body td[data-label="Cidade"],
+  #clientes-importador-table-body td[data-label="Empresa Responsável"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: var(--mobile-chip-radius) !important;
+    padding: var(--mobile-chip-pad) !important;
+    font-size: 0.72rem !important; /* bem pequeno */
+    color: var(--text-muted) !important;
+    margin: 4px 4px 0 0 !important;
+    max-width: 60% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  #clientes-importador-table-body td[data-label="Vendedor"]::before {
+    content: "Vend: " !important; font-weight: 700; opacity: 0.65;
+  }
+  #clientes-importador-table-body td[data-label="Cidade"]::before {
+    content: "Cidade: " !important; font-weight: 700; opacity: 0.65;
+  }
+  #clientes-importador-table-body td[data-label="Empresa Responsável"]::before {
+    content: "Emp: " !important; font-weight: 700; opacity: 0.65;
+  }
+}
+
+/* ============================================================
+   12. FORMULARIOS, HEADER, DASHBOARD, SIDEBAR, UTILITARIOS
    ============================================================ */
 @media (max-width: 900px) {
 
@@ -767,7 +1063,15 @@
   select { padding-right: 36px !important; }
   label  { font-size: 0.8rem !important; }
 
-  /* Header */
+  /* Header NÃO sticky no celular para evitar cobrir conteúdos ou ficar transparente sobrepondo formulários/abas */
+  .page-header.no-print {
+    position: relative !important;
+    top: auto !important;
+    z-index: 100 !important;
+    box-shadow: none !important;
+    background: var(--bg-card) !important;
+  }
+
   #btn-toggle-sidebar {
     min-width: 44px !important; min-height: 44px !important;
     display: flex !important; align-items: center !important; justify-content: center !important;
@@ -800,6 +1104,27 @@
   .card  { padding: 14px !important; border-radius: 14px !important; overflow: visible !important; }
   .btn   { min-height: 42px !important; font-size: 0.85rem !important; }
   .btn-sm{ min-height: 36px !important; font-size: 0.78rem !important; }
+
+  /* Tabelas de auditoria, histórico e arquivos exportados normais com scroll lateral */
+  .table-responsive:has(#files-table-body),
+  .table-responsive:has(#users-table-body),
+  .table-responsive:has(#units-table-body),
+  .table-responsive:has(#empresas-table-body),
+  .table-responsive:has(#system-audit-table-body) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #files-table-body td,
+  #users-table-body td,
+  #units-table-body td,
+  #empresas-table-body td,
+  #system-audit-table-body td {
+    display: table-cell !important;
+    padding: 8px !important;
+    font-size: 0.78rem !important;
+    white-space: nowrap !important;
+  }
 }
 
 /* Telas muito pequenas */
