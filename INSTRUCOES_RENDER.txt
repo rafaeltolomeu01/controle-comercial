@@ -15,10 +15,21 @@ PASSO A PASSO PARA SUBIR NO RENDER
    NODE_ENV = production
 
 4) O arquivo aberto pelo sistema e:
-   public/index.html
+   index.html na raiz do projeto
 
 5) Se aparecer versao antiga no navegador:
    aperte Ctrl + F5 ou abra em guia anonima.
+
+UPLOAD DE FOTOS FORA DO BANCO (RECOMENDADO)
+1. Crie uma conta no Cloudinary.
+2. Crie um Upload Preset do tipo unsigned.
+3. No Render, adicione:
+   CLOUDINARY_CLOUD_NAME=<seu cloud name>
+   CLOUDINARY_UPLOAD_PRESET=<seu upload preset>
+   CLOUDINARY_FOLDER=controle-comercial
+4. Com isso, novos uploads vao para o Cloudinary e o banco guarda somente a URL.
+5. Se quiser impedir qualquer fallback para o banco, adicione:
+   UPLOAD_EXTERNAL_REQUIRED=true
 
 PUSH NOTIFICATIONS / PWA
 1. Gere as chaves VAPID localmente ou no shell do Render:

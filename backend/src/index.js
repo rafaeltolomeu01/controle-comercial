@@ -1046,7 +1046,49 @@ app.get('/api/push/vapid-public-key', async (req, res) => {
   res.json({ publicKey: keys.publicKey || '', configured: !!keys.publicKey, runtime: !!keys.runtime });
 });
 
-// Upload persistente por banco: recebe dataURL/base64 e devolve URL real do sistema.
+function externalUploadEnabled() {
+  return !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_UPLOAD_PRESET);
+}
+
+async function uploadDataUrlExternally({ dataUrl, filename, module, empresaId }) {
+  if (!externalUploadEnabled()) return null;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
+  const folderRoot = process.env.CLOUDINARY_FOLDER || 'controle-comercial';
+  const folder = `${folderRoot}/${empresaId || '001'}/${module || 'geral'}`.replace(/\/+/g, '/');
+  const form = new FormData();
+  form.append('file', dataUrl);
+  form.append('upload_preset', uploadPreset);
+  form.append('folder', folder);
+  if (filename) form.append('public_id', path.parse(String(filename)).name.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) + '-' + Date.now());
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: form });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || !json.secure_url) {
+    throw new Error(json.error && json.error.message ? json.error.message : 'Falha ao enviar arquivo para armazenamento externo.');
+  }
+  return {
+    url: json.secure_url,
+    provider: 'cloudinary',
+    publicId: json.public_id || '',
+    bytes: json.bytes || 0
+  };
+}
+
+async function saveUploadFallbackToDatabase({ id, empresaId, userId, module, filename, mimeType, base64Data }) {
+  await db('app_uploads').insert({
+    id,
+    empresa_id: empresaId,
+    user_id: userId,
+    module: module || 'geral',
+    filename: filename || id,
+    mime_type: mimeType,
+    data_base64: base64Data
+  });
+  return `/api/uploads/${id}`;
+}
+
+// Upload persistente: usa armazenamento externo quando configurado e guarda no banco apenas a URL.
+// Sem CLOUDINARY_CLOUD_NAME/CLOUDINARY_UPLOAD_PRESET, cai no modo antigo para nao parar o sistema.
 app.post('/api/uploads/base64', async (req, res) => {
   try {
     const { dataUrl, filename, module } = req.body || {};
@@ -1066,16 +1108,20 @@ app.post('/api/uploads/base64', async (req, res) => {
     const empresaId = authUser.empresa_id || req.header('X-Company-Id') || '001';
     const userId = authUser.id ? String(authUser.id) : (req.header('X-User-Id') || null);
 
-    await db('app_uploads').insert({
-      id,
-      empresa_id: empresaId,
-      user_id: userId,
-      module: module || 'geral',
-      filename: filename || id,
-      mime_type: mimeType,
-      data_base64: base64Data
-    });
-    res.json({ success: true, id, url: `/api/uploads/${id}` });
+    try {
+      const external = await uploadDataUrlExternally({ dataUrl, filename, module, empresaId });
+      if (external && external.url) {
+        return res.json({ success: true, id, url: external.url, provider: external.provider, publicId: external.publicId, bytes: external.bytes });
+      }
+    } catch (externalErr) {
+      console.warn('Upload externo falhou; usando fallback no banco:', externalErr.message);
+      if (process.env.UPLOAD_EXTERNAL_REQUIRED === 'true') {
+        return res.status(502).json({ error: 'Falha ao salvar arquivo no armazenamento externo.' });
+      }
+    }
+
+    const url = await saveUploadFallbackToDatabase({ id, empresaId, userId, module, filename, mimeType, base64Data });
+    res.json({ success: true, id, url, provider: 'database-fallback' });
   } catch (err) {
     console.error('Erro ao salvar upload base64:', err);
     res.status(500).json({ error: 'Erro ao salvar arquivo.' });
@@ -1704,17 +1750,40 @@ app.post('/api/upload', (req, res) => {
     try {
       const fileBuffer = fs.readFileSync(req.file.path);
       const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
-      await db('app_uploads').insert({
+      const empresaId = (req.user && req.user.empresa_id) || '001';
+      const userId = req.user ? String(req.user.id) : null;
+      const mimeType = req.file.mimetype || 'application/octet-stream';
+      const base64Data = fileBuffer.toString('base64');
+      const dataUrl = `data:${mimeType};base64,${base64Data}`;
+      try {
+        const external = await uploadDataUrlExternally({
+          dataUrl,
+          filename: req.file.originalname || req.file.filename || id,
+          module: 'geral',
+          empresaId
+        });
+        if (external && external.url) {
+          fs.unlink(req.file.path, () => {});
+          return res.json({ success: true, id, url: external.url, provider: external.provider, publicId: external.publicId, bytes: external.bytes });
+        }
+      } catch (externalErr) {
+        console.warn('Upload externo falhou; usando fallback no banco:', externalErr.message);
+        if (process.env.UPLOAD_EXTERNAL_REQUIRED === 'true') {
+          fs.unlink(req.file.path, () => {});
+          return res.status(502).json({ error: 'Falha ao salvar arquivo no armazenamento externo.' });
+        }
+      }
+      const url = await saveUploadFallbackToDatabase({
         id,
-        empresa_id: (req.user && req.user.empresa_id) || '001',
-        user_id: req.user ? String(req.user.id) : null,
+        empresaId,
+        userId,
         module: 'geral',
         filename: req.file.originalname || req.file.filename || id,
-        mime_type: req.file.mimetype || 'application/octet-stream',
-        data_base64: fileBuffer.toString('base64')
+        mimeType,
+        base64Data
       });
       fs.unlink(req.file.path, () => {});
-      return res.json({ success: true, id, url: `/api/uploads/${id}` });
+      return res.json({ success: true, id, url, provider: 'database-fallback' });
     } catch (dbErr) {
       console.error('Erro ao persistir upload no banco:', dbErr);
       const companyId = req.user ? req.user.empresa_id : '001';
