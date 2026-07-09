@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 function ccNum(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   if (v === null || v === undefined || v === '') return 0;
@@ -3289,8 +3289,8 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
   if (!['Troca', 'AdiÃ§Ã£o', 'Adição', 'Recolha', 'Adesivar'].includes(tipo_solicitacao)) {
     return res.status(400).json({ error: 'Tipo de solicitaÃ§Ã£o invÃ¡lido.' });
   }
-  if (tipo_solicitacao === 'Troca' && (!patrimonio || !modelo || !patrimonio_novo || !modelo_novo || !detalhe_troca_adicao)) {
-    return res.status(400).json({ error: 'Para registrar Troca, preencha patrimÃ´nio/modelo antigo, patrimÃ´nio/modelo novo e motivo da troca.' });
+  if (tipo_solicitacao === 'Troca' && (!patrimonio || !modelo || !detalhe_troca_adicao)) {
+    return res.status(400).json({ error: 'Para registrar Troca, preencha patrimônio/modelo antigo e motivo da troca.' });
   }
 
   const now = new Date().toISOString();
