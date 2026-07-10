@@ -221,15 +221,18 @@
 
       const user = Store.getLoggedUser() || {};
 
-      // Admin pode escolher empresa; outros usuários veem apenas a própria empresa
+      // Admin ou usuários com acesso a "Todas as Unidades" (unitId === 'all') podem escolher empresa
       if (solEmpresa) {
-        if (isAdmin(user)) {
-          // Admin: mostrar seletor, preencher com todas as unidades
+        const canChooseUnit = isAdmin(user) || String(user.unitId || '').toLowerCase() === 'all';
+        if (canChooseUnit) {
+          // Mostrar seletor, preencher com todas as unidades
           solEmpresa.style.display = '';
           const labelEmpresa = document.querySelector('label[for="sol-empresa"]');
           if (labelEmpresa) labelEmpresa.style.display = '';
+          const wrap = document.getElementById('sol-empresa-nao-admin-wrap');
+          if (wrap) wrap.remove();
         } else {
-          // Não-admin: esconder seletor e fixar na unidade do usuário
+          // Restringe à própria empresa do usuário
           const userUnit = (Store.getUnits() || []).find(u => String(u.id) === String(user.unitId));
           if (userUnit) {
             // Selecionar automaticamente a unidade do usuário
@@ -243,13 +246,14 @@
           }
           // Esconder o select e mostrar o nome da empresa como texto
           const wrapId = 'sol-empresa-nao-admin-wrap';
-          if (!document.getElementById(wrapId)) {
-            const wrap = document.createElement('div');
+          let wrap = document.getElementById(wrapId);
+          if (!wrap) {
+            wrap = document.createElement('div');
             wrap.id = wrapId;
             wrap.style.cssText = 'padding:8px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-input); color:var(--text-color); font-size:.9rem;';
-            wrap.textContent = userUnit ? userUnit.name : (user.unit || '—');
             solEmpresa.parentNode.insertBefore(wrap, solEmpresa);
           }
+          wrap.textContent = userUnit ? userUnit.name : (user.unit || '—');
           solEmpresa.style.display = 'none';
         }
 
