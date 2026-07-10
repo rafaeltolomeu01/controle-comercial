@@ -244,6 +244,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -346,6 +348,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -467,6 +471,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -585,6 +591,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -683,6 +691,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -744,6 +754,8 @@
     position: absolute !important;
     top: 14px !important;
     right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
@@ -820,6 +832,8 @@
     display: block !important;
     position: absolute !important;
     top: 14px !important; right: 14px !important;
+    left: auto !important;
+    width: auto !important;
     padding: 0 !important;
   }
 
