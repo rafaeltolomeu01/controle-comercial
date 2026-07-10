@@ -180,6 +180,7 @@
   }
 
 
+  if (window.App) {
     function getSelectedSolicitacaoUnit() {
       const sel = document.getElementById('sol-empresa');
       if (!sel) return getCurrentUnit();
@@ -210,8 +211,15 @@
       oldInitSol();
       UI.populateUnitDropdowns();
 
-      const user = Store.getLoggedUser() || {};
+      // Preencher sol-empresa com unidades reais do banco
       const solEmpresa = document.getElementById('sol-empresa');
+      if (solEmpresa) {
+        const units = Store.getUnits ? Store.getUnits() : [];
+        solEmpresa.innerHTML = '<option value="">Selecione uma Empresa...</option>' +
+          units.map(u => `<option value="${u.name}" data-unit-id="${u.id}">${u.name}</option>`).join('');
+      }
+
+      const user = Store.getLoggedUser() || {};
 
       // Admin pode escolher empresa; outros usuários veem apenas a própria empresa
       if (solEmpresa) {
