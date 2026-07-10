@@ -1128,6 +1128,20 @@ app.post('/api/uploads/base64', async (req, res) => {
   }
 });
 
+app.post('/api/uploads/delete-batch', async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (Array.isArray(ids) && ids.length) {
+      const cleanIds = ids.map(String).filter(Boolean);
+      await db('app_uploads').whereIn('id', cleanIds).delete();
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Erro ao excluir arquivos:', err);
+    res.status(500).json({ error: 'Erro ao excluir arquivos.' });
+  }
+});
+
 app.get('/api/uploads/:id', async (req, res) => {
   try {
     const file = await db('app_uploads').where({ id: req.params.id }).first();

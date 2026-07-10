@@ -1453,8 +1453,26 @@ const App = {
         const clientFormEl = document.getElementById('client-form');
         if (formContainer) formContainer.classList.add('hidden');
         if (clientFormEl) {
+          // Coleta os IDs de upload temporários para excluir do banco
+          const idsToDelete = [];
+          clientFormEl.querySelectorAll('input[type="file"]').forEach(el => {
+            if (el.dataset.uploadId) idsToDelete.push(el.dataset.uploadId);
+            el.removeAttribute('data-uploaded-url');
+            el.removeAttribute('data-upload-id');
+          });
+          if (idsToDelete.length) {
+            App.fetchFromApi('/api/uploads/delete-batch', {
+              method: 'POST',
+              body: JSON.stringify({ ids: idsToDelete })
+            }).catch(err => console.warn('Erro ao limpar uploads cancelados:', err));
+          }
+
           clientFormEl.reset();
           UI.populateUnitDropdowns();
+          
+          // Limpa status visuais e caches temporários
+          document.querySelectorAll("[id^='upload-status-']").forEach(el => el.innerHTML = '');
+          window.TempPhotosCache = {};
         }
       });
     }
@@ -1593,7 +1611,24 @@ const App = {
         const formContainer = document.getElementById('movement-form-container');
         const formEl = document.getElementById('movement-form');
         if (formContainer) formContainer.classList.add('hidden');
-        if (formEl) formEl.reset();
+        if (formEl) {
+          // Coleta os IDs de upload temporários para excluir do banco
+          const idsToDelete = [];
+          formEl.querySelectorAll('input[type="file"]').forEach(el => {
+            if (el.dataset.uploadId) idsToDelete.push(el.dataset.uploadId);
+            el.removeAttribute('data-uploaded-url');
+            el.removeAttribute('data-upload-id');
+          });
+          if (idsToDelete.length) {
+            App.fetchFromApi('/api/uploads/delete-batch', {
+              method: 'POST',
+              body: JSON.stringify({ ids: idsToDelete })
+            }).catch(err => console.warn('Erro ao limpar uploads de movimentação cancelados:', err));
+          }
+
+          formEl.reset();
+          document.querySelectorAll("[id^='upload-status-mov-']").forEach(el => el.innerHTML = '');
+        }
         ['div-mov-troca', 'div-mov-adicao', 'div-mov-recolha', 'div-mov-adesivar'].forEach(id => {
           const el = document.getElementById(id);
           if (el) el.style.display = 'none';
@@ -1743,6 +1778,7 @@ const App = {
                 const savedUrl = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
                 if (savedUrl) {
                   inputEl.dataset.uploadedUrl = savedUrl;
+                  inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
                   window.TempPhotosCache[suffix] = savedUrl;
                   statusEl.innerHTML = '<span style="color:#10b981;">✅ Imagem salva e validada!</span>';
                 } else {
@@ -1752,6 +1788,7 @@ const App = {
                 console.error(`Erro no upload instantâneo (${suffix}):`, err);
                 statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
                 inputEl.removeAttribute('data-uploaded-url');
+                inputEl.removeAttribute('data-upload-id');
                 delete window.TempPhotosCache[suffix];
                 inputEl.value = ''; // Reseta input para exigir re-seleção
               }
@@ -1759,6 +1796,7 @@ const App = {
           } else {
             containerEl.style.display = 'none';
             inputEl.removeAttribute('data-uploaded-url');
+            inputEl.removeAttribute('data-upload-id');
             if (window.TempPhotosCache) delete window.TempPhotosCache[suffix];
             statusEl.innerHTML = '';
           }
@@ -2836,6 +2874,7 @@ const App = {
                 const savedUrl = await App.uploadBase64ToDatabase(base64, `mov-${clientPrefix}-${inputId}-${file.name || 'arquivo'}`, 'geral');
                 if (savedUrl) {
                   input.dataset.uploadedUrl = savedUrl;
+                  input.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
                   statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo enviado e validado!</span>';
                 } else {
                   throw new Error('Servidor retornou link vazio.');
@@ -2844,12 +2883,14 @@ const App = {
                 console.error(`Erro no upload instantâneo (${inputId}):`, err);
                 statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
                 input.removeAttribute('data-uploaded-url');
+                input.removeAttribute('data-upload-id');
                 input.value = '';
               }
             })();
           } else {
             if (container) container.style.display = 'none';
             input.removeAttribute('data-uploaded-url');
+            input.removeAttribute('data-upload-id');
             statusEl.innerHTML = '';
           }
         });
