@@ -1899,7 +1899,17 @@ const App = {
               historyContainer.innerHTML = historyHtml;
             }
           } else {
-            // Not found
+            // Se não encontrou nas movimentações ativas, busca nos Equipamentos Importados
+            const imported = await this.fetchFromApi(`/api/equipamentos-importados/lookup/${serialVal}`).catch(() => null);
+            if (imported && imported.found && imported.equipamento) {
+              const eq = imported.equipamento;
+              const eqModel = eq.nome_equipamento || eq.patrimonio || '';
+              if (typeInput && eqModel) {
+                const eqModelLower = eqModel.toLowerCase();
+                const opt = Array.from(typeInput.options).find(o => o.value && (eqModelLower.includes(o.value.toLowerCase()) || o.value.toLowerCase().includes(eqModelLower)));
+                if (opt) typeInput.value = opt.value;
+              }
+            }
             const historyContainer = document.getElementById('ticket-open-history-container');
             if (historyContainer) historyContainer.innerHTML = '';
           }
