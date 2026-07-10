@@ -3744,6 +3744,47 @@ app.get('/api/historico-exclusoes', async (req, res) => {
   }
 });
 
+// Restaurar registro excluído (Movimentação de Equipamento)
+app.post('/api/historico-exclusoes/restore/:id', async (req, res) => {
+  try {
+    if (req.user.profile !== 'Administrador') {
+      return res.status(403).json({ error: 'Somente administrador pode restaurar exclusões.' });
+    }
+    const exclusion = await db('historico_exclusoes').where({ id: req.params.id }).first();
+    if (!exclusion) {
+      return res.status(404).json({ error: 'Registro de exclusão não encontrado.' });
+    }
+    
+    const parsedData = JSON.parse(exclusion.dados_json);
+    
+    if (exclusion.modulo === 'Movimentação de Equipamento') {
+      const existing = await db('equipamentos_movimentacoes').where({ id: parsedData.id }).first();
+      if (existing) {
+        return res.status(400).json({ error: 'Esta movimentação já existe no sistema.' });
+      }
+      
+      await db('equipamentos_movimentacoes').insert(parsedData);
+      
+      await registrarAuditoriaSistema(req, {
+        acao: 'RESTAUROU_MOVIMENTACAO_EQUIPAMENTO',
+        modulo: 'Movimentação de Equipamentos',
+        registro_id: parsedData.id,
+        detalhes: `${req.user.name || req.user.id} restaurou a movimentação #${parsedData.id} que havia sido excluída.`,
+        dados_depois: parsedData
+      });
+      
+      await db('historico_exclusoes').where({ id: exclusion.id }).delete();
+      
+      return res.json({ success: true, message: 'Movimentação restaurada com sucesso!' });
+    } else {
+      return res.status(400).json({ error: 'Restauração não suportada para este tipo de módulo.' });
+    }
+  } catch (err) {
+    console.error('Erro ao restaurar registro excluído:', err);
+    res.status(500).json({ error: 'Erro ao restaurar registro.' });
+  }
+});
+
 // Detalhes / Dossiê completo da Movimentação
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;

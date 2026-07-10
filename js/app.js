@@ -5940,21 +5940,21 @@ const App = {
     const body = document.getElementById('system-audit-table-body') || document.getElementById('deletion-history-table-body');
     if (!body) return;
     if (!this.isAuditAdminUser()) {
-      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);">Acesso restrito ao administrador.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);">Acesso restrito ao administrador.</td></tr>';
       return;
     }
     if (!force && Array.isArray(this.systemAuditLogsCache)) {
       this.renderSystemAuditLogs();
       return;
     }
-    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Carregando registros...</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando registros...</td></tr>';
     try {
       const rows = await this.fetchFromApi('/api/auditoria');
       this.systemAuditLogsCache = Array.isArray(rows) ? rows : [];
       this.populateAuditModuleFilter();
       this.renderSystemAuditLogs();
     } catch (err) {
-      body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);">Erro ao carregar registros: ${this.escapeAuditHtml(err.message)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);">Erro ao carregar registros: ${this.escapeAuditHtml(err.message)}</td></tr>`;
     }
   },
 
@@ -5984,13 +5984,17 @@ const App = {
     });
 
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Nenhum registro encontrado.</td></tr>';
       return;
     }
 
     body.innerHTML = rows.slice(0, 500).map(row => {
       const data = row.data ? new Date(row.data).toLocaleString('pt-BR') : '-';
       const acao = String(row.acao || '-').replace(/_/g, ' ');
+      const isRestorable = row.origem === 'historico_exclusoes' && row.modulo === 'Movimentação de Equipamento';
+      const actionHtml = isRestorable 
+        ? `<button type="button" class="btn btn-success btn-xs" onclick="App.restoreExclusion('${row.id.replace('E-', '')}')" style="font-size:0.75rem; padding: 2px 6px;">Restaurar</button>`
+        : '-';
       return `
         <tr>
           <td>${this.escapeAuditHtml(data)}</td>
@@ -5999,9 +6003,31 @@ const App = {
           <td>${this.escapeAuditHtml(row.modulo || '-')}</td>
           <td>${row.registro_id ? '#' + this.escapeAuditHtml(row.registro_id) : '-'}</td>
           <td style="white-space:normal; min-width:280px;">${this.escapeAuditHtml(row.detalhes || '-')}</td>
+          <td>${actionHtml}</td>
         </tr>
       `;
     }).join('');
+  },
+
+  async restoreExclusion(exclusionId) {
+    if (!confirm('Deseja realmente restaurar este registro e reinseri-lo no sistema?')) return;
+    try {
+      const token = Store.getToken ? Store.getToken() : '';
+      const response = await fetch(this.getApiBaseUrl() + `/api/historico-exclusoes/restore/${exclusionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Erro ao restaurar.');
+      
+      alert(data.message || 'Registro restaurado com sucesso!');
+      await this.loadSystemAuditLogs(true);
+    } catch (err) {
+      alert('Erro ao restaurar: ' + err.message);
+    }
   },
 
   async loadDeletionHistory() {
