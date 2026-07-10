@@ -1,4 +1,4 @@
-﻿/* Compatibilidade consolidada - gerado em 09/07/2026. Mantem as correcoes historicas em uma unica entrada de script. */
+/* Compatibilidade consolidada - gerado em 09/07/2026. Mantem as correcoes historicas em uma unica entrada de script. */
 
 
 /* ===== final-updates-29-06.js ===== */
@@ -7077,9 +7077,15 @@
       const file = fileInput && fileInput.files && fileInput.files[0];
       if (!file) continue;
       try {
-        const base64 = await App.compressImageAndGetBase64(file);
-        const url = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
-        if (url) result[suffix] = url;
+        let url = fileInput.dataset.uploadedUrl;
+        if (!url) {
+          const base64 = await App.compressImageAndGetBase64(file);
+          url = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+        }
+        if (url) {
+          result[suffix] = url;
+          fileInput.dataset.uploadedUrl = url; // cache back
+        }
       } catch (err) {
         console.warn('Falha ao atualizar foto do cadastro em correção:', suffix, err.message || err);
       }
@@ -8917,7 +8923,6 @@
       var id = esc(c.id || '');
       var adminBtns = isAdmin() ? '<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.editClientAdmin(\''+id+'\')">Editar</button><button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.deleteClient && App.deleteClient(\''+id+'\', event)">Apagar</button>' : '';
       return '<tr class="mobile-summary-row" onclick="App.showClientDetails(\''+id+'\')">'
-        + '<td data-label="Selecionar"><input type="checkbox" onclick="event.stopPropagation()"></td>'
         + '<td data-label="Nome Cliente"><strong>'+esc(c.name || c.nomeFantasia || c.companyName || '-')+'</strong><br><small style="color:var(--text-muted);">'+esc(clientDate(c))+'</small></td>'
         + '<td data-label="CNPJ">'+esc(c.cnpj || '-')+'</td>'
         + '<td data-label="Categoria">'+esc(c.category || '-')+'</td>'

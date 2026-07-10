@@ -176,7 +176,6 @@
       var classification = c.classification ? ' ' + fixText(c.classification) : '';
       var adminBtns = isAdmin() ? '<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.editClientAdmin && App.editClientAdmin(\''+id+'\')">'+TXT.editar+'</button><button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.deleteClient && App.deleteClient(\''+id+'\', event)">'+TXT.apagar+'</button>' : '';
       return '<tr class="mobile-summary-row" onclick="App.showClientDetails(\''+id+'\')">'
-        + '<td data-label="Selecionar"><input type="checkbox" onclick="event.stopPropagation()"></td>'
         + '<td data-label="Nome Cliente"><strong>'+esc(fixText(c.name || c.nomeFantasia || c.companyName || '-'))+'</strong><br><small style="color:var(--text-muted);">'+esc(clientDate(c))+'</small></td>'
         + '<td data-label="CNPJ">'+esc(c.cnpj || '-')+'</td>'
         + '<td data-label="Categoria">'+esc(fixText(c.category || '-'))+'</td>'

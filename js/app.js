@@ -1206,11 +1206,15 @@ const App = {
         const photoUrls = {};
         const failedPhotos = [];
 
-        // Primeiro comprime TODAS as fotos em paralelo
+        // Primeiro verifica se já temos URLs pré-carregadas pelo upload instantâneo.
+        // Se não tivermos para algum arquivo selecionado, comprime e envia na hora do submit.
         const compressResults = await Promise.allSettled(
           suffixes.map(async (suffix) => {
             const fileInput = document.getElementById(`client-photo-${suffix}`);
             if (fileInput && fileInput.files && fileInput.files[0]) {
+              if (fileInput.dataset.uploadedUrl) {
+                return { suffix, base64: null, filename: null, preUploadedUrl: fileInput.dataset.uploadedUrl };
+              }
               const file = fileInput.files[0];
               const base64 = await this.compressImageAndGetBase64(file);
               return { suffix, base64, filename: file.name || 'foto' };
@@ -1219,15 +1223,21 @@ const App = {
           })
         );
 
-        // Depois faz upload de todas em paralelo
+        // Depois faz upload em paralelo apenas das que não foram pré-carregadas
         const uploadResults = await Promise.allSettled(
           compressResults.map(async (result) => {
-            if (result.status !== 'fulfilled' || !result.value.base64) {
-              return { suffix: result.value?.suffix || '?', url: '' };
+            if (result.status !== 'fulfilled') {
+              return { suffix: '?', url: '' };
             }
-            const { suffix, base64, filename } = result.value;
-            const savedUrl = await this.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${filename}`, 'clientes');
-            return { suffix, url: savedUrl || '' };
+            const val = result.value;
+            if (val.preUploadedUrl) {
+              return { suffix: val.suffix, url: val.preUploadedUrl };
+            }
+            if (!val.base64) {
+              return { suffix: val.suffix || '?', url: '' };
+            }
+            const savedUrl = await this.uploadBase64ToDatabase(val.base64, `cliente-${cnpjVal}-${val.suffix}-${val.filename}`, 'clientes');
+            return { suffix: val.suffix, url: savedUrl || '' };
           })
         );
 
@@ -1344,13 +1354,22 @@ const App = {
         if (cnpjStatus) cnpjStatus.textContent = '';
         UI.populateUnitDropdowns();
 
-        // Clear previews
+        // Clear previews, dataset URLs, and background upload statuses
         suffixes.forEach(suffix => {
           const container = document.getElementById(`preview-container-${suffix}`);
           const previewImg = document.getElementById(`preview-img-${suffix}`);
           if (container) container.style.display = 'none';
           if (previewImg) previewImg.src = '';
+          
+          const fileInput = document.getElementById(`client-photo-${suffix}`);
+          if (fileInput) {
+            fileInput.removeAttribute('data-uploaded-url');
+            fileInput.value = '';
+          }
+          const statusEl = document.getElementById(`upload-status-${suffix}`);
+          if (statusEl) statusEl.innerHTML = '';
         });
+        window.TempPhotosCache = {};
 
         // Esconder o formulário após envio
         const formContainer = document.getElementById('client-form-container');
@@ -1677,7 +1696,7 @@ const App = {
       });
     }
 
-    // Client photo upload previews setup
+    // Client photo upload previews setup with background uploading and validation
     const photoSuffixes = ['fachada', 'interna01', 'interna02', 'interna03', 'rua01', 'rua02', 'cnpj'];
     photoSuffixes.forEach(suffix => {
       const inputEl = document.getElementById(`client-photo-${suffix}`);
@@ -1686,15 +1705,54 @@ const App = {
       if (inputEl && previewImg && containerEl) {
         inputEl.addEventListener('change', (e) => {
           const file = e.target.files[0];
+          
+          // Cria ou busca elemento de status de envio
+          let statusEl = document.getElementById(`upload-status-${suffix}`);
+          if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.id = `upload-status-${suffix}`;
+            statusEl.style.cssText = 'margin-top: 6px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; gap: 4px;';
+            inputEl.parentNode.appendChild(statusEl);
+          }
+
           if (file) {
             const localUrl = URL.createObjectURL(file);
             previewImg.src = localUrl;
             containerEl.style.display = 'block';
             
-            // Prévia local somente na tela; o envio real gera URL pelo backend.
             if (!window.TempPhotosCache) window.TempPhotosCache = {};
+            
+            // Inicia envio instantâneo para validação e persistência precoce
+            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Compactando imagem...</span>';
+            (async () => {
+              try {
+                const base64 = await App.compressImageAndGetBase64(file);
+                statusEl.innerHTML = '<span style="color:#3b82f6;">🚀 Enviando para o servidor...</span>';
+                
+                const cnpjInput = document.getElementById('client-cnpj');
+                const cnpjVal = (cnpjInput?.value || '').replace(/\D/g, '') || 'temp';
+                
+                const savedUrl = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+                if (savedUrl) {
+                  inputEl.dataset.uploadedUrl = savedUrl;
+                  window.TempPhotosCache[suffix] = savedUrl;
+                  statusEl.innerHTML = '<span style="color:#10b981;">✅ Imagem salva e validada!</span>';
+                } else {
+                  throw new Error('Servidor retornou link vazio.');
+                }
+              } catch (err) {
+                console.error(`Erro no upload instantâneo (${suffix}):`, err);
+                statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
+                inputEl.removeAttribute('data-uploaded-url');
+                delete window.TempPhotosCache[suffix];
+                inputEl.value = ''; // Reseta input para exigir re-seleção
+              }
+            })();
           } else {
             containerEl.style.display = 'none';
+            inputEl.removeAttribute('data-uploaded-url');
+            if (window.TempPhotosCache) delete window.TempPhotosCache[suffix];
+            statusEl.innerHTML = '';
           }
         });
       }
