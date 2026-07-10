@@ -251,9 +251,18 @@
       set('unit-allow-no-hotel', String(cfg.allowNoHotel ?? unit?.allowNoHotel ?? true));
     };
 
+    function getSelectedSolicitacaoUnit() {
+      const sel = document.getElementById('sol-empresa');
+      if (!sel) return getCurrentUnit();
+      const opt = sel.options[sel.selectedIndex];
+      const unitId = opt ? opt.getAttribute('data-unit-id') : null;
+      if (unitId) return getUnitById(unitId) || getCurrentUnit();
+      return getCurrentUnit();
+    }
+
     // 08/09/10 - Solicitação de saldo usa empresa oficial e diária por unidade/perfil.
     App.buildHotelOptions = function(){
-      const unit = getCurrentUnit();
+      const unit = getSelectedSolicitacaoUnit();
       const user = Store.getLoggedUser ? Store.getLoggedUser() : {};
       const rate = getDailyRate(unit, user.profile);
       const max = maxNights(unit);
@@ -270,6 +279,16 @@
     if (oldInitSol) App.initSolicitacaoForm = function(){
       oldInitSol();
       UI.populateUnitDropdowns();
+
+      const solEmpresa = document.getElementById('sol-empresa');
+      if (solEmpresa && !solEmpresa.dataset.ccBound) {
+        solEmpresa.dataset.ccBound = '1';
+        solEmpresa.addEventListener('change', () => {
+          App.buildHotelOptions();
+          App.updateSolicitacaoTotal();
+        });
+      }
+
       App.buildHotelOptions();
       const user = Store.getLoggedUser() || {};
       const sol = document.getElementById('sol-solicitante'); if (sol) sol.value = user.name || '';
@@ -278,7 +297,8 @@
     App.updateSolicitacaoTotal = function(){
       let noites = 0;
       document.getElementsByName('sol-noites').forEach(r => { if (r.checked) noites = parseInt(r.value)||0; });
-      const hotel = getDailyRate(getCurrentUnit(), (Store.getLoggedUser()||{}).profile) * noites;
+      const unit = getSelectedSolicitacaoUnit();
+      const hotel = getDailyRate(unit, (Store.getLoggedUser()||{}).profile) * noites;
       const disp = document.getElementById('sol-hotel-alim-display'); if (disp) disp.textContent = money(hotel);
       let extras = 0; document.querySelectorAll('.extra-val').forEach(i => extras += num(i.value));
       const total = hotel + num(document.getElementById('sol-abastecimento')?.value) + extras;
@@ -286,8 +306,7 @@
     };
     const oldSubmitSol = App.submitSolicitacaoDespesas ? App.submitSolicitacaoDespesas.bind(App) : null;
     if (oldSubmitSol) App.submitSolicitacaoDespesas = async function(){
-      // substitui radios fixos antes da função original calcular
-      const unit = getCurrentUnit();
+      const unit = getSelectedSolicitacaoUnit();
       const rate = getDailyRate(unit, (Store.getLoggedUser()||{}).profile);
       const selected = [...document.getElementsByName('sol-noites')].find(r=>r.checked);
       const noites = selected ? parseInt(selected.value)||0 : 0;
