@@ -5588,11 +5588,6 @@
       }
     });
 
-    if (!state.mapping.cnpj && !state.mapping.cpf) {
-      hasMappingError = true;
-      errors.push({ line: 'Mapeamento', field: 'CNPJ/CPF', message: 'Mapeie CNPJ ou CPF. Cliente sem CNPJ será aceito quando tiver CPF.' });
-    }
-
     rows.forEach(row => {
       const rowErrors = [];
       const codeNorm = normalize(row.codigo);
@@ -5601,29 +5596,30 @@
 
       if (isEmptyValue(row.codigo)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código vazio.' });
       if (isEmptyValue(row.fantasia)) rowErrors.push({ line: row.__line, field: 'Fantasia', message: 'Fantasia vazia.' });
-      if (!cnpjDigits && !cpfDigits) rowErrors.push({ line: row.__line, field: 'CNPJ/CPF', message: 'Informe CNPJ ou CPF. Cliente sem CNPJ é aceito quando tiver CPF.' });
-      if (!isEmptyValue(row.email) && !isValidEmail(row.email)) rowErrors.push({ line: row.__line, field: 'Email', message: 'Email inválido.' });
 
+      // Ignora silenciosamente registros já existentes na base (sem gerar erros na tela)
+      let isAlreadyInDatabase = false;
+      if (codeNorm && existingCodes.has(codeNorm)) isAlreadyInDatabase = true;
+      if (cnpjDigits && existingCnpjs.has(cnpjDigits)) isAlreadyInDatabase = true;
+      if (cpfDigits && existingCpfs.has(cpfDigits)) isAlreadyInDatabase = true;
+
+      // Ignora duplicados dentro do próprio arquivo importado
       if (codeNorm) {
-        if (existingCodes.has(codeNorm)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código já importado anteriormente.' });
-        if (seenCodes.has(codeNorm)) rowErrors.push({ line: row.__line, field: 'Código', message: 'Código duplicado dentro da planilha.' });
+        if (seenCodes.has(codeNorm)) isAlreadyInDatabase = true;
         seenCodes.add(codeNorm);
       }
-
       if (cnpjDigits) {
-        if (existingCnpjs.has(cnpjDigits)) rowErrors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ já importado anteriormente.' });
-        if (seenCnpjs.has(cnpjDigits)) rowErrors.push({ line: row.__line, field: 'CNPJ', message: 'CNPJ duplicado dentro da planilha.' });
+        if (seenCnpjs.has(cnpjDigits)) isAlreadyInDatabase = true;
         seenCnpjs.add(cnpjDigits);
       }
-
       if (cpfDigits) {
-        if (existingCpfs.has(cpfDigits)) rowErrors.push({ line: row.__line, field: 'CPF', message: 'CPF já importado anteriormente.' });
-        if (seenCpfs.has(cpfDigits)) rowErrors.push({ line: row.__line, field: 'CPF', message: 'CPF duplicado dentro da planilha.' });
+        if (seenCpfs.has(cpfDigits)) isAlreadyInDatabase = true;
         seenCpfs.add(cpfDigits);
       }
 
-      errors.push(...rowErrors);
-      if (!hasMappingError && rowErrors.length === 0) {
+      if (rowErrors.length > 0) {
+        errors.push(...rowErrors);
+      } else if (!isAlreadyInDatabase && !hasMappingError) {
         validRows.push(row);
       }
     });
