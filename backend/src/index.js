@@ -2452,6 +2452,109 @@ app.post('/api/store/:key', async (req, res) => {
 
     await registrarDiferencasStore(req, key, previousData, finalData);
 
+    // Sincronização automática de mudanças (Vendedor, Supervisor, Dados etc.) no cadastro ativo quando o importador for atualizado
+    if (key === 'clientes_importador_sistema' && Array.isArray(finalData)) {
+      try {
+        const clientsKey = getStoreKey(req, 'clients');
+        const clientsRow = await db('app_kv_store').where({ company_id: companyId, store_key: clientsKey }).first();
+        if (clientsRow) {
+          const registeredClients = safeParseStoreJson(clientsRow.data_json, []);
+          if (Array.isArray(registeredClients) && registeredClients.length > 0) {
+            // Carrega usuários ativos para mapear vendedores
+            const users = await db('usuarios').where({ empresa_id: companyId, status: 'LIBERADO' });
+            const findUserByName = (name) => {
+              if (!name) return null;
+              const norm = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+              return users.find(u => {
+                const uNameNorm = (u.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+                return uNameNorm === norm;
+              });
+            };
+
+            let updatedAny = false;
+            for (const reg of registeredClients) {
+              const regCode = String(reg.route || '').trim();
+              const regCnpj = String(reg.cnpj || '').replace(/\D/g, '');
+              
+              const impMatch = finalData.find(imp => {
+                const impCode = String(imp.codigo || '').trim();
+                const impCnpj = String(imp.cnpj || '').replace(/\D/g, '');
+                return (regCode && impCode && regCode === impCode) || (regCnpj && impCnpj && regCnpj === impCnpj);
+              });
+
+              if (impMatch) {
+                let changed = false;
+
+                // 1. Mapear e atualizar Vendedor
+                if (impMatch.vendedor) {
+                  const targetUser = findUserByName(impMatch.vendedor);
+                  if (targetUser && String(reg.userId) !== String(targetUser.id)) {
+                    reg.userId = targetUser.id;
+                    changed = true;
+                  }
+                }
+
+                // 2. Atualizar outros dados se mudaram
+                if (impMatch.fantasia && reg.name !== impMatch.fantasia) {
+                  reg.name = impMatch.fantasia;
+                  changed = true;
+                }
+                if (impMatch.empresaResponsavel && reg.companyName !== impMatch.empresaResponsavel) {
+                  reg.companyName = impMatch.empresaResponsavel;
+                  changed = true;
+                }
+                if (impMatch.fone && reg.phone !== impMatch.fone) {
+                  reg.phone = impMatch.fone;
+                  changed = true;
+                }
+                if (impMatch.email && reg.email !== impMatch.email) {
+                  reg.email = impMatch.email;
+                  changed = true;
+                }
+                if (impMatch.cidade && reg.city !== impMatch.cidade) {
+                  reg.city = impMatch.cidade;
+                  changed = true;
+                }
+
+                if (changed) {
+                  updatedAny = true;
+                  reg.updatedAt = new Date().toISOString();
+                }
+              }
+            }
+
+            if (updatedAny) {
+              const updatedClientsJson = JSON.stringify(registeredClients);
+              await db('app_kv_store').where({ company_id: companyId, store_key: clientsKey }).update({
+                data_json: updatedClientsJson,
+                updated_by: req.user.id,
+                updated_at: new Date().toISOString()
+              });
+
+              for (const client of registeredClients) {
+                if (!client.id) continue;
+                const clientData = {
+                  name: client.name || null,
+                  cnpj: client.cnpj || null,
+                  phone: client.phone || null,
+                  email: client.email || null,
+                  unitId: client.unitId || null,
+                  userId: client.userId || null,
+                  companyName: client.companyName || null,
+                  city: client.city || null,
+                  address: client.addressFull || client.street || null,
+                  status_final: ['Aprovado', 'Reprovado', 'Pendente'].includes(client.status) ? client.status : 'Pendente'
+                };
+                await db('clientes').where({ id: client.id }).update(clientData);
+              }
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.error('Erro ao propagar alterações de vendedor do importador para clientes:', syncErr);
+      }
+    }
+
     // Sincronização física com a tabela clientes
     if (key === 'clients' && Array.isArray(finalData)) {
       try {
