@@ -7799,19 +7799,134 @@
   }
   function panelHtml(){ var admin = isAdmin(); return '<div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;"><span class="card-title">Equipamentos Importados</span><span id="imported-equipment-count" style="color:var(--text-muted);font-size:.82rem;">0 registros</span></div>'+ 
     '<div style="padding:18px 20px;border-bottom:1px solid var(--border-color);"><form id="imported-equipment-form" style="display:grid;grid-template-columns:2fr 1fr auto;gap:10px;align-items:end;"><div class="form-group" style="margin:0;"><label for="imported-equipment-file">Planilha (.xlsx ou .csv)</label><input type="file" id="imported-equipment-file" accept=".xlsx,.xls,.csv,text/csv" required></div><div class="form-group" style="margin:0;"><label for="imported-equipment-unit">Unidade</label><select id="imported-equipment-unit"><option value="all">Todas</option></select></div><button type="submit" class="btn btn-primary" style="height:38px;">Mapear Colunas</button></form><div id="imported-equipment-mapping" style="display:none;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-color);"></div><p id="imported-equipment-message" style="margin:10px 0 0;color:var(--text-muted);font-size:.82rem;"></p></div>'+ 
-    '<div style="padding:14px 20px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><input id="imported-equipment-search" type="text" placeholder="Buscar por patrimonio, modelo ou empresa..." style="max-width:340px;width:100%;height:36px;padding:0 10px;background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-main);border-radius:6px;"><div style="display:flex;gap:8px;align-items:center;"><button type="button" id="imported-equipment-prev" class="btn btn-secondary btn-sm">Anterior</button><span id="imported-equipment-page" style="color:var(--text-muted);font-size:.82rem;">1/1</span><button type="button" id="imported-equipment-next" class="btn btn-secondary btn-sm">Próxima</button></div></div>'+ 
-    '<div class="table-responsive" style="padding:0 20px 20px;"><table><thead><tr><th>Número do Patrimônio</th><th>Modelo</th><th>Empresa</th><th>Unidade</th><th>Atualizado em</th><th>Usuário</th>'+(admin?'<th>Ações</th>':'')+'</tr></thead><tbody id="imported-equipment-body"><tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr></tbody></table></div>'; }
+    '<div style="padding:14px 20px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><input id="imported-equipment-search" type="text" placeholder="Buscar por patrimonio, contrato, modelo ou marca..." style="max-width:340px;width:100%;height:36px;padding:0 10px;background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-main);border-radius:6px;"><div style="display:flex;gap:8px;align-items:center;"><button type="button" id="imported-equipment-prev" class="btn btn-secondary btn-sm">Anterior</button><span id="imported-equipment-page" style="color:var(--text-muted);font-size:.82rem;">1/1</span><button type="button" id="imported-equipment-next" class="btn btn-secondary btn-sm">Próxima</button></div></div>'+ 
+    '<div class="table-responsive" style="padding:0 20px 20px;"><table><thead><tr><th>Nr. Contrato</th><th>Dt. Emissão</th><th>Patrimônio</th><th>Marca</th><th>Nr. Patrimônio</th><th>Unidade</th><th>Atualizado em</th><th>Usuário</th>'+(admin?'<th>Ações</th>':'')+'</tr></thead><tbody id="imported-equipment-body"><tr><td colspan="9" style="text-align:center;color:var(--text-muted);">Carregando...</td></tr></tbody></table></div>'; }
   function bindPanel(){ setTimeout(function(){ var unit = document.getElementById('imported-equipment-unit'); if (unit && Store.getUnits) { var u = user(); var units = Store.getUnits() || []; if (u.unitId && u.unitId !== 'all') { unit.innerHTML = '<option value="'+esc(u.unitId)+'">'+esc(unitName(u.unitId))+'</option>'; unit.disabled = true; } else unit.innerHTML = '<option value="all">Todas</option>' + units.map(function(x){ return '<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>'; }).join(''); } }, 50); document.getElementById('imported-equipment-form')?.addEventListener('submit', previewFile); document.getElementById('imported-equipment-search')?.addEventListener('input', function(){ page = 1; renderList(); }); document.getElementById('imported-equipment-prev')?.addEventListener('click', function(){ if (page > 1) { page--; renderList(); } }); document.getElementById('imported-equipment-next')?.addEventListener('click', function(){ var total = Math.max(1, Math.ceil(filtered().length / pageSize)); if (page < total) { page++; renderList(); } }); }
-  function guessHeader(kind){ var tests = kind === 'patrimonio' ? ['patrimonio','numero','codigo'] : kind === 'modelo' ? ['modelo','equipamento','nome'] : ['empresa','cliente']; return previewHeaders.find(function(h){ var n = norm(h); return tests.some(function(t){ return n.indexOf(t) >= 0; }); }) || ''; }
+  function guessHeader(kind){
+    var tests = kind === 'nr_contrato' ? ['contrato'] :
+                kind === 'dt_emissao' ? ['emissao','data'] :
+                kind === 'patrimonio' ? ['patrimonio'] :
+                kind === 'marca' ? ['marca'] :
+                ['nr','num','patrimonio'];
+    return previewHeaders.find(function(h){ var n = norm(h); return tests.some(function(t){ return n.indexOf(t) >= 0; }); }) || '';
+  }
   function selectHtml(id, selected){ return '<select id="'+id+'" required><option value="">Selecione...</option>'+previewHeaders.map(function(h){ return '<option value="'+esc(h)+'" '+(h===selected?'selected':'')+'>'+esc(h)+'</option>'; }).join('')+'</select>'; }
-  function renderMapping(){ var box = document.getElementById('imported-equipment-mapping'); if (!box) return; box.style.display = 'block'; var sample = previewRows.slice(0,3); box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,minmax(160px,1fr)) auto;gap:10px;align-items:end;"><div class="form-group" style="margin:0;"><label>Número do Patrimônio</label>'+selectHtml('map-eq-patrimonio', guessHeader('patrimonio'))+'</div><div class="form-group" style="margin:0;"><label>Modelo</label>'+selectHtml('map-eq-modelo', guessHeader('modelo'))+'</div><div class="form-group" style="margin:0;"><label>Empresa</label>'+selectHtml('map-eq-empresa', guessHeader('empresa'))+'</div><button type="button" id="confirm-imported-equipment" class="btn btn-success" style="height:38px;">Importar</button></div><div style="margin-top:10px;color:var(--text-muted);font-size:.82rem;">'+previewRows.length+' linhas encontradas. Confira as colunas e confirme a importação.</div>'+previewTable(sample); document.getElementById('confirm-imported-equipment')?.addEventListener('click', importMapped); }
+  function renderMapping(){
+    var box = document.getElementById('imported-equipment-mapping');
+    if (!box) return;
+    box.style.display = 'block';
+    var sample = previewRows.slice(0,3);
+    box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(5,minmax(140px,1fr)) auto;gap:10px;align-items:end;">'
+      + '<div class="form-group" style="margin:0;"><label>Nr. Contrato</label>'+selectHtml('map-eq-nr-contrato', guessHeader('nr_contrato'))+'</div>'
+      + '<div class="form-group" style="margin:0;"><label>Dt. Emissão</label>'+selectHtml('map-eq-dt-emissao', guessHeader('dt_emissao'))+'</div>'
+      + '<div class="form-group" style="margin:0;"><label>Patrimônio</label>'+selectHtml('map-eq-patrimonio', guessHeader('patrimonio'))+'</div>'
+      + '<div class="form-group" style="margin:0;"><label>Marca</label>'+selectHtml('map-eq-marca', guessHeader('marca'))+'</div>'
+      + '<div class="form-group" style="margin:0;"><label>Nr. Patrimônio</label>'+selectHtml('map-eq-nr-patrimonio', guessHeader('nr_patrimonio'))+'</div>'
+      + '<button type="button" id="confirm-imported-equipment" class="btn btn-success" style="height:38px;">Importar</button></div>'
+      + '<div style="margin-top:10px;color:var(--text-muted);font-size:.82rem;">'+previewRows.length+' linhas encontradas. Confira as colunas e confirme a importação.</div>'
+      + previewTable(sample);
+    document.getElementById('confirm-imported-equipment')?.addEventListener('click', importMapped);
+  }
   function previewTable(rows){ if (!rows.length) return ''; var cols = previewHeaders.slice(0,6); return '<div class="table-responsive" style="margin-top:10px;"><table><thead><tr>'+cols.map(function(h){ return '<th>'+esc(h)+'</th>'; }).join('')+'</tr></thead><tbody>'+rows.map(function(r){ return '<tr>'+cols.map(function(h){ return '<td>'+esc(r[h])+'</td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>'; }
   async function previewFile(ev){ ev.preventDefault(); var file = document.getElementById('imported-equipment-file')?.files?.[0]; var msg = document.getElementById('imported-equipment-message'); if (!file) return; var fd = new FormData(); fd.append('file', file); if (msg) msg.textContent = 'Lendo planilha...'; try { var token = Store.getToken ? Store.getToken() : ''; var response = await fetch(apiBase() + '/api/equipamentos-importados/preview', { method:'POST', headers:{ Authorization:'Bearer ' + token }, body: fd }); var data = await response.json().catch(function(){ return {}; }); if (!response.ok) throw new Error(data.error || 'Erro ao ler planilha.'); previewRows = data.rows || []; previewHeaders = data.headers || []; if (!previewHeaders.length) throw new Error('Nenhuma coluna encontrada na planilha.'); if (msg) msg.textContent = 'Planilha carregada. Faça o mapeamento das colunas.'; renderMapping(); } catch(err) { previewRows = []; previewHeaders = []; if (msg) msg.textContent = err.message || String(err); } }
-  async function importMapped(){ var msg = document.getElementById('imported-equipment-message'); var mapping = { patrimonio: document.getElementById('map-eq-patrimonio')?.value || '', modelo: document.getElementById('map-eq-modelo')?.value || '', empresa: document.getElementById('map-eq-empresa')?.value || '' }; if (!mapping.patrimonio || !mapping.modelo || !mapping.empresa) { if (msg) msg.textContent = 'Selecione as três colunas: patrimônio, modelo e empresa.'; return; } var fd = new FormData(); fd.append('rows_json', JSON.stringify(previewRows)); fd.append('mapping_json', JSON.stringify(mapping)); fd.append('unitId', document.getElementById('imported-equipment-unit')?.value || 'all'); if (msg) msg.textContent = 'Importando equipamentos...'; try { var token = Store.getToken ? Store.getToken() : ''; var response = await fetch(apiBase() + '/api/equipamentos-importados/import', { method:'POST', headers:{ Authorization:'Bearer ' + token }, body: fd }); var data = await response.json().catch(function(){ return {}; }); if (!response.ok) throw new Error(data.error || 'Erro ao importar.'); if (msg) msg.textContent = 'Importação concluída: '+(data.created||0)+' criados, '+(data.updated||0)+' atualizados, '+(data.ignored||0)+' ignorados.'; var box = document.getElementById('imported-equipment-mapping'); if (box) box.style.display = 'none'; previewRows = []; previewHeaders = []; var file = document.getElementById('imported-equipment-file'); if (file) file.value = ''; await loadList(); } catch(err) { if (msg) msg.textContent = err.message || String(err); } }
-  async function loadList(){ if (!canUse()) return; try { var params = new URLSearchParams(); var unitId = document.getElementById('imported-equipment-unit')?.value || ''; if (unitId) params.set('unitId', unitId); cache = await api('/api/equipamentos-importados' + (params.toString() ? '?' + params.toString() : '')); renderList(); } catch(err) { var body = document.getElementById('imported-equipment-body'); if (body) body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);">'+esc(err.message || err)+'</td></tr>'; } }
-  function filtered(){ var q = norm(document.getElementById('imported-equipment-search')?.value || ''); return (cache || []).filter(function(x){ return !q || norm(x.codigo_equipamento).indexOf(q)>=0 || norm(x.nome_equipamento).indexOf(q)>=0 || norm(x.empresa_nome).indexOf(q)>=0; }); }
-  function renderList(){ var body = document.getElementById('imported-equipment-body'); if (!body) return; var admin = isAdmin(); var list = filtered(); var total = Math.max(1, Math.ceil(list.length / pageSize)); if (page > total) page = total; var slice = list.slice((page - 1) * pageSize, page * pageSize); var count = document.getElementById('imported-equipment-count'); if (count) count.textContent = list.length + ' registros'; var pageEl = document.getElementById('imported-equipment-page'); if (pageEl) pageEl.textContent = page + '/' + total; body.innerHTML = slice.map(function(item){ return '<tr><td style="font-family:monospace;font-weight:700;">'+esc(item.codigo_equipamento)+'</td><td>'+esc(item.nome_equipamento)+'</td><td>'+esc(item.empresa_nome || '-')+'</td><td>'+esc(unitName(item.unitId))+'</td><td>'+(item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '-')+'</td><td>'+esc(userName(item.atualizado_por || item.criado_por))+'</td>'+(admin?'<td><button class="btn btn-secondary btn-sm" onclick="window.EquipamentosImportados.edit('+item.id+')">Editar</button><button class="btn btn-danger btn-sm" onclick="window.EquipamentosImportados.remove('+item.id+')">Excluir</button></td>':'')+'</tr>'; }).join('') || '<tr><td colspan="'+(admin?7:6)+'" style="text-align:center;color:var(--text-muted);">Nenhum equipamento importado.</td></tr>'; }
-  async function edit(id){ if (!isAdmin()) return; var item = cache.find(function(x){ return Number(x.id) === Number(id); }); if (!item) return; var code = prompt('Número do patrimônio:', item.codigo_equipamento); if (code == null) return; var name = prompt('Modelo:', item.nome_equipamento); if (name == null) return; var empresa = prompt('Empresa:', item.empresa_nome || ''); if (empresa == null) return; await api('/api/equipamentos-importados/' + encodeURIComponent(id), { method:'PUT', body: JSON.stringify({ codigo_equipamento: code, nome_equipamento: name, empresa_nome: empresa }) }); await loadList(); }
+  async function importMapped(){
+    var msg = document.getElementById('imported-equipment-message');
+    var mapping = {
+      nr_contrato: document.getElementById('map-eq-nr-contrato')?.value || '',
+      dt_emissao: document.getElementById('map-eq-dt-emissao')?.value || '',
+      patrimonio: document.getElementById('map-eq-patrimonio')?.value || '',
+      marca: document.getElementById('map-eq-marca')?.value || '',
+      nr_patrimonio: document.getElementById('map-eq-nr-patrimonio')?.value || ''
+    };
+    if (!mapping.patrimonio || !mapping.nr_patrimonio) {
+      if (msg) msg.textContent = 'Selecione pelo menos as colunas de Patrimônio e Nr. Patrimônio.';
+      return;
+    }
+    var fd = new FormData();
+    fd.append('rows_json', JSON.stringify(previewRows));
+    fd.append('mapping_json', JSON.stringify(mapping));
+    fd.append('unitId', document.getElementById('imported-equipment-unit')?.value || 'all');
+    if (msg) msg.textContent = 'Importando equipamentos...';
+    try {
+      var token = Store.getToken ? Store.getToken() : '';
+      var response = await fetch(apiBase() + '/api/equipamentos-importados/import', { method:'POST', headers:{ Authorization:'Bearer ' + token }, body: fd });
+      var data = await response.json().catch(function(){ return {}; });
+      if (!response.ok) throw new Error(data.error || 'Erro ao importar.');
+      if (msg) msg.textContent = 'Importação concluída: '+(data.created||0)+' criados, '+(data.updated||0)+' atualizados, '+(data.ignored||0)+' ignorados.';
+      var box = document.getElementById('imported-equipment-mapping');
+      if (box) box.style.display = 'none';
+      previewRows = [];
+      previewHeaders = [];
+      var file = document.getElementById('imported-equipment-file');
+      if (file) file.value = '';
+      await loadList();
+    } catch(err) {
+      if (msg) msg.textContent = err.message || String(err);
+    }
+  }
+  async function loadList(){ if (!canUse()) return; try { var params = new URLSearchParams(); var unitId = document.getElementById('imported-equipment-unit')?.value || ''; if (unitId) params.set('unitId', unitId); cache = await api('/api/equipamentos-importados' + (params.toString() ? '?' + params.toString() : '')); renderList(); } catch(err) { var body = document.getElementById('imported-equipment-body'); if (body) body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--danger);">'+esc(err.message || err)+'</td></tr>'; } }
+  function filtered(){
+    var q = norm(document.getElementById('imported-equipment-search')?.value || '');
+    return (cache || []).filter(function(x){
+      return !q || norm(x.codigo_equipamento).indexOf(q)>=0 || norm(x.nome_equipamento).indexOf(q)>=0 || norm(x.empresa_nome).indexOf(q)>=0 || norm(x.nr_contrato).indexOf(q)>=0 || norm(x.marca).indexOf(q)>=0;
+    });
+  }
+  function renderList(){
+    var body = document.getElementById('imported-equipment-body');
+    if (!body) return;
+    var admin = isAdmin();
+    var list = filtered();
+    var total = Math.max(1, Math.ceil(list.length / pageSize));
+    if (page > total) page = total;
+    var slice = list.slice((page - 1) * pageSize, page * pageSize);
+    var count = document.getElementById('imported-equipment-count');
+    if (count) count.textContent = list.length + ' registros';
+    var pageEl = document.getElementById('imported-equipment-page');
+    if (pageEl) pageEl.textContent = page + '/' + total;
+    body.innerHTML = slice.map(function(item){
+      return '<tr>' +
+        '<td>' + esc(item.nr_contrato || '-') + '</td>' +
+        '<td>' + esc(item.dt_emissao || '-') + '</td>' +
+        '<td>' + esc(item.nome_equipamento || item.patrimonio || '-') + '</td>' +
+        '<td>' + esc(item.empresa_nome || item.marca || '-') + '</td>' +
+        '<td style="font-family:monospace;font-weight:700;">' + esc(item.codigo_equipamento || item.nr_patrimonio) + '</td>' +
+        '<td>' + esc(unitName(item.unitId)) + '</td>' +
+        '<td>' + (item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '-') + '</td>' +
+        '<td>' + esc(userName(item.atualizado_por || item.criado_por)) + '</td>' +
+        (admin ? '<td><button class="btn btn-secondary btn-sm" onclick="window.EquipamentosImportados.edit('+item.id+')">Editar</button><button class="btn btn-danger btn-sm" onclick="window.EquipamentosImportados.remove('+item.id+')">Excluir</button></td>' : '') +
+        '</tr>';
+    }).join('') || '<tr><td colspan="' + (admin ? 9 : 8) + '" style="text-align:center;color:var(--text-muted);">Nenhum equipamento importado.</td></tr>';
+  }
+  async function edit(id){
+    if (!isAdmin()) return;
+    var item = cache.find(function(x){ return Number(x.id) === Number(id); });
+    if (!item) return;
+    var nr_contrato = prompt('Nº Contrato:', item.nr_contrato || '');
+    if (nr_contrato == null) return;
+    var dt_emissao = prompt('Dt. Emissão:', item.dt_emissao || '');
+    if (dt_emissao == null) return;
+    var name = prompt('Patrimônio:', item.nome_equipamento || item.patrimonio || '');
+    if (name == null) return;
+    var marca = prompt('Marca:', item.empresa_nome || item.marca || '');
+    if (marca == null) return;
+    var code = prompt('Nº Patrimônio:', item.codigo_equipamento || item.nr_patrimonio || '');
+    if (code == null) return;
+    
+    await api('/api/equipamentos-importados/' + encodeURIComponent(id), {
+      method: 'PUT',
+      body: JSON.stringify({
+        nr_contrato: nr_contrato,
+        dt_emissao: dt_emissao,
+        codigo_equipamento: code,
+        nome_equipamento: name,
+        empresa_nome: marca,
+        patrimonio: name,
+        marca: marca,
+        nr_patrimonio: code
+      })
+    });
+    await loadList();
+  }
   async function remove(id){ if (!isAdmin() || !confirm('Excluir equipamento importado?')) return; await api('/api/equipamentos-importados/' + encodeURIComponent(id), { method:'DELETE' }); await loadList(); }
   async function lookupImported(code){ code = String(code || '').trim(); if (!code || !canUse()) return null; try { var data = await api('/api/equipamentos-importados/lookup/' + encodeURIComponent(code)); return data && data.found ? data.equipamento : null; } catch(_) { return null; } }
   function setModelValue(modelEl, name){ if (!modelEl) return; if (modelEl.tagName === 'SELECT') { var opt = Array.prototype.slice.call(modelEl.options).find(function(o){ return o.value === name || o.textContent === name; }); if (!opt) { opt = new Option(name, name); modelEl.appendChild(opt); } modelEl.value = name; } else { modelEl.value = name; modelEl.readOnly = true; modelEl.style.backgroundColor = 'rgba(255,255,255,0.03)'; } }

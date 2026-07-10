@@ -550,9 +550,14 @@ async function initDb() {
       table.unique(['empresa_id', 'unitId', 'codigo_equipamento']);
     });
     console.log('Database: Tabela equipamentos_importados criada com sucesso.');
-  } else if (!await db.schema.hasColumn('equipamentos_importados', 'empresa_nome')) {
-    await db.schema.table('equipamentos_importados', table => table.string('empresa_nome').nullable());
-    console.log('Database: Coluna empresa_nome adicionada à tabela equipamentos_importados.');
+  } else {
+    // Garante as colunas da planilha do cliente em equipamentos_importados
+    for (const col of ['nr_contrato', 'dt_emissao', 'patrimonio', 'marca', 'nr_patrimonio']) {
+      if (!await db.schema.hasColumn('equipamentos_importados', col)) {
+        await db.schema.table('equipamentos_importados', table => table.string(col).nullable());
+        console.log(`Database: Coluna ${col} adicionada à tabela equipamentos_importados.`);
+      }
+    }
   }
 
   // 8. Create app_kv_store table (cache central do frontend no PostgreSQL)
@@ -1519,14 +1524,17 @@ function normalizeEquipHeader(value) {
 }
 
 function pickImportedEquipmentColumns(row) {
-  const out = { code: '', name: '', empresa: '' };
+  const out = { nr_contrato: '', dt_emissao: '', patrimonio: '', marca: '', nr_patrimonio: '' };
   for (const [key, value] of Object.entries(row || {})) {
     const h = normalizeEquipHeader(key);
-    if (!out.code && (h.includes('codigo') || h.includes('patrimonio') || h === 'numerodopatrimonio' || h === 'codigodoequipamento')) out.code = normalizeEquipCode(value);
-    if (!out.name && (h.includes('nome') || h.includes('modelo') || h.includes('equipamento'))) {
-      if (!h.includes('codigo') && !h.includes('patrimonio')) out.name = String(value == null ? '' : value).trim();
+    const val = String(value == null ? '' : value).trim();
+    if (h.includes('contrato')) out.nr_contrato = val;
+    if (h.includes('emissao') || h.includes('data')) out.dt_emissao = val;
+    if (h === 'patrimonio' || (h.includes('patrimonio') && !h.includes('nr') && !h.includes('num'))) out.patrimonio = val;
+    if (h.includes('marca')) out.marca = val;
+    if (h.includes('nrpatrimonio') || h.includes('numpatrimonio') || h.includes('numero') || (h === 'patrimonio' && !out.nr_patrimonio)) {
+      out.nr_patrimonio = normalizeEquipCode(value);
     }
-    if (!out.empresa && (h === 'empresa' || h.includes('empresa') || h.includes('cliente'))) out.empresa = String(value == null ? '' : value).trim();
   }
   return out;
 }
@@ -1535,9 +1543,11 @@ function mapImportedEquipmentRow(row, mapping) {
   const source = row || {};
   const get = key => key ? source[key] : '';
   return {
-    code: normalizeEquipCode(get(mapping && mapping.patrimonio)),
-    name: String(get(mapping && mapping.modelo) || '').trim(),
-    empresa: String(get(mapping && mapping.empresa) || '').trim()
+    nr_contrato: String(get(mapping && mapping.nr_contrato) || '').trim(),
+    dt_emissao: String(get(mapping && mapping.dt_emissao) || '').trim(),
+    patrimonio: String(get(mapping && mapping.patrimonio) || '').trim(),
+    marca: String(get(mapping && mapping.marca) || '').trim(),
+    nr_patrimonio: String(get(mapping && mapping.nr_patrimonio) || '').trim()
   };
 }
 
@@ -1574,17 +1584,34 @@ async function saveImportedEquipmentRows({ rows, mapping, req }) {
   const errors = [];
   for (let i = 0; i < rows.length; i += 1) {
     const picked = mapping ? mapImportedEquipmentRow(rows[i], mapping) : pickImportedEquipmentColumns(rows[i]);
-    const code = normalizeEquipCode(picked.code);
-    const name = String(picked.name || '').trim();
-    const empresaNome = String(picked.empresa || '').trim();
-    if (!code || !name) { ignored += 1; errors.push('Linha ' + (i + 2) + ': patrimonio ou modelo vazio.'); continue; }
+    const code = normalizeEquipCode(picked.nr_patrimonio);
+    const name = String(picked.patrimonio || '').trim();
+    if (!code || !name) { ignored += 1; errors.push('Linha ' + (i + 2) + ': Nr. Patrimônio ou Patrimônio vazio.'); continue; }
+    
     const existing = await db('equipamentos_importados').where({ empresa_id: empresaId, unitId, codigo_equipamento: code }).first();
-    const payload = { nome_equipamento: name, empresa_nome: empresaNome, atualizado_por: req.user.id, updated_at: new Date().toISOString() };
+    const payload = {
+      codigo_equipamento: code,
+      nome_equipamento: name,
+      empresa_nome: picked.marca || '',
+      nr_contrato: picked.nr_contrato || '',
+      dt_emissao: picked.dt_emissao || '',
+      patrimonio: name,
+      marca: picked.marca || '',
+      nr_patrimonio: code,
+      atualizado_por: req.user.id,
+      updated_at: new Date().toISOString()
+    };
     if (existing) {
       await db('equipamentos_importados').where({ id: existing.id }).update(payload);
       updated += 1;
     } else {
-      await db('equipamentos_importados').insert({ empresa_id: empresaId, unitId, codigo_equipamento: code, nome_equipamento: name, empresa_nome: empresaNome, criado_por: req.user.id, atualizado_por: req.user.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      await db('equipamentos_importados').insert({
+        empresa_id: empresaId,
+        unitId,
+        criado_por: req.user.id,
+        created_at: new Date().toISOString(),
+        ...payload
+      });
       created += 1;
     }
   }
@@ -1818,7 +1845,13 @@ app.get('/api/equipamentos-importados', async (req, res) => {
     else if (requestedUnit && requestedUnit !== 'all') query = query.where({ unitId: requestedUnit });
     if (qText) {
       query = query.andWhere(function() {
-        this.where('codigo_equipamento', 'like', '%' + qText + '%').orWhere('nome_equipamento', 'like', '%' + qText + '%').orWhere('empresa_nome', 'like', '%' + qText + '%');
+        this.where('codigo_equipamento', 'like', '%' + qText + '%')
+          .orWhere('nome_equipamento', 'like', '%' + qText + '%')
+          .orWhere('empresa_nome', 'like', '%' + qText + '%')
+          .orWhere('nr_contrato', 'like', '%' + qText + '%')
+          .orWhere('marca', 'like', '%' + qText + '%')
+          .orWhere('patrimonio', 'like', '%' + qText + '%')
+          .orWhere('nr_patrimonio', 'like', '%' + qText + '%');
       });
     }
     const rows = await query.orderBy('codigo_equipamento', 'asc');
@@ -1888,7 +1921,18 @@ app.put('/api/equipamentos-importados/:id', async (req, res) => {
     const name = String(req.body.nome_equipamento || '').trim();
     const empresaNome = String(req.body.empresa_nome || '').trim();
     if (!code || !name) return res.status(400).json({ error: 'Patrimonio e modelo sao obrigatorios.' });
-    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({ codigo_equipamento: code, nome_equipamento: name, empresa_nome: empresaNome, atualizado_por: req.user.id, updated_at: new Date().toISOString() });
+    await db('equipamentos_importados').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({
+      codigo_equipamento: code,
+      nome_equipamento: name,
+      empresa_nome: empresaNome,
+      nr_contrato: req.body.nr_contrato || '',
+      dt_emissao: req.body.dt_emissao || '',
+      patrimonio: name,
+      marca: empresaNome,
+      nr_patrimonio: code,
+      atualizado_por: req.user.id,
+      updated_at: new Date().toISOString()
+    });
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao editar equipamento importado:', err);
