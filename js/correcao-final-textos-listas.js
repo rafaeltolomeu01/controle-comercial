@@ -89,7 +89,11 @@
         || (record && norm(u.name) === norm(record.vendedor_nome || record.sellerName || record.vendedor));
     });
     if (found) return fixText(found.name || found.username || found.id);
-    if (id) return String(id).startsWith('USR') || String(id).startsWith('user') ? TXT.usuarioNaoLocalizado : fixText(id);
+    if (id) {
+      var idStr = String(id).toLowerCase();
+      if (idStr.startsWith('usr') || idStr.startsWith('user')) return TXT.usuarioNaoLocalizado;
+      return fixText(id);
+    }
     return TXT.usuarioNaoInformado;
   }
 

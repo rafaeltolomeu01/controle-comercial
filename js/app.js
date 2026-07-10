@@ -190,6 +190,11 @@ const App = {
    */
   async refreshAllLists() {
     if (!this.isLoggedIn) return;
+    try {
+      await UI.renderUsers(null, true);
+    } catch (e) {
+      console.warn('Erro ao carregar usuários:', e);
+    }
     const clients = Store.getClients();
     const equipments = Store.getEquipments();
     await this.loadProspects();

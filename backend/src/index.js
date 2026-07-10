@@ -3143,8 +3143,9 @@ app.put('/api/despesas/:id', async (req, res) => {
     });
 
     // Update items in despesas_solicitacoes_itens
-    await db('despesas_solicitacoes_itens').where({ solicitacao_id: id }).delete();
-    await db('despesas_itens_extras').where({ solicitacao_id: id }).delete();
+    const solicitacaoId = parseInt(id, 10);
+    await db('despesas_solicitacoes_itens').where({ solicitacao_id: solicitacaoId }).delete();
+    await db('despesas_itens_extras').where({ solicitacao_id: solicitacaoId }).delete();
 
     const itemsToInsert = [];
     const valHotel = valor_hotel_alim !== undefined ? valor_hotel_alim : request.valor_hotel_alim;
@@ -3153,7 +3154,7 @@ app.put('/api/despesas/:id', async (req, res) => {
     if (valHotel > 0) {
       let noites = Math.round(valHotel / 120.00);
       itemsToInsert.push({
-        solicitacao_id: id,
+        solicitacao_id: solicitacaoId,
         categoria: 'Hospedagem',
         valor_solicitado: valHotel,
         quantidade_solicitada: noites || 1,
@@ -3163,7 +3164,7 @@ app.put('/api/despesas/:id', async (req, res) => {
 
     if (valAbas > 0) {
       itemsToInsert.push({
-        solicitacao_id: id,
+        solicitacao_id: solicitacaoId,
         categoria: 'Abastecimento',
         valor_solicitado: valAbas,
         quantidade_solicitada: null,
@@ -3174,7 +3175,7 @@ app.put('/api/despesas/:id', async (req, res) => {
     if (Array.isArray(extras)) {
       if (extras.length) {
         const extraRows = extras.map(it => ({
-          solicitacao_id: id,
+          solicitacao_id: solicitacaoId,
           valor: it.valor || 0,
           descricao: it.descricao || '',
           created_at: now.toISOString(),
@@ -3184,7 +3185,7 @@ app.put('/api/despesas/:id', async (req, res) => {
 
         extras.forEach(ext => {
           itemsToInsert.push({
-            solicitacao_id: id,
+            solicitacao_id: solicitacaoId,
             categoria: ext.descricao,
             valor_solicitado: ext.valor,
             quantidade_solicitada: null,
@@ -3239,6 +3240,7 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
     let generalStatus;
     let totalAprovado = 0;
 
+    const solicitacaoId = parseInt(id, 10);
     const result = await db.transaction(async (trx) => {
       let allApprovedIntegral = true;
       let allReproved = true;
@@ -3246,8 +3248,10 @@ app.post('/api/despesas/:id/approval', async (req, res) => {
       let localTotalAprovado = 0;
 
       for (const evalItem of items) {
+        const itemId = parseInt(evalItem.id, 10);
+        if (isNaN(itemId)) continue;
         const dbItem = await trx('despesas_solicitacoes_itens')
-          .where({ id: evalItem.id, solicitacao_id: id })
+          .where({ id: itemId, solicitacao_id: solicitacaoId })
           .first();
 
         if (!dbItem) continue;
