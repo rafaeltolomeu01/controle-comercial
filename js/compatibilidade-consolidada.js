@@ -50,11 +50,11 @@
     unit = unit || getCurrentUnit();
     const key = roleKey(profile || (Store.getLoggedUser()||{}).profile);
     const cfg = unit.travelConfig || unit.financeConfig || {};
-    return num(cfg['daily_'+key] ?? cfg[key] ?? unit['daily_'+key] ?? (key==='gerente' ? 180 : key==='supervisor' ? 150 : 120));
+    return num(unit['diaria_'+key] ?? cfg['daily_'+key] ?? cfg[key] ?? unit['daily_'+key] ?? (key==='gerente' ? 180 : key==='supervisor' ? 150 : 120));
   }
   function maxNights(unit){
     const cfg = (unit||{}).travelConfig || (unit||{}).financeConfig || {};
-    const v = parseInt(cfg.maxNights ?? (unit||{}).maxNights ?? 4, 10);
+    const v = parseInt((unit||{}).maximo_diarias ?? cfg.maxNights ?? (unit||{}).maxNights ?? 4, 10);
     return Number.isFinite(v) && v > 0 ? v : 4;
   }
   window.CC_getDailyRate = getDailyRate;
@@ -179,77 +179,6 @@
     };
   }
 
-  // 09/10 - Configuração de hospedagem por unidade e perfil.
-  function ensureUnitFinanceFields(){
-    const form = document.getElementById('unit-form');
-    if (!form || document.getElementById('unit-daily-vendedor')) return;
-    const block = document.createElement('div');
-    block.id = 'unit-travel-config-block';
-    block.className = 'card';
-    block.style.cssText = 'margin-top:16px; padding:16px; background:rgba(255,255,255,0.02);';
-    block.innerHTML = `
-      <h4 style="margin:0 0 12px;color:var(--primary-color);">Configurações Financeiras - Hospedagem</h4>
-      <div class="form-row">
-        <div class="form-group"><label>Diária Vendedor (R$)</label><input type="number" id="unit-daily-vendedor" step="0.01" min="0" value="120"></div>
-        <div class="form-group"><label>Diária Supervisor (R$)</label><input type="number" id="unit-daily-supervisor" step="0.01" min="0" value="150"></div>
-        <div class="form-group"><label>Diária Gerente (R$)</label><input type="number" id="unit-daily-gerente" step="0.01" min="0" value="180"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>Máximo de Diárias</label><input type="number" id="unit-max-nights" min="1" step="1" value="4"></div>
-        <div class="form-group"><label>Permitir Sem Hospedagem</label><select id="unit-allow-no-hotel"><option value="true">Sim</option><option value="false">Não</option></select></div>
-      </div>`;
-    form.appendChild(block);
-  }
-  window.CC_ensureUnitFinanceFields = ensureUnitFinanceFields;
-
-  // Override renderUnits para garantir bloco financeiro e botão editar.
-  if (window.UI && UI.renderUnits) {
-    const originalRenderUnits = UI.renderUnits.bind(UI);
-    UI.renderUnits = function(){
-      originalRenderUnits();
-      ensureUnitFinanceFields();
-    };
-  }
-
-  // Enriquecer salvamento/edição de unidade sem mexer no restante.
-  setTimeout(() => {
-    ensureUnitFinanceFields();
-    const unitForm = document.getElementById('unit-form');
-    if (unitForm && !unitForm.dataset.ccFinanceBound) {
-      unitForm.dataset.ccFinanceBound = '1';
-      unitForm.addEventListener('submit', () => {
-        const editingId0 = unitForm.dataset.editingId || '';
-        const name0 = document.getElementById('unit-name')?.value || '';
-        const cfg0 = {
-          daily_vendedor: num(document.getElementById('unit-daily-vendedor')?.value || 120),
-          daily_supervisor: num(document.getElementById('unit-daily-supervisor')?.value || 150),
-          daily_gerente: num(document.getElementById('unit-daily-gerente')?.value || 180),
-          maxNights: parseInt(document.getElementById('unit-max-nights')?.value || 4,10),
-          allowNoHotel: String(document.getElementById('unit-allow-no-hotel')?.value || 'true') === 'true'
-        };
-        setTimeout(() => {
-          const units = Store.getUnits ? Store.getUnits() : [];
-          const unit = units.find(u => String(u.id) === String(editingId0)) || [...units].reverse().find(u => u.name === name0) || units[units.length-1];
-          if (unit) { unit.travelConfig = cfg0; Store.saveUnits(units); }
-        }, 80);
-      }, true);
-    }
-  }, 800);
-
-  if (window.App) {
-    const oldEditUnit = App.editUnit ? App.editUnit.bind(App) : null;
-    if (oldEditUnit) App.editUnit = function(unitId){
-      oldEditUnit(unitId);
-      ensureUnitFinanceFields();
-      const unit = (Store.getUnits() || []).find(u => String(u.id) === String(unitId));
-      const cfg = (unit && (unit.travelConfig || unit.financeConfig)) || {};
-      const set = (id,val) => { const el=document.getElementById(id); if(el) el.value = val; };
-      set('unit-daily-vendedor', cfg.daily_vendedor ?? cfg.vendedor ?? unit?.daily_vendedor ?? 120);
-      set('unit-daily-supervisor', cfg.daily_supervisor ?? cfg.supervisor ?? unit?.daily_supervisor ?? 150);
-      set('unit-daily-gerente', cfg.daily_gerente ?? cfg.gerente ?? unit?.daily_gerente ?? 180);
-      set('unit-max-nights', cfg.maxNights ?? unit?.maxNights ?? 4);
-      set('unit-allow-no-hotel', String(cfg.allowNoHotel ?? unit?.allowNoHotel ?? true));
-    };
 
     function getSelectedSolicitacaoUnit() {
       const sel = document.getElementById('sol-empresa');
