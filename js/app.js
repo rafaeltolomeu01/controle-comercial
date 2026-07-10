@@ -1522,13 +1522,35 @@ const App = {
     }
     const btnCancelTicketForm = document.getElementById('btn-cancel-ticket-form');
     if (btnCancelTicketForm) {
-      btnCancelTicketForm.addEventListener('click', () => {
+      btnCancelTicketForm.addEventListener('click', async () => {
         const formContainer = document.getElementById('ticket-form-container');
         const formEl = document.getElementById('ticket-open-form');
         if (formContainer) formContainer.classList.add('hidden');
-        if (formEl) { formEl.reset(); delete formEl.dataset.editingId; const b = formEl.querySelector('button[type="submit"]'); if (b) b.textContent = 'Cadastrar Unidade'; }
+
+        // Apaga uploads temporários do servidor ao cancelar
+        try {
+          const fileInputs = ['ticket-open-photo-defect', 'ticket-open-video-defect'];
+          for (const inputId of fileInputs) {
+            const inp = document.getElementById(inputId);
+            if (inp && inp.dataset.uploadedUrl) {
+              const uploadId = inp.dataset.uploadId || inp.dataset.uploadedUrl.split('/').pop();
+              if (uploadId) {
+                await this.fetchFromApi(`/api/uploads/${uploadId}`, { method: 'DELETE' }).catch(() => {});
+              }
+              inp.dataset.uploadedUrl = '';
+              inp.dataset.uploadId = '';
+            }
+          }
+        } catch(e) { /* silencioso */ }
+
+        if (formEl) { formEl.reset(); delete formEl.dataset.editingId; const b = formEl.querySelector('button[type="submit"]'); if (b) b.textContent = 'Abrir Chamado Corretivo'; }
         const previewCont = document.getElementById('preview-ticket-open-photo-container');
         if (previewCont) previewCont.style.display = 'none';
+        // Limpa status de upload
+        ['ticket-open-photo-defect', 'ticket-open-video-defect'].forEach(id => {
+          const statusEl = document.getElementById(`upload-status-${id}`);
+          if (statusEl) statusEl.innerHTML = '';
+        });
       });
     }
 
@@ -1954,20 +1976,66 @@ const App = {
       ticketOpenSerial.addEventListener('blur', handleSerialLookup);
     }
 
-    // Defect Photo Preview in Open Form
+    // Defect Photo/Video - Preview + Upload Instantâneo em Background
     const ticketOpenPhotoInput = document.getElementById('ticket-open-photo-defect');
     const ticketOpenPhotoPreviewContainer = document.getElementById('preview-ticket-open-photo-container');
     const ticketOpenPhotoPreviewImg = document.getElementById('preview-img-ticket-open-photo');
-    if (ticketOpenPhotoInput && ticketOpenPhotoPreviewContainer && ticketOpenPhotoPreviewImg) {
-      ticketOpenPhotoInput.addEventListener('change', (e) => {
+
+    const bindInstantTicketUpload = (inputEl, previewImg, previewContainer, mediaType) => {
+      if (!inputEl || inputEl.dataset.instantUploadBound === '1') return;
+      inputEl.dataset.instantUploadBound = '1';
+      inputEl.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        if (file) {
-          ticketOpenPhotoPreviewImg.src = URL.createObjectURL(file);
-          ticketOpenPhotoPreviewContainer.style.display = 'block';
-        } else {
-          ticketOpenPhotoPreviewContainer.style.display = 'none';
+        // Limpa URL anterior se houver
+        if (inputEl.dataset.uploadedUrl) {
+          const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
+          if (oldId) this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
+          inputEl.dataset.uploadedUrl = '';
+          inputEl.dataset.uploadId = '';
         }
+        if (!file) {
+          if (previewContainer) previewContainer.style.display = 'none';
+          return;
+        }
+        // Preview local imediato
+        if (previewImg && previewContainer) {
+          previewImg.src = URL.createObjectURL(file);
+          previewContainer.style.display = 'block';
+        }
+        // Status de upload
+        let statusEl = document.getElementById(`upload-status-${inputEl.id}`);
+        if (!statusEl) {
+          statusEl = document.createElement('div');
+          statusEl.id = `upload-status-${inputEl.id}`;
+          statusEl.style.cssText = 'margin-top:6px; font-size:0.72rem; font-weight:600; display:flex; align-items:center; gap:4px;';
+          inputEl.parentNode.appendChild(statusEl);
+        }
+        // Upload em background
+        (async () => {
+          try {
+            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
+            const savedUrl = await this.uploadFile(file);
+            if (savedUrl) {
+              inputEl.dataset.uploadedUrl = savedUrl;
+              inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
+              statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+            } else {
+              throw new Error('Servidor retornou link vazio.');
+            }
+          } catch (err) {
+            statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
+            console.error(`Erro no upload instantâneo (${inputEl.id}):`, err);
+          }
+        })();
       });
+    };
+
+    bindInstantTicketUpload(ticketOpenPhotoInput, ticketOpenPhotoPreviewImg, ticketOpenPhotoPreviewContainer, 'image');
+
+    // Vídeo do defeito
+    const ticketOpenVideoInput = document.getElementById('ticket-open-video-defect');
+    if (ticketOpenVideoInput) {
+      bindInstantTicketUpload(ticketOpenVideoInput, null, null, 'video');
     }
 
     // 7c. Submit Seller Abertura de Chamado
@@ -1991,16 +2059,20 @@ const App = {
 
         const ticketId = 'CH-' + Math.floor(100 + Math.random() * 900);
 
-        // Process photos/videos
+        // Process photos/videos — usa URL já enviada em background se disponível
         let defectPhotoUrl = '';
         const photoInput = document.getElementById('ticket-open-photo-defect');
-        if (photoInput && photoInput.files && photoInput.files[0]) {
+        if (photoInput && photoInput.dataset.uploadedUrl) {
+          defectPhotoUrl = photoInput.dataset.uploadedUrl;
+        } else if (photoInput && photoInput.files && photoInput.files[0]) {
           defectPhotoUrl = await this.uploadFile(photoInput.files[0]);
         }
 
         let defectVideoUrl = '';
         const videoInput = document.getElementById('ticket-open-video-defect');
-        if (videoInput && videoInput.files && videoInput.files[0]) {
+        if (videoInput && videoInput.dataset.uploadedUrl) {
+          defectVideoUrl = videoInput.dataset.uploadedUrl;
+        } else if (videoInput && videoInput.files && videoInput.files[0]) {
           defectVideoUrl = await this.uploadFile(videoInput.files[0]);
         }
 

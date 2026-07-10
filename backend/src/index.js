@@ -5378,13 +5378,19 @@ app.post('/api/chamados', async (req, res) => {
     if (!body.equipmentSerial || !body.title) {
       return res.status(400).json({ error: 'Patrimônio e descrição do defeito são obrigatórios.' });
     }
+    const typeCheck = await validateMechanicalEquipmentType(req, body.equipmentType);
+    // Aceita o tipo mesmo que não esteja na lista global (ex: importado da planilha)
+    const resolvedEquipmentType = typeCheck.ok ? typeCheck.typeName : String(body.equipmentType || '').trim();
+    if (!resolvedEquipmentType) {
+      return res.status(400).json({ error: 'Tipo de equipamento é obrigatório.' });
+    }
     const record = {
       id,
       empresa_id: req.user.empresa_id || '001',
       unitId: body.unitId || req.user.unitId || 'all',
       userId: ownerId,
       equipmentSerial: String(body.equipmentSerial || '').trim(),
-      equipmentType: typeCheck.typeName,
+      equipmentType: resolvedEquipmentType,
       client: body.client || '',
       fantasyName: body.fantasyName || '',
       city: body.city || '',
