@@ -2106,6 +2106,7 @@ const App = {
         const address = document.getElementById('ticket-open-address').value.trim();
         const clientCode = ((document.getElementById('ticket-open-client-code-hidden') || {}).value || (document.getElementById('ticket-open-client-code') || {}).value || '').trim();
         const clientSeller = ((document.getElementById('ticket-open-client-seller-imported') || {}).value || '').trim();
+        const clientGroup = ((document.getElementById('ticket-open-client-group-imported') || {}).value || '').trim();
         const title = document.getElementById('ticket-open-title').value.trim();
         const priority = document.getElementById('ticket-open-priority').value;
         const obs = document.getElementById('ticket-open-obs').value.trim();
@@ -2144,6 +2145,7 @@ const App = {
               address,
               clientCode,
               clientSeller,
+              clientGroup,
               title,
               priority,
               defectPhoto: defectPhotoUrl,
@@ -7166,6 +7168,7 @@ App.showTicketDetails = function(id) {
     ${row('Data', ticket.date)}
     ${row('Cliente', ticket.client)}
     ${row('Código do Cliente', ticket.clientCode || ticket.cliente_codigo)}
+    ${row('Grupo de Cliente', ticket.clientGroup || ticket.cliente_grupo || '—')}
     ${row('Vendedor do Cliente', ticket.clientSeller || ticket.cliente_vendedor)}
     ${row('Cidade', ticket.city)}
     ${row('Endereço', ticket.address)}
@@ -7201,6 +7204,7 @@ App.generateTicketPdf = function(id) {
     city: ticket.city,
     address: ticket.address,
     clientCode: ticket.clientCode || ticket.cliente_codigo,
+    clientGroup: ticket.clientGroup || ticket.cliente_grupo,
     clientSeller: ticket.clientSeller || ticket.cliente_vendedor,
     seller: UI.getUserName ? UI.getUserName(ticket.userId) : ticket.userId,
     unit: UI.getUnitName ? UI.getUnitName(ticket.unitId) : ticket.unitId,
@@ -7519,15 +7523,19 @@ App.printTicketData = function(ticket) {
       </td>
     </tr>
     <tr>
-      <td style="width: 33%;">
+      <td style="width: 25%;">
         <span class="label">Código do Cliente</span>
         <span class="val">${esc(ticket.clientCode || ticket.cliente_codigo || '')}</span>
       </td>
-      <td style="width: 33%;">
+      <td style="width: 25%;">
+        <span class="label">Grupo de Cliente</span>
+        <span class="val">${esc(ticket.clientGroup || ticket.cliente_grupo || '')}</span>
+      </td>
+      <td style="width: 25%;">
         <span class="label">Vendedor do Cliente (Planilha)</span>
         <span class="val">${esc(ticket.clientSeller || ticket.cliente_vendedor || '')}</span>
       </td>
-      <td style="width: 34%;">
+      <td style="width: 25%;">
         <span class="label">Vendedor Responsável</span>
         <span class="val">${esc(ticket.seller)}</span>
       </td>

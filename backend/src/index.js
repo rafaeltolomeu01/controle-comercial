@@ -463,6 +463,7 @@ async function initDb() {
       table.string('address').nullable();
       table.string('clientCode').nullable();
       table.string('clientSeller').nullable();
+      table.string('clientGroup').nullable();
       table.string('title').notNullable();
       table.string('priority').notNullable().defaultTo('Média');
       table.text('observations').nullable();
@@ -501,6 +502,7 @@ async function initDb() {
       address: t => t.string('address').nullable(),
       clientCode: t => t.string('clientCode').nullable(),
       clientSeller: t => t.string('clientSeller').nullable(),
+      clientGroup: t => t.string('clientGroup').nullable(),
       title: t => t.string('title').notNullable().defaultTo('Chamado mecânico'),
       priority: t => t.string('priority').notNullable().defaultTo('Média'),
       observations: t => t.text('observations').nullable(),
@@ -5397,6 +5399,7 @@ app.post('/api/chamados', async (req, res) => {
       address: body.address || '',
       clientCode: body.clientCode || body.cliente_codigo || '',
       clientSeller: body.clientSeller || body.cliente_vendedor || '',
+      clientGroup: body.clientGroup || body.cliente_grupo || '',
       title: body.title || '',
       priority: body.priority || 'Média',
       observations: body.observations || '',
@@ -5462,7 +5465,7 @@ app.put('/api/chamados/:id', async (req, res) => {
     const updates = { updated_at: new Date().toISOString() };
     const allowed = [
       'unitId', 'userId', 'equipmentSerial', 'equipmentType', 'client', 'fantasyName', 'city', 'address',
-      'clientCode', 'clientSeller', 'title', 'priority', 'observations', 'defectPhoto', 'defectVideo',
+      'clientCode', 'clientSeller', 'clientGroup', 'title', 'priority', 'observations', 'defectPhoto', 'defectVideo',
       'status', 'mechanic', 'date', 'startTime', 'endTime', 'faultDescription', 'solutionDescription',
       'eqStatusAfter', 'gasCharge', 'additionalNotes', 'fotoAntes', 'fotoDepois', 'fotoPlaqueta', 'videoAtendimento'
     ];

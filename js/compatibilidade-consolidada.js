@@ -3659,6 +3659,7 @@
       y += 20;
       fieldBox(doc, 14, y, 'Prioridade', ticket.priority, 54);
       fieldBox(doc, 75, y, 'Estado Pós Atendimento', ticket.eqStatusAfter, 54);
+      fieldBox(doc, 136, y, 'Grupo de Cliente', ticket.clientGroup || ticket.cliente_grupo || '-', 54);
       y += 20;
       fieldBox(doc, 14, y, 'Cidade', ticket.city || '-', 54);
       fieldBox(doc, 75, y, 'Endereço', ticket.address || '-', 116);
@@ -4179,6 +4180,7 @@
   const VISIBLE_FIELDS = [
     { key: 'codigo', label: 'Código', required: true, aliases: ['codigo', 'código', 'cod', 'cód', 'codigo cliente', 'codigo do cliente', 'cód cliente', 'cod cliente'] },
     { key: 'fantasia', label: 'Fantasia', required: true, aliases: ['fantasia', 'nome fantasia', 'cliente', 'nome cliente', 'razao fantasia'] },
+    { key: 'grupo', label: 'Grupo de Cliente', required: false, aliases: ['grupo de cliente', 'grupo de clientes', 'grupo', 'grupo cliente', 'grupo_cliente', 'grupo do cliente'] },
     { key: 'cnpj', label: 'CNPJ', required: false, aliases: ['cnpj', 'cpf/cnpj', 'cnpj/cpf', 'documento'] },
     { key: 'atividade', label: 'Atividade', required: false, aliases: ['atividade', 'categoria', 'ramo', 'ramo atividade', 'atividade principal'] },
     { key: 'fone', label: 'Fone', required: false, aliases: ['fone', 'telefone', 'tel', 'celular', 'whatsapp', 'contato'] },
@@ -4282,6 +4284,12 @@
       openButton.style.display = canImport ? '' : 'none';
       openButton.setAttribute('aria-hidden', canImport ? 'false' : 'true');
       openButton.disabled = !canImport;
+    }
+    const clearAllButton = panel.querySelector('#btn-clientes-importador-clear-all');
+    if (clearAllButton) {
+      clearAllButton.style.display = canImport ? '' : 'none';
+      clearAllButton.setAttribute('aria-hidden', canImport ? 'false' : 'true');
+      clearAllButton.disabled = !canImport;
     }
   }
 
@@ -4838,9 +4846,12 @@
     return `
       <div id="clientes-importador-sistema-content" class="hidden">
         <div class="card" id="clientes-importador-card">
-          <div class="card-header">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span class="card-title">Clientes Importador do Sistema</span>
-            <button class="btn btn-primary" id="btn-clientes-importador-open" type="button">+ Importar Clientes</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-danger" id="btn-clientes-importador-clear-all" type="button" style="display:none; background-color:var(--danger-color, #ef4444); border-color:var(--danger-color, #ef4444);">✕ Apagar Todos Clientes</button>
+              <button class="btn btn-primary" id="btn-clientes-importador-open" type="button">+ Importar Clientes</button>
+            </div>
           </div>
 
           <div class="general-filter-bar no-print" style="padding:16px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border-color);display:flex;flex-direction:column;gap:12px;">
@@ -5044,6 +5055,7 @@
     panel.querySelector('#btn-clientes-importador-confirm')?.addEventListener('click', confirmImport);
     panel.querySelector('#btn-clientes-importador-errors-xlsx')?.addEventListener('click', exportErrors);
     panel.querySelector('#clientes-importador-file-input')?.addEventListener('change', handleFileSelected);
+    panel.querySelector('#btn-clientes-importador-clear-all')?.addEventListener('click', clearAllImportedClients);
 
     const modal = panel.querySelector('#modal-clientes-importador');
     modal?.addEventListener('click', event => {
@@ -5088,6 +5100,26 @@
     state.currentPage = 1;
     refreshFilterOptions();
     renderTable();
+  }
+
+  async function clearAllImportedClients() {
+    if (!isAdminUser()) {
+      showToast('Somente administrador pode apagar os clientes importados.');
+      return;
+    }
+    if (!confirm('Atenção: Esta ação irá apagar definitivamente todos os clientes importados do sistema. Deseja continuar?')) {
+      return;
+    }
+    try {
+      await saveRows([]);
+      refreshFilterOptions();
+      state.currentPage = 1;
+      renderTable();
+      showToast('Todos os clientes importados foram removidos com sucesso.');
+    } catch (err) {
+      console.error('Falha ao apagar todos os clientes importados:', err);
+      alert('Não foi possível apagar os clientes. Erro: ' + (err.message || err));
+    }
   }
 
   function getFilterValues() {
@@ -5713,8 +5745,21 @@
         clean.enderecoCompleto = buildEnderecoCompleto(clean);
         return clean;
       });
-      const allRows = getRows().concat(rowsToSave);
-      await saveRows(allRows);
+      const existingRows = getRows();
+      const updatedRows = [...existingRows];
+      rowsToSave.forEach(newRow => {
+        const key = String(newRow.codigo).trim();
+        const existingIdx = updatedRows.findIndex(r => String(r.codigo).trim() === key);
+        if (existingIdx !== -1) {
+          updatedRows[existingIdx] = {
+            ...updatedRows[existingIdx],
+            ...newRow
+          };
+        } else {
+          updatedRows.push(newRow);
+        }
+      });
+      await saveRows(updatedRows);
       closeImportModal();
       refreshFilterOptions();
       state.currentPage = 1;
@@ -6236,7 +6281,7 @@
   function ensureTicketImportedHiddenFields() {
     const form = document.getElementById('ticket-open-form');
     if (!form) return;
-    ['ticket-open-client-code-hidden', 'ticket-open-client-seller-imported'].forEach(id => {
+    ['ticket-open-client-code-hidden', 'ticket-open-client-seller-imported', 'ticket-open-client-group-imported'].forEach(id => {
       if (!document.getElementById(id)) {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -6299,6 +6344,7 @@
     setValue('ticket-open-address', buildAddress(row), true);
     setHiddenValue('ticket-open-client-code-hidden', row.codigo || code);
     setHiddenValue('ticket-open-client-seller-imported', getImportedSellerName(row));
+    setHiddenValue('ticket-open-client-group-imported', row.grupo || '');
     setHint(input, 'ticket-open-client-code-hint', 'found', 'Cliente localizado na base importada. Os dados automáticos ficaram bloqueados.');
   }
 
@@ -8670,7 +8716,9 @@
         var body = document.getElementById('modal-ticket-details-mobile-content');
         if (!t || !body || body.querySelector('[data-client-code-row]')) return;
         var code = t.clientCode || t.cliente_codigo || '-';
-        var html = '<div data-client-code-row style="margin:8px 0;padding:8px;border:1px solid var(--border-color);border-radius:6px;"><span style="display:block;color:var(--text-muted);font-size:.7rem;font-weight:700;text-transform:uppercase;">CÃ³digo do Cliente</span><strong>'+esc(code)+'</strong></div>';
+        var grupo = t.clientGroup || t.cliente_grupo || '-';
+        var html = '<div data-client-code-row style="margin:8px 0;padding:8px;border:1px solid var(--border-color);border-radius:6px;"><span style="display:block;color:var(--text-muted);font-size:.7rem;font-weight:700;text-transform:uppercase;">Código do Cliente</span><strong>'+esc(code)+'</strong></div>' +
+                   '<div data-client-group-row style="margin:8px 0;padding:8px;border:1px solid var(--border-color);border-radius:6px;"><span style="display:block;color:var(--text-muted);font-size:.7rem;font-weight:700;text-transform:uppercase;">Grupo de Cliente</span><strong>'+esc(grupo)+'</strong></div>';
         body.insertAdjacentHTML('afterbegin', html);
       }, 80);
     };
@@ -8699,6 +8747,8 @@
             equipmentType: document.getElementById('ticket-open-eq-type')?.value || '',
             equipmentSerial: document.getElementById('ticket-open-serial')?.value.trim() || '',
             clientCode: document.getElementById('ticket-open-client-code')?.value.trim() || '',
+            clientSeller: document.getElementById('ticket-open-client-seller-imported')?.value.trim() || '',
+            clientGroup: document.getElementById('ticket-open-client-group-imported')?.value.trim() || '',
             client: document.getElementById('ticket-open-client')?.value.trim() || '',
             fantasyName: document.getElementById('ticket-open-fantasy')?.value.trim() || '',
             city: document.getElementById('ticket-open-city')?.value.trim() || '',
