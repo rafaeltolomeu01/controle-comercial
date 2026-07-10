@@ -1951,6 +1951,18 @@ app.delete('/api/equipamentos-importados/:id', async (req, res) => {
   }
 });
 
+app.post('/api/equipamentos-importados/delete-all', async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode excluir todos.' });
+    const empresaId = req.user.empresa_id || '001';
+    const count = await db('equipamentos_importados').where({ empresa_id: empresaId }).delete();
+    res.json({ success: true, count });
+  } catch (err) {
+    console.error('Erro ao excluir todos os equipamentos importados:', err);
+    res.status(500).json({ error: 'Erro ao excluir todos os equipamentos.' });
+  }
+});
+
 // Persistência geral de listas/configurações do frontend no PostgreSQL.
 // O aplicativo mostra primeiro o cache local para não sumir nada no celular e sincroniza aqui em segundo plano.
 const ALLOWED_STORE_KEYS = new Set([
