@@ -427,13 +427,33 @@
   const oldSaveUnits = Store.saveUnits?.bind(Store);
   if (oldSaveUnits) Store.saveUnits = function(units){ return oldSaveUnits((units || []).map(normalizeUnit)); };
 
-  const oldEditUnit = App.editUnit?.bind(App);
   App.editUnit = function(unitId){
-    if (oldEditUnit) oldEditUnit(unitId);
-    const unit = (Store.getUnits() || []).find(u => String(u.id) === String(unitId));
+    const units = Store.getUnits ? Store.getUnits() : [];
+    const unit = units.find(u => String(u.id) === String(unitId));
+    if (!unit) {
+      console.error('Unidade não encontrada:', unitId);
+      return;
+    }
+
+    const formContainer = document.getElementById('unit-form-container');
+    if (formContainer) {
+      formContainer.classList.remove('hidden');
+      formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const formEl = document.getElementById('unit-form');
+    if (formEl) formEl.dataset.editingId = unit.id;
+
+    const nameInput = document.getElementById('unit-name');
+    if (nameInput) {
+      nameInput.value = unit.name || '';
+      nameInput.focus();
+    }
+
+    const submitBtn = formEl ? formEl.querySelector('button[type="submit"]') : null;
+    if (submitBtn) submitBtn.textContent = 'Atualizar Unidade';
+
     fillUnitFinanceFields(unit);
-    const form = document.getElementById('unit-form');
-    if (form) form.dataset.editingId = unitId;
   };
 
   function bindUnitFormPatch(){
