@@ -1541,6 +1541,27 @@ const App = {
           formContainer.classList.remove('hidden');
           formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+
+        // Auto-preenchimento da última placa lançada pelo usuário para abastecimento
+        try {
+          const all = (window.AppExpensesCache || (window.Store && typeof Store.getExpenses === 'function' ? Store.getExpenses() : [])) || [];
+          const logged = window.Store && typeof Store.getLoggedUser === 'function' ? Store.getLoggedUser() : null;
+          const userId = logged ? logged.id : null;
+          const myExpenses = all.filter(e => {
+            const matchesUser = userId ? (String(e.usuario_id || e.usuarioId) === String(userId)) : true;
+            return matchesUser && (String(e.finalidade || '').toLowerCase() === 'abastecimento') && e.veiculo;
+          });
+          if (myExpenses.length) {
+            const sorted = [...myExpenses].sort((a, b) => (b.id || 0) - (a.id || 0));
+            const plate = sorted[0].veiculo;
+            const veiculoInput = document.getElementById('exp-veiculo');
+            if (veiculoInput && !veiculoInput.value) {
+              veiculoInput.value = plate;
+            }
+          }
+        } catch (err) {
+          console.warn('Erro ao preencher última placa de veículo:', err);
+        }
       });
     }
     const btnCancelExpenseForm = document.getElementById('btn-cancel-expense-form');
