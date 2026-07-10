@@ -851,7 +851,18 @@
     return r;
   };
   const oldRoute = App.onRouteChanged?.bind(App);
-  App.onRouteChanged = function(hash){ if (hash !== '#despesas') sessionStorage.removeItem('cc_expense_approval_mode'); const r = oldRoute(hash); setTimeout(()=>{ ensureTabs(); UI.updateBalanceCards?.(); },120); return r; };
+  App.onRouteChanged = function(hash){
+    if (hash !== '#despesas') sessionStorage.removeItem('cc_expense_approval_mode');
+    const r = oldRoute(hash);
+    setTimeout(()=>{
+      ensureTabs();
+      UI.updateBalanceCards?.();
+      if (hash === '#unidades') {
+        UI.renderUnits();
+      }
+    },120);
+    return r;
+  };
 
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ensureTabs(); UI.updateBalanceCards?.();},800));
   // MutationObserver de abas desativado para evitar pisca-pisca/duplicidade.
