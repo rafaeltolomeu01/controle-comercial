@@ -250,10 +250,10 @@
     if (!window.UI || UI.__ccSmartNames) return;
     UI.__ccSmartNames = true;
     var oldUser = UI.getUserName ? UI.getUserName.bind(UI) : null;
-    UI.getUserName = function(id){
+    UI.getUserName = function(id, record){
       var name = oldUser ? oldUser(id) : '';
       if (name && norm(name) !== 'usuario nao localizado') return fixText(name);
-      return getUserNameSmart(id, null);
+      return getUserNameSmart(id, record);
     };
     var oldUnit = UI.getUnitName ? UI.getUnitName.bind(UI) : null;
     UI.getUnitName = function(id){

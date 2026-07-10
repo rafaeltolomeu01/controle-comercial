@@ -603,7 +603,7 @@ const UI = {
           <td data-label="Telefone">${client.phone}</td>
           <td data-label="E-mail">${client.email}</td>
           <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:0.7rem; font-weight:500;">${UI.getUnitName(client.unitId)}</span></td>
-          <td data-label="Vendedor"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId)}</span></td>
+          <td data-label="Vendedor"><span style="font-size:0.75rem; color:var(--text-muted);">${UI.getUserName(client.userId, client)}</span></td>
           <td data-label="Score">${UI.formatClientScore(client)}</td>
           <td data-label="Status">${statusBadge}</td>
           <td data-label="Ações">${actionsHTML}</td>
@@ -1300,19 +1300,23 @@ const UI = {
   },
 
   async renderUsers(usersData, bypassRender) {
+    let users = usersData;
+    if (!users) {
+      try {
+        users = await App.fetchFromApi('/api/usuarios');
+        Store.saveUsers(users);
+      } catch (e) {
+        console.error('Erro ao sincronizar cache de usuários:', e);
+      }
+    }
+
     const listBody = document.getElementById('users-table-body');
-    if (!listBody) return;
+    if (!listBody) return users;
 
     try {
       const loggedUser = Store.getLoggedUser() || {};
       const loggedPerms = loggedUser.permissions || [];
       const canManageUsers = loggedUser.profile === 'Administrador' || loggedPerms.includes('Administrador') || loggedPerms.includes('Usuários');
-      const users = usersData || await App.fetchFromApi('/api/usuarios');
-      try {
-        Store.saveUsers(users);
-      } catch (e) {
-        console.error('Erro ao sincronizar cache de usuários:', e);
-      }
 
       if (bypassRender && !usersData) {
         return users;
