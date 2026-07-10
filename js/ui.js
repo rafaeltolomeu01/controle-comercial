@@ -1625,6 +1625,20 @@ const UI = {
       ? client.products.map(p => `<span class="badge-status badge-primary" style="margin-right: 4px; display: inline-block; font-size: 0.65rem;">${p}</span>`).join('')
       : '<span class="badge-status badge-secondary" style="font-size: 0.65rem;">Nenhum selecionado</span>';
 
+    let rejectionCard = '';
+    if ((client.status === 'Reprovado' || client.status === 'Aguardando Ajuste') && client.rejectionReason) {
+      rejectionCard = `
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1.5px solid #ef4444; border-radius: 8px; padding: 14px 16px; margin-top: -10px; margin-bottom: 20px; color: #fca5a5; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.08);">
+          <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #ef4444; font-weight: 800; display: block; margin-bottom: 6px;">
+            ⚠️ MOTIVO DA REPROVAÇÃO / AJUSTE
+          </span>
+          <p style="margin: 0; font-size: 0.88rem; font-weight: 600; line-height: 1.4; color: #ffffff;">
+            ${client.rejectionReason}
+          </p>
+        </div>
+      `;
+    }
+
     content.innerHTML = `
       <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); gap: 10px;">
         <div>
@@ -1633,9 +1647,11 @@ const UI = {
         </div>
         <div style="text-align: right;">
           <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: bold; display: block; margin-bottom: 4px;">Status de Aprovação</span>
-          <span class="badge-status ${statusBadgeClass}" style="font-size: 0.8rem; padding: 4px 10px;">${client.status}${client.rejectionReason ? ` - Motivo: ${client.rejectionReason}` : ''}</span>
+          <span class="badge-status ${statusBadgeClass}" style="font-size: 0.8rem; padding: 4px 10px;">${client.status}</span>
         </div>
       </div>
+
+      ${rejectionCard}
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; margin-bottom: 16px;">
         <!-- Column 1: Identification -->
