@@ -7122,6 +7122,14 @@
     if (btn && btn.dataset.normalText) btn.textContent = btn.dataset.normalText;
     const msg = document.getElementById('client-correction-alert');
     if (msg) msg.remove();
+    
+    // Seleciona automaticamente o vendedor logado e bloqueia a seleção ao cadastrar novo
+    const loggedUser = window.Store ? Store.getLoggedUser() : null;
+    const clientSeller = document.getElementById('client-seller');
+    if (clientSeller && loggedUser) {
+      clientSeller.value = loggedUser.id;
+      clientSeller.disabled = true;
+    }
   }
 
   async function submitCorrection(e){
@@ -8750,6 +8758,8 @@
       setValue('client-email', c.email);
       setValue('client-unit', c.unitId);
       setValue('client-seller', c.userId);
+      const clientSeller = document.getElementById('client-seller');
+      if (clientSeller) clientSeller.disabled = false; // Permite Admin editar o proprietário
       setValue('client-category', c.category);
       setValue('client-company-name', c.companyName);
       setValue('client-ie', c.ie);

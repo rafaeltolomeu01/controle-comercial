@@ -1433,6 +1433,14 @@ const App = {
         if (formContainer) {
           formContainer.classList.remove('hidden');
           formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          
+          // Seleciona automaticamente o vendedor logado e bloqueia a seleção
+          const loggedUser = Store.getLoggedUser();
+          const clientSeller = document.getElementById('client-seller');
+          if (clientSeller && loggedUser) {
+            clientSeller.value = loggedUser.id;
+            clientSeller.disabled = true;
+          }
         }
       });
     }
@@ -2791,18 +2799,58 @@ const App = {
     bindPatrimonioBlur('mov-patrimonio-adesivar', 'mov-modelo-adesivar', 'mov-voltagem-adesivar', 'hist-patrimonio-adesivar-link');
 
     // 11. Listeners para uploads de foto para preview
-    const setupPhotoPreviewListener = (inputId, previewImgId, containerId) => {
+    const setupPhotoPreviewListener = (inputId, previewImgId = null, containerId = null) => {
       const input = document.getElementById(inputId);
-      const img = document.getElementById(previewImgId);
-      const container = document.getElementById(containerId);
-      if (input && img && container) {
+      const img = previewImgId ? document.getElementById(previewImgId) : null;
+      const container = containerId ? document.getElementById(containerId) : null;
+      if (input) {
         input.addEventListener('change', (e) => {
           const file = e.target.files[0];
+          
+          let statusEl = document.getElementById(`upload-status-${inputId}`);
+          if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.id = `upload-status-${inputId}`;
+            statusEl.style.cssText = 'margin-top: 6px; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; gap: 4px;';
+            input.parentNode.appendChild(statusEl);
+          }
+
           if (file) {
-            img.src = URL.createObjectURL(file);
-            container.style.display = 'block';
+            if (img) img.src = URL.createObjectURL(file);
+            if (container) container.style.display = 'block';
+            
+            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Compactando arquivo...</span>';
+            (async () => {
+              try {
+                let base64;
+                if (file.type.startsWith('image/')) {
+                  base64 = await App.compressImageAndGetBase64(file);
+                } else {
+                  base64 = await Store.fileToBase64(file);
+                }
+                
+                statusEl.innerHTML = '<span style="color:#3b82f6;">🚀 Enviando arquivo...</span>';
+                const clientNameInput = document.getElementById('mov-client-name');
+                const clientPrefix = (clientNameInput?.value || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 15) || 'mov';
+                
+                const savedUrl = await App.uploadBase64ToDatabase(base64, `mov-${clientPrefix}-${inputId}-${file.name || 'arquivo'}`, 'geral');
+                if (savedUrl) {
+                  input.dataset.uploadedUrl = savedUrl;
+                  statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo enviado e validado!</span>';
+                } else {
+                  throw new Error('Servidor retornou link vazio.');
+                }
+              } catch (err) {
+                console.error(`Erro no upload instantâneo (${inputId}):`, err);
+                statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
+                input.removeAttribute('data-uploaded-url');
+                input.value = '';
+              }
+            })();
           } else {
-            container.style.display = 'none';
+            if (container) container.style.display = 'none';
+            input.removeAttribute('data-uploaded-url');
+            statusEl.innerHTML = '';
           }
         });
       }
@@ -2813,6 +2861,7 @@ const App = {
     setupPhotoPreviewListener('mov-foto-recolhido', 'preview-img-mov-foto-recolhido', 'preview-container-mov-foto-recolhido');
     setupPhotoPreviewListener('mov-foto-antes', 'preview-img-mov-foto-antes', 'preview-container-mov-foto-antes');
     setupPhotoPreviewListener('mov-foto-depois', 'preview-img-mov-foto-depois', 'preview-container-mov-foto-depois');
+    setupPhotoPreviewListener('mov-video-troca');
 
     // 12. Submit do formulário de movimentação
     const movementForm = document.getElementById('movement-form');
@@ -3480,8 +3529,14 @@ const App = {
     });
   },
 
-  async uploadFile(file) {
+  async uploadFile(file, inputIdOrElement = null) {
     if (!file) return '';
+    if (inputIdOrElement) {
+      const el = typeof inputIdOrElement === 'string' ? document.getElementById(inputIdOrElement) : inputIdOrElement;
+      if (el && el.dataset.uploadedUrl) {
+        return el.dataset.uploadedUrl;
+      }
+    }
     // Em Render Free o disco pode reiniciar e sumir arquivos. Por isso o padrão
     // agora é salvar o arquivo no PostgreSQL e devolver uma URL /api/uploads/:id.
     try {
@@ -5699,13 +5754,13 @@ const App = {
       const vTroca = document.getElementById('mov-video-troca').files[0];
 
       if (fAntigo) {
-        foto_equipamento_url = await this.uploadFile(fAntigo);
+        foto_equipamento_url = await this.uploadFile(fAntigo, 'mov-foto-antigo');
       }
       if (fTroca) {
-        foto_antes_url = await this.uploadFile(fTroca);
+        foto_antes_url = await this.uploadFile(fTroca, 'mov-foto-troca');
       }
       if (vTroca) {
-        video_url = await this.uploadFile(vTroca);
+        video_url = await this.uploadFile(vTroca, 'mov-video-troca');
       }
     } else if (tipo_solicitacao === 'Adição') {
       patrimonio = (document.getElementById('mov-patrimonio-adicao')?.value || '').trim().toUpperCase();
@@ -5721,7 +5776,7 @@ const App = {
 
       const fRecolhido = document.getElementById('mov-foto-recolhido').files[0];
       if (fRecolhido) {
-        foto_equipamento_url = await this.uploadFile(fRecolhido);
+        foto_equipamento_url = await this.uploadFile(fRecolhido, 'mov-foto-recolhido');
       }
     } else if (tipo_solicitacao === 'Adesivar') {
       patrimonio = document.getElementById('mov-patrimonio-adesivar').value.trim().toUpperCase();
@@ -5732,10 +5787,10 @@ const App = {
       const fAntes = document.getElementById('mov-foto-antes').files[0];
       const fDepois = document.getElementById('mov-foto-depois').files[0];
       if (fAntes) {
-        foto_antes_url = await this.uploadFile(fAntes);
+        foto_antes_url = await this.uploadFile(fAntes, 'mov-foto-antes');
       }
       if (fDepois) {
-        foto_depois_url = await this.uploadFile(fDepois);
+        foto_depois_url = await this.uploadFile(fDepois, 'mov-foto-depois');
       }
     }
 
@@ -5776,6 +5831,13 @@ const App = {
         this.showToast('Solicitação de movimentação registrada com sucesso!');
         
         document.getElementById('movement-form').reset();
+        
+        // Limpa URLs cacheadas dos inputs de arquivo de movimentação e os status visuais
+        document.querySelectorAll('#movement-form input[type="file"]').forEach(el => {
+          el.removeAttribute('data-uploaded-url');
+          el.value = '';
+        });
+        document.querySelectorAll("[id^='upload-status-mov-']").forEach(el => el.innerHTML = '');
         
         ['mov-client-name','mov-client-city','mov-client-address','mov-client-seller'].forEach(id => {
           const el = document.getElementById(id);
