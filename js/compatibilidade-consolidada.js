@@ -379,27 +379,10 @@
   const getUnitConfigDefaults = () => ({ diaria_vendedor:120, diaria_supervisor:150, diaria_gerente:180, maximo_diarias:4, permitir_sem_hospedagem:true });
   const normalizeUnit = (u, idx=0) => ({ ...getUnitConfigDefaults(), ...u, id: String(u.id ?? (idx+1)) });
 
+  // ensureUnitFinanceFields: campos agora fixos no HTML do template (pages/unidades.html)
+  // Função mantida apenas para compatibilidade com chamadas legadas.
   function ensureUnitFinanceFields(){
-    const form = document.getElementById('unit-form');
-    if (!form) return;
-    let block = form.querySelector('#unit-finance-config-block');
-    if (!block) {
-      block = document.createElement('div');
-      block.id = 'unit-finance-config-block';
-      block.style.cssText = 'margin-top:18px; padding:18px; border:1px solid var(--border-color); border-radius:12px; width:100%;';
-      block.innerHTML = `
-        <h3 style="color:var(--primary-color); font-size:1rem; margin-bottom:14px;">Configurações Financeiras - Hospedagem</h3>
-        <div class="form-row">
-          <div class="form-group"><label for="unit-diaria-vendedor">Diária Vendedor (R$)</label><input type="number" id="unit-diaria-vendedor" min="0" step="0.01" value="120"></div>
-          <div class="form-group"><label for="unit-diaria-supervisor">Diária Supervisor (R$)</label><input type="number" id="unit-diaria-supervisor" min="0" step="0.01" value="150"></div>
-          <div class="form-group"><label for="unit-diaria-gerente">Diária Gerente (R$)</label><input type="number" id="unit-diaria-gerente" min="0" step="0.01" value="180"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label for="unit-maximo-diarias">Máximo de Diárias</label><input type="number" id="unit-maximo-diarias" min="0" step="1" value="4"></div>
-          <div class="form-group"><label for="unit-permitir-sem-hospedagem">Permitir Sem Hospedagem</label><select id="unit-permitir-sem-hospedagem"><option value="true">Sim</option><option value="false">Não</option></select></div>
-        </div>`;
-      form.appendChild(block);
-    }
+    // Os campos de hospedagem já estão no HTML — nada a criar.
   }
   function readUnitFinanceFields(){
     return {
@@ -430,30 +413,43 @@
   App.editUnit = function(unitId){
     const units = Store.getUnits ? Store.getUnits() : [];
     const unit = units.find(u => String(u.id) === String(unitId));
-    if (!unit) {
-      console.error('Unidade não encontrada:', unitId);
-      return;
+    if (!unit) { console.error('Unidade não encontrada:', unitId); return; }
+
+    // Função interna que preenche o formulário quando ele estiver disponível
+    function _doFill() {
+      const formContainer = document.getElementById('unit-form-container');
+      if (formContainer) {
+        formContainer.classList.remove('hidden');
+        setTimeout(() => formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      }
+      const formEl = document.getElementById('unit-form');
+      if (formEl) formEl.dataset.editingId = unit.id;
+
+      const nameInput = document.getElementById('unit-name');
+      if (nameInput) { nameInput.value = unit.name || ''; nameInput.focus(); }
+
+      const submitBtn = formEl ? formEl.querySelector('button[type="submit"]') : null;
+      if (submitBtn) submitBtn.textContent = 'Atualizar Unidade';
+
+      fillUnitFinanceFields(unit);
     }
 
-    const formContainer = document.getElementById('unit-form-container');
-    if (formContainer) {
-      formContainer.classList.remove('hidden');
-      formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Tenta preencher imediatamente; se os campos não existirem ainda (template async), aguarda
+    if (document.getElementById('unit-name')) {
+      _doFill();
+    } else {
+      // Aguarda o template carregar (loadPageContent é assíncrono)
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (document.getElementById('unit-name')) {
+          clearInterval(interval);
+          _doFill();
+        } else if (attempts > 30) {
+          clearInterval(interval);
+        }
+      }, 100);
     }
-
-    const formEl = document.getElementById('unit-form');
-    if (formEl) formEl.dataset.editingId = unit.id;
-
-    const nameInput = document.getElementById('unit-name');
-    if (nameInput) {
-      nameInput.value = unit.name || '';
-      nameInput.focus();
-    }
-
-    const submitBtn = formEl ? formEl.querySelector('button[type="submit"]') : null;
-    if (submitBtn) submitBtn.textContent = 'Atualizar Unidade';
-
-    fillUnitFinanceFields(unit);
   };
 
   function bindUnitFormPatch(){
