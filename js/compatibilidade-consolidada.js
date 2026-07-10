@@ -8933,7 +8933,7 @@
       var id = esc(c.id || '');
       var adminBtns = isAdmin() ? '<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.editClientAdmin(\''+id+'\')">Editar</button><button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.deleteClient && App.deleteClient(\''+id+'\', event)">Apagar</button>' : '';
       return '<tr class="mobile-summary-row" onclick="App.showClientDetails(\''+id+'\')">'
-        + '<td data-label="Nome Cliente"><strong>'+esc(c.name || c.nomeFantasia || c.companyName || '-')+'</strong><br><small style="color:var(--text-muted);">'+esc(clientDate(c))+'</small></td>'
+        + '<td data-label="Cliente"><strong>'+esc(c.name || c.nomeFantasia || c.companyName || '-')+'</strong><br><small style="color:var(--text-muted);">'+esc(clientDate(c))+'</small></td>'
         + '<td data-label="CNPJ">'+esc(c.cnpj || '-')+'</td>'
         + '<td data-label="Categoria">'+esc(c.category || '-')+'</td>'
         + '<td data-label="Telefone">'+esc(c.phone || '-')+'</td>'
