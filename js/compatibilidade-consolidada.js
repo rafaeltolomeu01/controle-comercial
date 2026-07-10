@@ -193,11 +193,12 @@
     App.buildHotelOptions = function(){
       const unit = getSelectedSolicitacaoUnit();
       const user = Store.getLoggedUser ? Store.getLoggedUser() : {};
+      const profile = (user.profile || '').toLowerCase();
       const rate = getDailyRate(unit, user.profile);
       const max = maxNights(unit);
       const container = document.querySelector('input[name="sol-noites"]')?.closest('div[style*="grid-template-columns"]');
       if (!container) return;
-      const allowNo = ((unit.travelConfig||{}).allowNoHotel ?? true) !== false;
+      const allowNo = (unit.permitir_sem_hospedagem !== false && (unit.travelConfig||{}).allowNoHotel !== false);
       let html = '';
       if (allowNo) html += `<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;border:1px solid var(--border-color);border-radius:6px;cursor:pointer;background:var(--bg-input);"><input type="radio" name="sol-noites" value="0" checked style="margin-bottom:6px;"><span style="font-size:.8rem;font-weight:600;">Sem Hospedagem</span><span style="font-size:.7rem;color:var(--text-muted);">${money(0)}</span></label>`;
       for(let i=1;i<=max;i++) html += `<label style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;border:1px solid var(--border-color);border-radius:6px;cursor:pointer;background:var(--bg-input);"><input type="radio" name="sol-noites" value="${i}" ${!allowNo&&i===1?'checked':''} style="margin-bottom:6px;"><span style="font-size:.8rem;font-weight:600;">${i} Noite${i>1?'s':''}</span><span style="font-size:.7rem;color:var(--text-muted);">${money(rate*i)}</span></label>`;
@@ -209,17 +210,51 @@
       oldInitSol();
       UI.populateUnitDropdowns();
 
+      const user = Store.getLoggedUser() || {};
       const solEmpresa = document.getElementById('sol-empresa');
-      if (solEmpresa && !solEmpresa.dataset.ccBound) {
-        solEmpresa.dataset.ccBound = '1';
-        solEmpresa.addEventListener('change', () => {
-          App.buildHotelOptions();
-          App.updateSolicitacaoTotal();
-        });
+
+      // Admin pode escolher empresa; outros usuários veem apenas a própria empresa
+      if (solEmpresa) {
+        if (isAdmin(user)) {
+          // Admin: mostrar seletor, preencher com todas as unidades
+          solEmpresa.style.display = '';
+          const labelEmpresa = document.querySelector('label[for="sol-empresa"]');
+          if (labelEmpresa) labelEmpresa.style.display = '';
+        } else {
+          // Não-admin: esconder seletor e fixar na unidade do usuário
+          const userUnit = (Store.getUnits() || []).find(u => String(u.id) === String(user.unitId));
+          if (userUnit) {
+            // Selecionar automaticamente a unidade do usuário
+            for (let i = 0; i < solEmpresa.options.length; i++) {
+              if (solEmpresa.options[i].getAttribute('data-unit-id') === String(userUnit.id) ||
+                  solEmpresa.options[i].value === userUnit.name) {
+                solEmpresa.selectedIndex = i;
+                break;
+              }
+            }
+          }
+          // Esconder o select e mostrar o nome da empresa como texto
+          const wrapId = 'sol-empresa-nao-admin-wrap';
+          if (!document.getElementById(wrapId)) {
+            const wrap = document.createElement('div');
+            wrap.id = wrapId;
+            wrap.style.cssText = 'padding:8px 12px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-input); color:var(--text-color); font-size:.9rem;';
+            wrap.textContent = userUnit ? userUnit.name : (user.unit || '—');
+            solEmpresa.parentNode.insertBefore(wrap, solEmpresa);
+          }
+          solEmpresa.style.display = 'none';
+        }
+
+        if (!solEmpresa.dataset.ccBound) {
+          solEmpresa.dataset.ccBound = '1';
+          solEmpresa.addEventListener('change', () => {
+            App.buildHotelOptions();
+            App.updateSolicitacaoTotal();
+          });
+        }
       }
 
       App.buildHotelOptions();
-      const user = Store.getLoggedUser() || {};
       const sol = document.getElementById('sol-solicitante'); if (sol) sol.value = user.name || '';
       App.updateSolicitacaoTotal();
     };
@@ -452,40 +487,62 @@
     }
   };
 
+  // bindUnitFormPatch: usa event delegation no document para evitar listeners duplicados
+  let _unitFormDelegated = false;
   function bindUnitFormPatch(){
-    ensureUnitFinanceFields();
+    // Ligar o botao "Cadastrar Nova" para resetar valores ao abrir
     const openBtn = document.getElementById('btn-open-unit-form');
     if (openBtn && !openBtn.dataset.financePatch) {
       openBtn.dataset.financePatch = '1';
       openBtn.addEventListener('click', () => setTimeout(()=>fillUnitFinanceFields(getUnitConfigDefaults()), 50));
     }
-    const form = document.getElementById('unit-form');
-    if (!form || form.dataset.rodada1419Bound) return;
-    form.dataset.rodada1419Bound = '1';
-    form.addEventListener('submit', (e)=>{
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const name = document.getElementById('unit-name')?.value?.trim();
-      if (!name) return alert('Informe o nome da unidade.');
-      const units = Store.getUnits() || [];
-      const editingId = form.dataset.editingId || '';
-      const finance = readUnitFinanceFields();
-      if (editingId) {
-        const unit = units.find(u => String(u.id) === String(editingId));
-        if (unit) Object.assign(unit, finance, { name });
-        delete form.dataset.editingId;
-      } else {
-        units.push({ id: nextUnitId(units), name, ...finance });
-      }
-      Store.saveUnits(units);
-      UI.populateUnitDropdowns?.();
-      UI.populateMovementCompanyDropdown?.();
-      UI.renderUnits?.();
-      form.reset(); fillUnitFinanceFields(getUnitConfigDefaults());
-      const btn = form.querySelector('button[type="submit"]'); if (btn) btn.textContent = 'Cadastrar Unidade';
-      document.getElementById('unit-form-container')?.classList.add('hidden');
-      App.showToast?.(editingId ? 'Configurações da unidade atualizadas com sucesso.' : 'Unidade cadastrada com sucesso.');
-    }, true);
+
+    // Event delegation: registra apenas uma vez no document para pegar qualquer #unit-form
+    if (!_unitFormDelegated) {
+      _unitFormDelegated = true;
+      document.addEventListener('submit', function(e) {
+        const form = e.target;
+        if (!form || form.id !== 'unit-form') return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const name = document.getElementById('unit-name')?.value?.trim();
+        if (!name) return alert('Informe o nome da unidade.');
+
+        const editingId = form.dataset.editingId || '';
+        const finance = readUnitFinanceFields();
+
+        // Busca unidades sempre frescas
+        const rawGet = Store._getListRaw ? Store._getListRaw('units') : null;
+        let units = Store.getUnits ? Store.getUnits() : [];
+
+        if (editingId) {
+          const unit = units.find(u => String(u.id) === String(editingId));
+          if (unit) {
+            Object.assign(unit, finance, { name });
+          } else {
+            console.warn('Unidade nao encontrada para edicao:', editingId);
+          }
+          delete form.dataset.editingId;
+        } else {
+          units.push({ id: nextUnitId(units), name, ...finance });
+        }
+
+        const saved = Store.saveUnits(units);
+        console.log('[UnitForm] saveUnits result:', saved, 'units:', units);
+
+        UI.populateUnitDropdowns?.();
+        UI.populateMovementCompanyDropdown?.();
+        UI.renderUnits?.();
+
+        form.reset();
+        fillUnitFinanceFields(getUnitConfigDefaults());
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.textContent = 'Cadastrar Unidade';
+        document.getElementById('unit-form-container')?.classList.add('hidden');
+        App.showToast?.(editingId ? 'Configuracoes da unidade atualizadas com sucesso.' : 'Unidade cadastrada com sucesso.');
+      }, true);
+    }
   }
 
   const oldRenderUnits = UI.renderUnits?.bind(UI);
@@ -500,16 +557,29 @@
     body.innerHTML = units.map((unit, idx) => {
       const parsedId = parseInt(unit.id,10);
       const idVisual = (Number.isFinite(parsedId) && parsedId < 1000000) ? String(parsedId) : String(idx + 1);
-      const hasLinks = prospects.some(x=>String(x.unitId)===String(unit.id)) || clients.some(x=>String(x.unitId)===String(unit.id)) || tickets.some(x=>String(x.unitId)===String(unit.id)) || movements.some(x=>String(x.unitId||x.unit_id)===String(unit.id));
       const unitProspects = prospects.filter(p=>String(p.unitId)===String(unit.id)).length;
       const unitClients = clients.filter(c=>String(c.unitId)===String(unit.id) && c.status === 'Aprovado').length;
       const unitTickets = tickets.filter(t=>String(t.unitId)===String(unit.id) && ['Aberto','Em Atendimento'].includes(t.status)).length;
       const unitMovements = movements.filter(m=>String(m.unitId||m.unit_id||'')===String(unit.id)).length;
       const del = isAdmin() ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.deleteUnit('${unit.id}')">Excluir</button>` : '';
-      return `<tr><td style="font-family:monospace;">${idVisual}</td><td style="font-weight:600;">${unit.name}</td><td style="text-align:center;">${unitProspects}</td><td style="text-align:center;">${unitClients}</td><td style="text-align:center;"><span class="badge-status ${unitTickets>0?'badge-danger':'badge-success'}">${unitTickets} ativos</span></td><td style="text-align:center;">${unitMovements}</td><td style="text-align:center; display:flex; gap:6px; justify-content:center;"><button class="btn btn-secondary btn-sm" onclick="App.editUnit('${unit.id}')">Editar</button>${del}</td></tr>`;
+      // Mostrar valores de diaria cadastrados
+      const dv = unit.diaria_vendedor ?? unit.daily_vendedor ?? 120;
+      const ds = unit.diaria_supervisor ?? unit.daily_supervisor ?? 150;
+      return `<tr>
+        <td style="font-family:monospace;">${idVisual}</td>
+        <td style="font-weight:600;">${unit.name}</td>
+        <td style="text-align:center;">${unitProspects}</td>
+        <td style="text-align:center;">${unitClients}</td>
+        <td style="text-align:center;"><span class="badge-status ${unitTickets>0?'badge-danger':'badge-success'}">${unitTickets} ativos</span></td>
+        <td style="text-align:center;">${unitMovements}</td>
+        <td style="text-align:center; display:flex; gap:6px; justify-content:center;">
+          <button class="btn btn-secondary btn-sm" onclick="App.editUnit('${unit.id}')">Editar</button>${del}
+        </td>
+      </tr>`;
     }).join('');
     bindUnitFormPatch();
   };
+
   App.deleteUnit = function(unitId){
     if (!isAdmin()) return alert('Somente administrador pode excluir empresa.');
     const units = Store.getUnits() || [];
@@ -518,10 +588,10 @@
     const tickets = Store.getTickets?.() || [];
     const movements = Store.getMovements?.() || [];
     const hasLinks = prospects.some(x=>String(x.unitId)===String(unitId)) || clients.some(x=>String(x.unitId)===String(unitId)) || tickets.some(x=>String(x.unitId)===String(unitId)) || movements.some(x=>String(x.unitId||x.unit_id)===String(unitId));
-    if (hasLinks) return alert('Não é possível excluir esta empresa porque existem registros vinculados a ela.');
-    if (!confirm('Tem certeza que deseja excluir esta empresa? Essa ação não poderá ser desfeita.')) return;
+    if (hasLinks) return alert('Nao e possivel excluir esta empresa porque existem registros vinculados a ela.');
+    if (!confirm('Tem certeza que deseja excluir esta empresa? Essa acao nao podera ser desfeita.')) return;
     Store.saveUnits(units.filter(u=>String(u.id)!==String(unitId)));
-    UI.populateUnitDropdowns?.(); UI.renderUnits?.(); App.showToast?.('Empresa excluída com sucesso.');
+    UI.populateUnitDropdowns?.(); UI.renderUnits?.(); App.showToast?.('Empresa excluida com sucesso.');
   };
 
   // 14/15 - Aprovação de Despesas de Campo + imagens no PDF.
