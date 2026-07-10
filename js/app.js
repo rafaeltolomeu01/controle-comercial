@@ -1890,8 +1890,10 @@ const App = {
               if (sellerInput && clientObj.userId) sellerInput.value = clientObj.userId;
             }
 
-            // Injeta o tipo exato do equipamento (da base de movimentacoes)
+            // Injeta o tipo exato do equipamento (da base de movimentações) — robusto
             if (typeInput && eqModel) {
+              // Salva o modelo no dataset para fallback no submit
+              ticketOpenSerial.dataset.foundModel = eqModel;
               // Remove opcoes injetadas anteriores
               Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
               let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
@@ -1900,7 +1902,19 @@ const App = {
                 opt.dataset.injected = '1';
                 typeInput.appendChild(opt);
               }
+              // Desativa required e force-seleciona o valor
+              typeInput.removeAttribute('required');
               typeInput.value = eqModel;
+              typeInput.dispatchEvent(new Event('change', { bubbles: true }));
+              // Mostra badge de confirmacao
+              let modelBadge = document.getElementById('ticket-eq-model-badge');
+              if (!modelBadge) {
+                modelBadge = document.createElement('div');
+                modelBadge.id = 'ticket-eq-model-badge';
+                modelBadge.style.cssText = 'font-size:0.7rem; margin-top:4px; color:var(--success-color,#10b981); font-weight:600;';
+                typeInput.parentNode.appendChild(modelBadge);
+              }
+              modelBadge.textContent = `✔ Tipo detectado: ${eqModel}`;
             }
 
             // Render history timeline
@@ -1955,8 +1969,11 @@ const App = {
             const imported = await this.fetchFromApi(`/api/equipamentos-importados/lookup/${serialVal}`).catch(() => null);
             if (imported && imported.found && imported.equipamento) {
               const eq = imported.equipamento;
-              const eqModel = eq.nome_equipamento || eq.patrimonio || '';
+              const eqModel = (eq.nome_equipamento || eq.patrimonio || '').trim();
+              const typeInput = document.getElementById('ticket-open-eq-type');
               if (typeInput && eqModel) {
+                // Salva modelo no dataset para fallback no submit
+                ticketOpenSerial.dataset.foundModel = eqModel;
                 // Remove opcoes injetadas anteriores
                 Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
                 let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
@@ -1965,14 +1982,31 @@ const App = {
                   opt.dataset.injected = '1';
                   typeInput.appendChild(opt);
                 }
+                // Desativa required e force-seleciona
+                typeInput.removeAttribute('required');
                 typeInput.value = eqModel;
+                typeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                // Badge de confirmacao
+                let modelBadge = document.getElementById('ticket-eq-model-badge');
+                if (!modelBadge) {
+                  modelBadge = document.createElement('div');
+                  modelBadge.id = 'ticket-eq-model-badge';
+                  modelBadge.style.cssText = 'font-size:0.7rem; margin-top:4px; color:var(--success-color,#10b981); font-weight:600;';
+                  typeInput.parentNode.appendChild(modelBadge);
+                }
+                modelBadge.textContent = `✔ Tipo da planilha: ${eqModel}`;
               }
             } else {
-              // Nao encontrado em nenhuma base — remove opcoes injetadas e deixa selecao livre
+              // Nao encontrado em nenhuma base — remove opcoes injetadas e libera selecao manual
+              ticketOpenSerial.dataset.foundModel = '';
+              const typeInput = document.getElementById('ticket-open-eq-type');
               if (typeInput) {
                 Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
                 typeInput.value = ''; // volta para "Selecione..."
+                typeInput.setAttribute('required', '');
               }
+              const modelBadge = document.getElementById('ticket-eq-model-badge');
+              if (modelBadge) modelBadge.textContent = '';
             }
             const historyContainer = document.getElementById('ticket-open-history-container');
             if (historyContainer) historyContainer.innerHTML = '';
@@ -2056,7 +2090,15 @@ const App = {
         e.preventDefault();
         const unitId = document.getElementById('ticket-open-unit').value;
         const userId = document.getElementById('ticket-open-seller').value;
-        const equipmentType = document.getElementById('ticket-open-eq-type').value;
+        // Usa foundModel (detectado via lookup) se o select estiver vazio
+        const serialElForType = document.getElementById('ticket-open-serial');
+        const typeSelectVal = (document.getElementById('ticket-open-eq-type') || {}).value || '';
+        const foundModel = (serialElForType ? serialElForType.dataset.foundModel : '') || '';
+        const equipmentType = typeSelectVal || foundModel;
+        if (!equipmentType) {
+          alert('Selecione ou aguarde a detecção do Tipo de Equipamento.');
+          return;
+        }
         const serial = document.getElementById('ticket-open-serial').value.trim();
         const client = document.getElementById('ticket-open-client').value.trim();
         const fantasyName = document.getElementById('ticket-open-fantasy').value.trim();
@@ -2121,12 +2163,16 @@ const App = {
           });
           // Reseta controle do patrimônio para permitir nova busca
           const serialEl = document.getElementById('ticket-open-serial');
-          if (serialEl) serialEl.dataset.lastLookupVal = '';
-          // Remove opções injetadas do dropdown de tipo de equipamento
+          if (serialEl) { serialEl.dataset.lastLookupVal = ''; serialEl.dataset.foundModel = ''; }
+          // Remove opções injetadas do dropdown de tipo de equipamento e restaura required
           const typeEl = document.getElementById('ticket-open-eq-type');
           if (typeEl) {
             Array.from(typeEl.options).forEach(opt => { if (opt.dataset.injected === '1') opt.remove(); });
+            typeEl.setAttribute('required', '');
           }
+          // Limpa badge de modelo detectado
+          const modelBadge = document.getElementById('ticket-eq-model-badge');
+          if (modelBadge) modelBadge.textContent = '';
           if (ticketOpenPhotoPreviewContainer) ticketOpenPhotoPreviewContainer.style.display = 'none';
           const historyContainer = document.getElementById('ticket-open-history-container');
           if (historyContainer) historyContainer.innerHTML = '';
