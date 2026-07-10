@@ -1848,10 +1848,14 @@ const App = {
               if (sellerInput && clientObj.userId) sellerInput.value = clientObj.userId;
             }
 
-            // Map model to eq type dropdown options
-            if (typeInput) {
-              const opt = Array.from(typeInput.options).find(o => o.value.toLowerCase().includes(eqModel.toLowerCase()) || eqModel.toLowerCase().includes(o.value.toLowerCase()));
-              if (opt) typeInput.value = opt.value;
+            // Map model to eq type dropdown options (inject exact model from DB)
+            if (typeInput && eqModel) {
+              let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
+              if (!opt) {
+                opt = new Option(eqModel, eqModel);
+                typeInput.appendChild(opt);
+              }
+              typeInput.value = eqModel;
             }
 
             // Render history timeline
@@ -1908,9 +1912,12 @@ const App = {
               const eq = imported.equipamento;
               const eqModel = eq.nome_equipamento || eq.patrimonio || '';
               if (typeInput && eqModel) {
-                const eqModelLower = eqModel.toLowerCase();
-                const opt = Array.from(typeInput.options).find(o => o.value && (eqModelLower.includes(o.value.toLowerCase()) || o.value.toLowerCase().includes(eqModelLower)));
-                if (opt) typeInput.value = opt.value;
+                let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
+                if (!opt) {
+                  opt = new Option(eqModel, eqModel);
+                  typeInput.appendChild(opt);
+                }
+                typeInput.value = eqModel;
               }
             }
             const historyContainer = document.getElementById('ticket-open-history-container');
