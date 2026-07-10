@@ -381,24 +381,25 @@
 
   function ensureUnitFinanceFields(){
     const form = document.getElementById('unit-form');
-    if (!form || document.getElementById('unit-diaria-vendedor')) return;
-    const row = form.querySelector('.form-row');
-    if (!row) return;
-    const block = document.createElement('div');
-    block.id = 'unit-finance-config-block';
-    block.style.cssText = 'margin-top:18px; padding:18px; border:1px solid var(--border-color); border-radius:12px; width:100%;';
-    block.innerHTML = `
-      <h3 style="color:var(--primary-color); font-size:1rem; margin-bottom:14px;">Configurações Financeiras - Hospedagem</h3>
-      <div class="form-row">
-        <div class="form-group"><label for="unit-diaria-vendedor">Diária Vendedor (R$)</label><input type="number" id="unit-diaria-vendedor" min="0" step="0.01" value="120"></div>
-        <div class="form-group"><label for="unit-diaria-supervisor">Diária Supervisor (R$)</label><input type="number" id="unit-diaria-supervisor" min="0" step="0.01" value="150"></div>
-        <div class="form-group"><label for="unit-diaria-gerente">Diária Gerente (R$)</label><input type="number" id="unit-diaria-gerente" min="0" step="0.01" value="180"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label for="unit-maximo-diarias">Máximo de Diárias</label><input type="number" id="unit-maximo-diarias" min="0" step="1" value="4"></div>
-        <div class="form-group"><label for="unit-permitir-sem-hospedagem">Permitir Sem Hospedagem</label><select id="unit-permitir-sem-hospedagem"><option value="true">Sim</option><option value="false">Não</option></select></div>
-      </div>`;
-    form.appendChild(block);
+    if (!form) return;
+    let block = form.querySelector('#unit-finance-config-block');
+    if (!block) {
+      block = document.createElement('div');
+      block.id = 'unit-finance-config-block';
+      block.style.cssText = 'margin-top:18px; padding:18px; border:1px solid var(--border-color); border-radius:12px; width:100%;';
+      block.innerHTML = `
+        <h3 style="color:var(--primary-color); font-size:1rem; margin-bottom:14px;">Configurações Financeiras - Hospedagem</h3>
+        <div class="form-row">
+          <div class="form-group"><label for="unit-diaria-vendedor">Diária Vendedor (R$)</label><input type="number" id="unit-diaria-vendedor" min="0" step="0.01" value="120"></div>
+          <div class="form-group"><label for="unit-diaria-supervisor">Diária Supervisor (R$)</label><input type="number" id="unit-diaria-supervisor" min="0" step="0.01" value="150"></div>
+          <div class="form-group"><label for="unit-diaria-gerente">Diária Gerente (R$)</label><input type="number" id="unit-diaria-gerente" min="0" step="0.01" value="180"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label for="unit-maximo-diarias">Máximo de Diárias</label><input type="number" id="unit-maximo-diarias" min="0" step="1" value="4"></div>
+          <div class="form-group"><label for="unit-permitir-sem-hospedagem">Permitir Sem Hospedagem</label><select id="unit-permitir-sem-hospedagem"><option value="true">Sim</option><option value="false">Não</option></select></div>
+        </div>`;
+      form.appendChild(block);
+    }
   }
   function readUnitFinanceFields(){
     return {
