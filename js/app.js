@@ -1806,10 +1806,13 @@ const App = {
 
     // 7. Abertura de Chamado (Seller) - Patrimônio Event Listener
     const ticketOpenSerial = document.getElementById('ticket-open-serial');
-    if (ticketOpenSerial) {
-      ticketOpenSerial.addEventListener('change', async (e) => {
+    if (ticketOpenSerial && ticketOpenSerial.dataset.bound !== '1') {
+      ticketOpenSerial.dataset.bound = '1';
+      let lastVal = '';
+      const handleSerialLookup = async (e) => {
         const serialVal = e.target.value.trim();
-        if (!serialVal) return;
+        if (!serialVal || serialVal === lastVal) return;
+        lastVal = serialVal;
 
         try {
           const res = await this.fetchFromApi(`/api/equipamentos/patrimonio/${serialVal}`);
@@ -1918,7 +1921,9 @@ const App = {
           const historyContainer = document.getElementById('ticket-open-history-container');
           if (historyContainer) historyContainer.innerHTML = '';
         }
-      });
+      };
+      ticketOpenSerial.addEventListener('change', handleSerialLookup);
+      ticketOpenSerial.addEventListener('blur', handleSerialLookup);
     }
 
     // Defect Photo Preview in Open Form

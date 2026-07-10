@@ -1867,8 +1867,35 @@ app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
     if (!assertImportedEquipmentAccess(req, res)) return;
     const code = normalizeEquipCode(req.params.codigo);
     if (!code) return res.status(400).json({ error: 'Codigo nao informado.' });
-    let query = db('equipamentos_importados').where({ empresa_id: req.user.empresa_id || '001', codigo_equipamento: code });
-    if (req.user.unitId && req.user.unitId !== 'all') query = query.where(function() { this.where({ unitId: req.user.unitId }).orWhere({ unitId: 'all' }); });
+    
+    const numericStr = code.replace(/\D/g, '');
+    const cleanNum = numericStr ? String(Number(numericStr)) : '';
+
+    let query = db('equipamentos_importados')
+      .where({ empresa_id: req.user.empresa_id || '001' })
+      .andWhere(function() {
+        this.where('codigo_equipamento', code);
+        if (cleanNum && cleanNum !== code) {
+          this.orWhere('codigo_equipamento', cleanNum);
+        }
+        const padded = code.padStart(6, '0');
+        if (padded !== code) {
+          this.orWhere('codigo_equipamento', padded);
+        }
+        if (cleanNum) {
+          const paddedNum = cleanNum.padStart(6, '0');
+          if (paddedNum !== code && paddedNum !== cleanNum) {
+            this.orWhere('codigo_equipamento', paddedNum);
+          }
+        }
+      });
+
+    if (req.user.unitId && req.user.unitId !== 'all') {
+      query = query.where(function() {
+        this.where({ unitId: req.user.unitId }).orWhere({ unitId: 'all' });
+      });
+    }
+    
     const row = await query.orderBy('updated_at', 'desc').first();
     res.json(row ? { found: true, equipamento: row } : { found: false });
   } catch (err) {
