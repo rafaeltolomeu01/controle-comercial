@@ -3984,6 +3984,7 @@
   }
   function stat(label,value){return '<div class=\"cc-pro-stat\"><small>'+esc(label)+'</small><b>'+val(value)+'</b></div>';}
   function field(label,value,wide){return '<div class=\"cc-pro-field'+(wide?' cc-pro-field-wide':'')+'\"><small>'+esc(label)+'</small><b>'+val(value)+'</b></div>';}
+  function fieldHtml(label,html,wide){return '<div class=\"cc-pro-field'+(wide?' cc-pro-field-wide':'')+'\"><small>'+esc(label)+'</small><b>'+(html||'-')+'</b></div>';}
   function card(title,fields){return '<section class=\"cc-pro-card\"><div class=\"cc-pro-card-head\"><h4>'+esc(title)+'</h4></div><div class=\"cc-pro-fields\">'+fields+'</div></section>';}
   function mediaHtml(ticket){var items=mediaItems(ticket); if(!items.length) return ''; return '<section class=\"cc-pro-card\"><div class=\"cc-pro-card-head\"><h4>Anexos</h4></div><div class=\"cc-pro-media\">'+items.map(function(media){var url=(window.TempPhotosCache&&window.TempPhotosCache[media.url])||media.url; var body=media.kind==='video'?'<a class=\"cc-pro-video\" href=\"'+esc(url)+'\" target=\"_blank\">Abrir vídeo</a>':'<img src=\"'+esc(url)+'\" onclick=\"App.showFacadeImage(\''+esc(url)+'\')\" onerror=\"this.parentElement.style.display=\'none\'\">'; return '<div class=\"cc-pro-media-card\"><small>'+esc(media.label)+'</small>'+body+'</div>';}).join('')+'</div></section>';}
   function install(){
@@ -4000,7 +4001,11 @@
       var parts=Array.isArray(ticket.parts)?ticket.parts.join(', '):(ticket.parts||'');
       var services=Array.isArray(ticket.services)?ticket.services.join(', '):(ticket.services||'');
       var resumo='<div class=\"cc-pro-summary\">'+stat('OS',ticket.id)+stat('Data',ticket.date)+stat('Status',ticket.status)+stat('Prioridade',ticket.priority)+'</div>';
-      var abertura=card('Abertura do chamado',field('Unidade',unit(ticket))+field('Vendedor',seller(ticket))+field('Tipo',ticket.equipmentType)+field('Patrimônio',ticket.equipmentSerial)+field('Cliente',ticket.client)+field('Fantasia',ticket.fantasyName)+field('Cidade',ticket.city)+field('Endereço',ticket.address)+field('Falha relatada',ticket.title,true)+field('Observações',ticket.observations,true));
+      var codeVal = ticket.clientCode || ticket.cliente_codigo || '';
+      var codeHtml = codeVal ? '<span style="background-color:#fef08a;color:#1e293b;padding:2px 6px;border-radius:4px;font-weight:700;display:inline-block;">' + esc(codeVal) + '</span>' : '<span class="cc-pro-empty">-</span>';
+      var groupVal = ticket.clientGroup || ticket.cliente_grupo || '';
+      var groupHtml = groupVal ? esc(groupVal) : '<span class="cc-pro-empty">-</span>';
+      var abertura=card('Abertura do chamado',field('Unidade',unit(ticket))+field('Vendedor',seller(ticket))+field('Tipo',ticket.equipmentType)+field('Patrimônio',ticket.equipmentSerial)+field('Cliente',ticket.client)+field('Fantasia',ticket.fantasyName)+fieldHtml('Código do Cliente',codeHtml)+fieldHtml('Grupo de Cliente',groupHtml)+field('Cidade',ticket.city)+field('Endereço',ticket.address)+field('Falha relatada',ticket.title,true)+field('Observações',ticket.observations,true));
       var atendimento=card('Atendimento técnico',field('Mecânico',ticket.mechanic)+field('Início',ticket.startTime)+field('Conclusão',ticket.endTime)+field('Situação pós',ticket.eqStatusAfter)+field('Peças utilizadas',parts,true)+field('Serviços executados',services,true)+field('Problema encontrado',ticket.faultDescription,true)+field('Solução aplicada',ticket.solutionDescription,true)+field('Carga de gás',ticket.gasCharge)+field('Observações finais',ticket.additionalNotes,true));
       document.getElementById('modal-ticket-details-mobile-content').innerHTML=resumo+'<div class=\"cc-pro-grid\"><div class=\"cc-pro-stack\">'+abertura+'</div><div class=\"cc-pro-stack\">'+atendimento+mediaHtml(ticket)+'</div></div>';
       modal.style.display='flex';
