@@ -4378,12 +4378,20 @@
     const safeRows = Array.isArray(rows) ? rows : [];
 
     // Backup local para não perder a importação caso a internet caia no meio.
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeRows));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(safeRows));
+    } catch (err) {
+      console.warn('Falha ao salvar backup local (limite de cota do navegador):', err);
+    }
     writeCentralRows(safeRows);
 
     // Salva no armazenamento central do sistema e no banco PostgreSQL.
-    if (window.Store && typeof Store.saveList === 'function') {
-      Store.saveList(STORE_KEY, safeRows);
+    try {
+      if (window.Store && typeof Store.saveList === 'function') {
+        Store.saveList(STORE_KEY, safeRows);
+      }
+    } catch (err) {
+      console.warn('Falha ao salvar Store local:', err);
     }
 
     // Garante a gravação no banco antes de fechar o modal e avisar sucesso.

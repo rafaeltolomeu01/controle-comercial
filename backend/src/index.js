@@ -2759,8 +2759,8 @@ app.post('/api/despesas', async (req, res) => {
         solicitacao_id: id,
         valor: it.valor || 0,
         descricao: it.descricao || '',
-        created_at: now.toISOString(),
-        updated_at: now.toISOString()
+        created_at: bdt.iso,
+        updated_at: bdt.iso
       }));
       await db('despesas_itens_extras').insert(extraRows);
 
