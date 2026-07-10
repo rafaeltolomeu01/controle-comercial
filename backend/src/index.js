@@ -1870,23 +1870,23 @@ app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
     const numericStr = code.replace(/\D/g, '');
     const cleanNum = numericStr ? String(Number(numericStr)) : '';
 
+    // Gera todas as variações de código para busca flexível (com/sem zeros à esquerda)
+    const variants = new Set([code]);
+    if (cleanNum && cleanNum !== code) variants.add(cleanNum);
+    const padded = code.padStart(6, '0');
+    if (padded !== code) variants.add(padded);
+    if (cleanNum) {
+      const paddedNum = cleanNum.padStart(6, '0');
+      variants.add(paddedNum);
+    }
+    const variantArr = Array.from(variants);
+
     let query = db('equipamentos_importados')
       .where({ empresa_id: req.user.empresa_id || '001' })
       .andWhere(function() {
-        this.where('codigo_equipamento', code);
-        if (cleanNum && cleanNum !== code) {
-          this.orWhere('codigo_equipamento', cleanNum);
-        }
-        const padded = code.padStart(6, '0');
-        if (padded !== code) {
-          this.orWhere('codigo_equipamento', padded);
-        }
-        if (cleanNum) {
-          const paddedNum = cleanNum.padStart(6, '0');
-          if (paddedNum !== code && paddedNum !== cleanNum) {
-            this.orWhere('codigo_equipamento', paddedNum);
-          }
-        }
+        // Busca em codigo_equipamento E em nr_patrimonio
+        this.whereIn('codigo_equipamento', variantArr)
+          .orWhereIn('nr_patrimonio', variantArr);
       });
 
     if (req.user.unitId && req.user.unitId !== 'all') {

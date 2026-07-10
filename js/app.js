@@ -1851,11 +1851,10 @@ const App = {
     const ticketOpenSerial = document.getElementById('ticket-open-serial');
     if (ticketOpenSerial && ticketOpenSerial.dataset.bound !== '1') {
       ticketOpenSerial.dataset.bound = '1';
-      let lastVal = '';
       const handleSerialLookup = async (e) => {
         const serialVal = e.target.value.trim();
-        if (!serialVal || serialVal === lastVal) return;
-        lastVal = serialVal;
+        if (!serialVal || serialVal === (ticketOpenSerial.dataset.lastLookupVal || '')) return;
+        ticketOpenSerial.dataset.lastLookupVal = serialVal;
 
         try {
           const res = await this.fetchFromApi(`/api/equipamentos/patrimonio/${serialVal}`);
@@ -1891,11 +1890,14 @@ const App = {
               if (sellerInput && clientObj.userId) sellerInput.value = clientObj.userId;
             }
 
-            // Map model to eq type dropdown options (inject exact model from DB)
+            // Injeta o tipo exato do equipamento (da base de movimentacoes)
             if (typeInput && eqModel) {
+              // Remove opcoes injetadas anteriores
+              Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
               let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
               if (!opt) {
                 opt = new Option(eqModel, eqModel);
+                opt.dataset.injected = '1';
                 typeInput.appendChild(opt);
               }
               typeInput.value = eqModel;
@@ -1949,18 +1951,27 @@ const App = {
               historyContainer.innerHTML = historyHtml;
             }
           } else {
-            // Se não encontrou nas movimentações ativas, busca nos Equipamentos Importados
+            // Busca nos Equipamentos Importados
             const imported = await this.fetchFromApi(`/api/equipamentos-importados/lookup/${serialVal}`).catch(() => null);
             if (imported && imported.found && imported.equipamento) {
               const eq = imported.equipamento;
               const eqModel = eq.nome_equipamento || eq.patrimonio || '';
               if (typeInput && eqModel) {
+                // Remove opcoes injetadas anteriores
+                Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
                 let opt = Array.from(typeInput.options).find(o => o.value === eqModel || o.textContent === eqModel);
                 if (!opt) {
                   opt = new Option(eqModel, eqModel);
+                  opt.dataset.injected = '1';
                   typeInput.appendChild(opt);
                 }
                 typeInput.value = eqModel;
+              }
+            } else {
+              // Nao encontrado em nenhuma base — remove opcoes injetadas e deixa selecao livre
+              if (typeInput) {
+                Array.from(typeInput.options).forEach(o => { if (o.dataset.injected === '1') o.remove(); });
+                typeInput.value = ''; // volta para "Selecione..."
               }
             }
             const historyContainer = document.getElementById('ticket-open-history-container');
@@ -2101,6 +2112,21 @@ const App = {
 
           await this.loadTickets();
           ticketOpenForm.reset();
+          // Limpa status de upload (mensagem verde) e dados temporários
+          ['ticket-open-photo-defect', 'ticket-open-video-defect'].forEach(id => {
+            const inp = document.getElementById(id);
+            if (inp) { inp.dataset.uploadedUrl = ''; inp.dataset.uploadId = ''; }
+            const statusEl = document.getElementById(`upload-status-${id}`);
+            if (statusEl) statusEl.innerHTML = '';
+          });
+          // Reseta controle do patrimônio para permitir nova busca
+          const serialEl = document.getElementById('ticket-open-serial');
+          if (serialEl) serialEl.dataset.lastLookupVal = '';
+          // Remove opções injetadas do dropdown de tipo de equipamento
+          const typeEl = document.getElementById('ticket-open-eq-type');
+          if (typeEl) {
+            Array.from(typeEl.options).forEach(opt => { if (opt.dataset.injected === '1') opt.remove(); });
+          }
           if (ticketOpenPhotoPreviewContainer) ticketOpenPhotoPreviewContainer.style.display = 'none';
           const historyContainer = document.getElementById('ticket-open-history-container');
           if (historyContainer) historyContainer.innerHTML = '';
