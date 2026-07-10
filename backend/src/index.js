@@ -788,16 +788,15 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter (only allow images and safe documents)
+// File filter (only allow images, spreadsheets and safe documents)
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|pdf|docx|xlsx/;
-  const isMimeValid = allowedTypes.test(file.mimetype.toLowerCase());
-  const isExtValid = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const allowedExts = /jpeg|jpg|png|gif|pdf|docx|xlsx|xls|csv|txt/;
+  const isExtValid = allowedExts.test(path.extname(file.originalname).toLowerCase());
 
-  if (isMimeValid && isExtValid) {
+  if (isExtValid) {
     return cb(null, true);
   }
-  cb(new Error('Tipo de arquivo não permitido. Apenas imagens e documentos (PDF, DOCX, XLSX) são aceitos.'));
+  cb(new Error('Tipo de arquivo não permitido. Apenas imagens e documentos (PDF, DOCX, XLSX, XLS, CSV) são aceitos.'));
 };
 
 const upload = multer({
