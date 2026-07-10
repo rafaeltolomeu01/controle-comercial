@@ -1864,7 +1864,6 @@ app.get('/api/equipamentos-importados', async (req, res) => {
 
 app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
   try {
-    if (!assertImportedEquipmentAccess(req, res)) return;
     const code = normalizeEquipCode(req.params.codigo);
     if (!code) return res.status(400).json({ error: 'Codigo nao informado.' });
     
