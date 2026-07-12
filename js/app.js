@@ -2372,52 +2372,93 @@ const App = {
           inputEl.parentNode.appendChild(statusEl);
         }
 
-        let removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
-        if (!removeBtn) {
-          removeBtn = document.createElement('button');
-          removeBtn.id = `btn-remove-upload-${inputId}`;
-          removeBtn.type = 'button';
-          removeBtn.className = 'btn btn-danger btn-sm';
-          removeBtn.textContent = '✕ Remover';
-          removeBtn.style.cssText = 'padding: 2px 6px; font-size: 0.65rem; width: auto !important; height: auto !important; margin-left: 8px; vertical-align: middle; display: inline-block;';
-          removeBtn.addEventListener('click', () => {
-            if (inputEl.dataset.uploadedUrl) {
-              const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
-              if (oldId && oldId.length > 5) {
-                this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
-              }
-            }
-            inputEl.value = '';
-            inputEl.dataset.uploadedUrl = '';
-            inputEl.dataset.uploadId = '';
-            if (containerEl) containerEl.style.display = 'none';
-            if (statusEl) statusEl.innerHTML = '';
-            removeBtn.style.display = 'none';
-          });
-          if (containerEl) {
-            containerEl.appendChild(removeBtn);
-          } else {
-            inputEl.parentNode.appendChild(removeBtn);
-          }
-        }
-        if (removeBtn) removeBtn.style.display = 'inline-block';
+        statusEl.innerHTML = '<span style="color:#f59e0b;">📸 Pré-visualização da foto. Confirme ou tire outra.</span>';
 
-        (async () => {
-          try {
-            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
-            const savedUrl = await this.uploadFile(file);
-            if (savedUrl) {
-              inputEl.dataset.uploadedUrl = savedUrl;
-              inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
-              statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+        let removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
+        if (removeBtn) removeBtn.style.display = 'none';
+
+        // Remove botões de confirmação anteriores se houver
+        let confirmActionContainer = document.getElementById(`confirm-actions-${inputId}`);
+        if (confirmActionContainer) confirmActionContainer.remove();
+
+        confirmActionContainer = document.createElement('div');
+        confirmActionContainer.id = `confirm-actions-${inputId}`;
+        confirmActionContainer.style.cssText = 'display: flex; gap: 8px; margin-top: 6px; margin-bottom: 6px;';
+        
+        const btnConfirm = document.createElement('button');
+        btnConfirm.type = 'button';
+        btnConfirm.className = 'btn btn-success btn-sm';
+        btnConfirm.innerHTML = '✔ Confirmar Foto';
+        btnConfirm.style.cssText = 'padding: 4px 10px; font-size: 0.72rem; width: auto !important; height: auto !important; margin: 0; font-weight: bold; cursor: pointer;';
+        
+        const btnDiscard = document.createElement('button');
+        btnDiscard.type = 'button';
+        btnDiscard.className = 'btn btn-secondary btn-sm';
+        btnDiscard.innerHTML = '✕ Tirar Outra / Descartar';
+        btnDiscard.style.cssText = 'padding: 4px 10px; font-size: 0.72rem; width: auto !important; height: auto !important; margin: 0; cursor: pointer;';
+
+        confirmActionContainer.appendChild(btnConfirm);
+        confirmActionContainer.appendChild(btnDiscard);
+        inputEl.parentNode.appendChild(confirmActionContainer);
+
+        btnDiscard.addEventListener('click', () => {
+          inputEl.value = '';
+          inputEl.dataset.uploadedUrl = '';
+          inputEl.dataset.uploadId = '';
+          if (containerEl) containerEl.style.display = 'none';
+          if (statusEl) statusEl.innerHTML = '';
+          confirmActionContainer.remove();
+        });
+
+        btnConfirm.addEventListener('click', () => {
+          confirmActionContainer.remove();
+
+          if (!removeBtn) {
+            removeBtn = document.createElement('button');
+            removeBtn.id = `btn-remove-upload-${inputId}`;
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-danger btn-sm';
+            removeBtn.textContent = '✕ Remover';
+            removeBtn.style.cssText = 'padding: 2px 6px; font-size: 0.65rem; width: auto !important; height: auto !important; margin-left: 8px; vertical-align: middle; display: inline-block;';
+            removeBtn.addEventListener('click', () => {
+              if (inputEl.dataset.uploadedUrl) {
+                const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
+                if (oldId && oldId.length > 5) {
+                  this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
+                }
+              }
+              inputEl.value = '';
+              inputEl.dataset.uploadedUrl = '';
+              inputEl.dataset.uploadId = '';
+              if (containerEl) containerEl.style.display = 'none';
+              if (statusEl) statusEl.innerHTML = '';
+              removeBtn.style.display = 'none';
+            });
+            if (containerEl) {
+              containerEl.appendChild(removeBtn);
             } else {
-              throw new Error('Servidor retornou link vazio.');
+              inputEl.parentNode.appendChild(removeBtn);
             }
-          } catch (err) {
-            statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
-            console.error(`Erro no upload instantâneo (${inputId}):`, err);
           }
-        })();
+          if (removeBtn) removeBtn.style.display = 'inline-block';
+
+          (async () => {
+            try {
+              statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
+              const savedUrl = await this.uploadFile(file);
+              if (savedUrl) {
+                inputEl.dataset.uploadedUrl = savedUrl;
+                inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
+                statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+              } else {
+                throw new Error('Servidor retornou link vazio.');
+              }
+            } catch (err) {
+              statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
+              console.error(`Erro no upload instantâneo (${inputId}):`, err);
+            }
+          })();
+        });
       });
     };
     bindFichaInstantUpload('ticket-foto-antes', 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes', 'image');
