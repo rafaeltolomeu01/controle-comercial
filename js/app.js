@@ -1796,6 +1796,15 @@ const App = {
       if (inputEl && previewImg && containerEl) {
         inputEl.addEventListener('change', (e) => {
           const file = e.target.files[0];
+          if (!file) {
+            containerEl.style.display = 'none';
+            inputEl.removeAttribute('data-uploaded-url');
+            inputEl.removeAttribute('data-upload-id');
+            if (window.TempPhotosCache) delete window.TempPhotosCache[suffix];
+            const statusEl = document.getElementById(`upload-status-${suffix}`);
+            if (statusEl) statusEl.innerHTML = '';
+            return;
+          }
           
           // Cria ou busca elemento de status de envio
           let statusEl = document.getElementById(`upload-status-${suffix}`);
@@ -1806,47 +1815,67 @@ const App = {
             inputEl.parentNode.appendChild(statusEl);
           }
 
-          if (file) {
-            const localUrl = URL.createObjectURL(file);
-            previewImg.src = localUrl;
-            containerEl.style.display = 'block';
-            
-            if (!window.TempPhotosCache) window.TempPhotosCache = {};
-            
-            // Inicia envio instantâneo para validação e persistência precoce
-            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Compactando imagem...</span>';
-            (async () => {
-              try {
-                const base64 = await App.compressImageAndGetBase64(file);
-                statusEl.innerHTML = '<span style="color:#3b82f6;">🚀 Enviando para o servidor...</span>';
-                
-                const cnpjInput = document.getElementById('client-cnpj');
-                const cnpjVal = (cnpjInput?.value || '').replace(/\D/g, '') || 'temp';
-                
-                const savedUrl = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
-                if (savedUrl) {
-                  inputEl.dataset.uploadedUrl = savedUrl;
-                  inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
-                  window.TempPhotosCache[suffix] = savedUrl;
-                  statusEl.innerHTML = '<span style="color:#10b981;">✅ Imagem salva e validada!</span>';
-                } else {
-                  throw new Error('Servidor retornou link vazio.');
+          const localUrl = URL.createObjectURL(file);
+
+          const modalConfirm = document.getElementById('modal-photo-confirm');
+          const confirmImg = document.getElementById('photo-confirm-img');
+          const btnSave = document.getElementById('btn-photo-confirm-save');
+          const btnDiscard = document.getElementById('btn-photo-confirm-discard');
+
+          if (modalConfirm && confirmImg && btnSave && btnDiscard) {
+            confirmImg.src = localUrl;
+            modalConfirm.style.display = 'flex';
+
+            const newBtnSave = btnSave.cloneNode(true);
+            const newBtnDiscard = btnDiscard.cloneNode(true);
+            btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+            btnDiscard.parentNode.replaceChild(newBtnDiscard, btnDiscard);
+
+            newBtnDiscard.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              inputEl.value = '';
+              inputEl.removeAttribute('data-uploaded-url');
+              inputEl.removeAttribute('data-upload-id');
+              if (containerEl) containerEl.style.display = 'none';
+              if (statusEl) statusEl.innerHTML = '';
+            });
+
+            newBtnSave.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              
+              previewImg.src = localUrl;
+              containerEl.style.display = 'block';
+
+              statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Compactando imagem...</span>';
+              if (!window.TempPhotosCache) window.TempPhotosCache = {};
+
+              (async () => {
+                try {
+                  const base64 = await App.compressImageAndGetBase64(file);
+                  statusEl.innerHTML = '<span style="color:#3b82f6;">🚀 Enviando para o servidor...</span>';
+                  
+                  const cnpjInput = document.getElementById('client-cnpj');
+                  const cnpjVal = (cnpjInput?.value || '').replace(/\D/g, '') || 'temp';
+                  
+                  const savedUrl = await App.uploadBase64ToDatabase(base64, `cliente-${cnpjVal}-${suffix}-${file.name || 'foto'}`, 'clientes');
+                  if (savedUrl) {
+                    inputEl.dataset.uploadedUrl = savedUrl;
+                    inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
+                    window.TempPhotosCache[suffix] = savedUrl;
+                    statusEl.innerHTML = '<span style="color:#10b981;">✅ Imagem salva e validada!</span>';
+                  } else {
+                    throw new Error('Servidor retornou link vazio.');
+                  }
+                } catch (err) {
+                  console.error(`Erro no upload instantâneo (${suffix}):`, err);
+                  statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
+                  inputEl.removeAttribute('data-uploaded-url');
+                  inputEl.removeAttribute('data-upload-id');
+                  delete window.TempPhotosCache[suffix];
+                  inputEl.value = '';
                 }
-              } catch (err) {
-                console.error(`Erro no upload instantâneo (${suffix}):`, err);
-                statusEl.innerHTML = `<span style="color:#ef4444;">❌ Erro: ${err.message || 'Falha no envio'}. Selecione novamente.</span>`;
-                inputEl.removeAttribute('data-uploaded-url');
-                inputEl.removeAttribute('data-upload-id');
-                delete window.TempPhotosCache[suffix];
-                inputEl.value = ''; // Reseta input para exigir re-seleção
-              }
-            })();
-          } else {
-            containerEl.style.display = 'none';
-            inputEl.removeAttribute('data-uploaded-url');
-            inputEl.removeAttribute('data-upload-id');
-            if (window.TempPhotosCache) delete window.TempPhotosCache[suffix];
-            statusEl.innerHTML = '';
+              })();
+            });
           }
         });
       }
@@ -2036,7 +2065,6 @@ const App = {
       inputEl.dataset.instantUploadBound = '1';
       inputEl.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        // Limpa URL anterior se houver
         if (inputEl.dataset.uploadedUrl) {
           const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
           if (oldId) this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
@@ -2047,12 +2075,7 @@ const App = {
           if (previewContainer) previewContainer.style.display = 'none';
           return;
         }
-        // Preview local imediato
-        if (previewImg && previewContainer) {
-          previewImg.src = URL.createObjectURL(file);
-          previewContainer.style.display = 'block';
-        }
-        // Status de upload
+
         let statusEl = document.getElementById(`upload-status-${inputEl.id}`);
         if (!statusEl) {
           statusEl = document.createElement('div');
@@ -2060,23 +2083,65 @@ const App = {
           statusEl.style.cssText = 'margin-top:6px; font-size:0.72rem; font-weight:600; display:flex; align-items:center; gap:4px;';
           inputEl.parentNode.appendChild(statusEl);
         }
-        // Upload em background
-        (async () => {
-          try {
-            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
-            const savedUrl = await this.uploadFile(file);
-            if (savedUrl) {
-              inputEl.dataset.uploadedUrl = savedUrl;
-              inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
-              statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
-            } else {
-              throw new Error('Servidor retornou link vazio.');
+
+        const localUrl = URL.createObjectURL(file);
+
+        const startUpload = () => {
+          (async () => {
+            try {
+              statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
+              const savedUrl = await this.uploadFile(file);
+              if (savedUrl) {
+                inputEl.dataset.uploadedUrl = savedUrl;
+                inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
+                statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+              } else {
+                throw new Error('Servidor retornou link vazio.');
+              }
+            } catch (err) {
+              statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
+              console.error(`Erro no upload instantâneo (${inputEl.id}):`, err);
             }
-          } catch (err) {
-            statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
-            console.error(`Erro no upload instantâneo (${inputEl.id}):`, err);
+          })();
+        };
+
+        if (mediaType === 'image') {
+          const modalConfirm = document.getElementById('modal-photo-confirm');
+          const confirmImg = document.getElementById('photo-confirm-img');
+          const btnSave = document.getElementById('btn-photo-confirm-save');
+          const btnDiscard = document.getElementById('btn-photo-confirm-discard');
+
+          if (modalConfirm && confirmImg && btnSave && btnDiscard) {
+            confirmImg.src = localUrl;
+            modalConfirm.style.display = 'flex';
+
+            const newBtnSave = btnSave.cloneNode(true);
+            const newBtnDiscard = btnDiscard.cloneNode(true);
+            btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+            btnDiscard.parentNode.replaceChild(newBtnDiscard, btnDiscard);
+
+            newBtnDiscard.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              inputEl.value = '';
+              inputEl.dataset.uploadedUrl = '';
+              inputEl.dataset.uploadId = '';
+              if (previewContainer) previewContainer.style.display = 'none';
+              if (statusEl) statusEl.innerHTML = '';
+            });
+
+            newBtnSave.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              if (previewImg && previewContainer) {
+                previewImg.src = localUrl;
+                previewContainer.style.display = 'block';
+              }
+              startUpload();
+            });
+            return;
           }
-        })();
+        }
+
+        startUpload();
       });
     };
 
@@ -2267,28 +2332,28 @@ const App = {
         }
 
         // Photos mapping
-        let fotoAntesUrl = '';
-        const fotoAntesEl = document.getElementById('ticket-foto-antes');
-        if (fotoAntesEl && fotoAntesEl.files && fotoAntesEl.files[0]) {
-          fotoAntesUrl = await this.uploadFile(fotoAntesEl.files[0]);
+        let fotoAntesUrl = (document.getElementById('ticket-foto-antes')?.dataset.uploadedUrl || '').trim();
+        if (!fotoAntesUrl) {
+          const el = document.getElementById('ticket-foto-antes');
+          if (el && el.files && el.files[0]) fotoAntesUrl = await this.uploadFile(el.files[0]);
         }
 
-        let fotoDepoisUrl = '';
-        const fotoDepoisEl = document.getElementById('ticket-foto-depois');
-        if (fotoDepoisEl && fotoDepoisEl.files && fotoDepoisEl.files[0]) {
-          fotoDepoisUrl = await this.uploadFile(fotoDepoisEl.files[0]);
+        let fotoDepoisUrl = (document.getElementById('ticket-foto-depois')?.dataset.uploadedUrl || '').trim();
+        if (!fotoDepoisUrl) {
+          const el = document.getElementById('ticket-foto-depois');
+          if (el && el.files && el.files[0]) fotoDepoisUrl = await this.uploadFile(el.files[0]);
         }
 
-        let fotoPlaquetaUrl = '';
-        const fotoPlaquetaEl = document.getElementById('ticket-foto-plaqueta');
-        if (fotoPlaquetaEl && fotoPlaquetaEl.files && fotoPlaquetaEl.files[0]) {
-          fotoPlaquetaUrl = await this.uploadFile(fotoPlaquetaEl.files[0]);
+        let fotoPlaquetaUrl = (document.getElementById('ticket-foto-plaqueta')?.dataset.uploadedUrl || '').trim();
+        if (!fotoPlaquetaUrl) {
+          const el = document.getElementById('ticket-foto-plaqueta');
+          if (el && el.files && el.files[0]) fotoPlaquetaUrl = await this.uploadFile(el.files[0]);
         }
 
-        let videoAtendimentoUrl = '';
-        const videoAtendimentoEl = document.getElementById('ticket-video');
-        if (videoAtendimentoEl && videoAtendimentoEl.files && videoAtendimentoEl.files[0]) {
-          videoAtendimentoUrl = await this.uploadFile(videoAtendimentoEl.files[0]);
+        let videoAtendimentoUrl = (document.getElementById('ticket-video')?.dataset.uploadedUrl || '').trim();
+        if (!videoAtendimentoUrl) {
+          const el = document.getElementById('ticket-video');
+          if (el && el.files && el.files[0]) videoAtendimentoUrl = await this.uploadFile(el.files[0]);
         }
 
         try {
@@ -2534,25 +2599,15 @@ const App = {
       expFinalidade.addEventListener('change', handleFinalidadeChange);
     }
 
-    const previewImage = (inputId, previewContainerId, imgElementId) => {
-      const input = document.getElementById(inputId);
-      const container = document.getElementById(previewContainerId);
-      const img = document.getElementById(imgElementId);
-      if (input && container && img) {
-        input.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            img.src = URL.createObjectURL(file);
-            container.style.display = 'block';
-          } else {
-            img.src = '';
-            container.style.display = 'none';
-          }
-        });
-      }
-    };
-    previewImage('exp-odometro-img', 'preview-odometro', 'img-preview-odometro');
-    previewImage('exp-comprovante-img', 'preview-comprovante', 'img-preview-comprovante');
+    // Apply instant upload with photo confirm to travel expenses
+    const odoInputEl = document.getElementById('exp-odometro-img');
+    if (odoInputEl) {
+      bindInstantTicketUpload(odoInputEl, document.getElementById('img-preview-odometro'), document.getElementById('preview-odometro'), 'image');
+    }
+    const compInputEl = document.getElementById('exp-comprovante-img');
+    if (compInputEl) {
+      bindInstantTicketUpload(compInputEl, document.getElementById('img-preview-comprovante'), document.getElementById('preview-comprovante'), 'image');
+    }
 
     const parseExpenseMoneyInput = (inputValue) => {
       if (inputValue === null || inputValue === undefined || inputValue === '') return 0;
@@ -2622,26 +2677,29 @@ const App = {
             date = document.getElementById('exp-date').value;
             observation = document.getElementById('exp-obs').value;
 
-            const fileComprovante = document.getElementById('exp-comprovante-img').files[0];
-            if (fileComprovante) {
-              foto_comprovante = await this.uploadFile(fileComprovante);
+            const inputComp = document.getElementById('exp-comprovante-img');
+            foto_comprovante = inputComp?.dataset.uploadedUrl || '';
+            if (!foto_comprovante && inputComp && inputComp.files && inputComp.files[0]) {
+              foto_comprovante = await this.uploadFile(inputComp.files[0]);
             }
           } else {
             value = parseExpenseMoneyInput(document.getElementById('exp-val').value);
             date = document.getElementById('exp-date').value;
             observation = document.getElementById('exp-obs').value;
 
-            const fileComprovante = document.getElementById('exp-comprovante-img').files[0];
-            if (fileComprovante) {
-              foto_comprovante = await this.uploadFile(fileComprovante);
+            const inputComp = document.getElementById('exp-comprovante-img');
+            foto_comprovante = inputComp?.dataset.uploadedUrl || '';
+            if (!foto_comprovante && inputComp && inputComp.files && inputComp.files[0]) {
+              foto_comprovante = await this.uploadFile(inputComp.files[0]);
             }
 
             if (finalidade === 'Abastecimento') {
               veiculo = document.getElementById('exp-veiculo').value;
               km = parseInt(document.getElementById('exp-km').value, 10);
-              const fileOdometro = document.getElementById('exp-odometro-img').files[0];
-              if (fileOdometro) {
-                foto_odometro = await this.uploadFile(fileOdometro);
+              const inputOdo = document.getElementById('exp-odometro-img');
+              foto_odometro = inputOdo?.dataset.uploadedUrl || '';
+              if (!foto_odometro && inputOdo && inputOdo.files && inputOdo.files[0]) {
+                foto_odometro = await this.uploadFile(inputOdo.files[0]);
               }
             }
           }
