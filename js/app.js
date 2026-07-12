@@ -2359,11 +2359,6 @@ const App = {
           return;
         }
 
-        if (previewImg && containerEl) {
-          previewImg.src = URL.createObjectURL(file);
-          containerEl.style.display = 'block';
-        }
-
         let statusEl = document.getElementById(`upload-status-${inputId}`);
         if (!statusEl) {
           statusEl = document.createElement('div');
@@ -2372,47 +2367,10 @@ const App = {
           inputEl.parentNode.appendChild(statusEl);
         }
 
-        statusEl.innerHTML = '<span style="color:#f59e0b;">📸 Pré-visualização da foto. Confirme ou tire outra.</span>';
+        const localUrl = URL.createObjectURL(file);
 
-        let removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
-        if (removeBtn) removeBtn.style.display = 'none';
-
-        // Remove botões de confirmação anteriores se houver
-        let confirmActionContainer = document.getElementById(`confirm-actions-${inputId}`);
-        if (confirmActionContainer) confirmActionContainer.remove();
-
-        confirmActionContainer = document.createElement('div');
-        confirmActionContainer.id = `confirm-actions-${inputId}`;
-        confirmActionContainer.style.cssText = 'display: flex; gap: 8px; margin-top: 6px; margin-bottom: 6px;';
-        
-        const btnConfirm = document.createElement('button');
-        btnConfirm.type = 'button';
-        btnConfirm.className = 'btn btn-success btn-sm';
-        btnConfirm.innerHTML = '✔ Confirmar Foto';
-        btnConfirm.style.cssText = 'padding: 4px 10px; font-size: 0.72rem; width: auto !important; height: auto !important; margin: 0; font-weight: bold; cursor: pointer;';
-        
-        const btnDiscard = document.createElement('button');
-        btnDiscard.type = 'button';
-        btnDiscard.className = 'btn btn-secondary btn-sm';
-        btnDiscard.innerHTML = '✕ Tirar Outra / Descartar';
-        btnDiscard.style.cssText = 'padding: 4px 10px; font-size: 0.72rem; width: auto !important; height: auto !important; margin: 0; cursor: pointer;';
-
-        confirmActionContainer.appendChild(btnConfirm);
-        confirmActionContainer.appendChild(btnDiscard);
-        inputEl.parentNode.appendChild(confirmActionContainer);
-
-        btnDiscard.addEventListener('click', () => {
-          inputEl.value = '';
-          inputEl.dataset.uploadedUrl = '';
-          inputEl.dataset.uploadId = '';
-          if (containerEl) containerEl.style.display = 'none';
-          if (statusEl) statusEl.innerHTML = '';
-          confirmActionContainer.remove();
-        });
-
-        btnConfirm.addEventListener('click', () => {
-          confirmActionContainer.remove();
-
+        const startUploadFlow = () => {
+          let removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
           if (!removeBtn) {
             removeBtn = document.createElement('button');
             removeBtn.id = `btn-remove-upload-${inputId}`;
@@ -2458,7 +2416,45 @@ const App = {
               console.error(`Erro no upload instantâneo (${inputId}):`, err);
             }
           })();
-        });
+        };
+
+        if (mediaType === 'image') {
+          const modalConfirm = document.getElementById('modal-photo-confirm');
+          const confirmImg = document.getElementById('photo-confirm-img');
+          const btnSave = document.getElementById('btn-photo-confirm-save');
+          const btnDiscard = document.getElementById('btn-photo-confirm-discard');
+
+          if (modalConfirm && confirmImg && btnSave && btnDiscard) {
+            confirmImg.src = localUrl;
+            modalConfirm.style.display = 'flex';
+
+            const newBtnSave = btnSave.cloneNode(true);
+            const newBtnDiscard = btnDiscard.cloneNode(true);
+            btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+            btnDiscard.parentNode.replaceChild(newBtnDiscard, btnDiscard);
+
+            newBtnDiscard.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              inputEl.value = '';
+              inputEl.dataset.uploadedUrl = '';
+              inputEl.dataset.uploadId = '';
+              if (containerEl) containerEl.style.display = 'none';
+              if (statusEl) statusEl.innerHTML = '';
+            });
+
+            newBtnSave.addEventListener('click', () => {
+              modalConfirm.style.display = 'none';
+              if (previewImg && containerEl) {
+                previewImg.src = localUrl;
+                containerEl.style.display = 'block';
+              }
+              startUploadFlow();
+            });
+            return;
+          }
+        }
+
+        startUploadFlow();
       });
     };
     bindFichaInstantUpload('ticket-foto-antes', 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes', 'image');
@@ -3762,7 +3758,7 @@ const App = {
           inp.dataset.uploadId = isValid && finalUrl.includes('/api/uploads/') ? finalUrl.split('/').pop() : '';
           inp.value = '';
           const removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
-          if (removeBtn) removeBtn.style.display = isValid ? 'inline-block' : 'none';
+          if (removeBtn) removeBtn.style.display = (isValid && !isResolved) ? 'inline-block' : 'none';
           const statusEl = document.getElementById(`upload-status-${inputId}`);
           if (statusEl) statusEl.innerHTML = '';
         }
@@ -3789,7 +3785,7 @@ const App = {
         videoInput.dataset.uploadId = isValid && finalUrl.includes('/api/uploads/') ? finalUrl.split('/').pop() : '';
         videoInput.value = '';
         const removeBtn = document.getElementById('btn-remove-upload-ticket-video');
-        if (removeBtn) removeBtn.style.display = isValid ? 'inline-block' : 'none';
+        if (removeBtn) removeBtn.style.display = (isValid && !isResolved) ? 'inline-block' : 'none';
         const statusEl = document.getElementById('upload-status-ticket-video');
         if (statusEl) statusEl.innerHTML = '';
       }
