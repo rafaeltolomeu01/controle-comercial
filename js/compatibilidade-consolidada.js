@@ -2783,7 +2783,7 @@
   function renderPhotoCard(label, url){
     const finalUrl = (window.App && App.resolveMediaUrl ? App.resolveMediaUrl(url) : url) || '';
     if (!finalUrl) return `<div class="photo-card"><b>${esc(label)}</b><div class="photo-empty">Imagem não enviada</div></div>`;
-    return `<div class="photo-card"><b>${esc(label)}</b><img src="${esc(finalUrl)}" alt="${esc(label)}" onclick="App.showFacadeImage && App.showFacadeImage('${esc(finalUrl).replace(/'/g,'\\&#39;')}')" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'photo-empty',textContent:'Imagem indisponível'}))"><div style="font-size:.65rem;color:var(--text-muted);overflow-wrap:anywhere;margin-top:4px;">${esc(finalUrl)}</div></div>`;
+    return `<div class="photo-card"><b>${esc(label)}</b><img src="${esc(finalUrl)}" alt="${esc(label)}" onclick="App.showFacadeImage && App.showFacadeImage('${esc(finalUrl).replace(/'/g,'\\&#39;')}')" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'photo-empty',textContent:'Imagem indisponível'}))"></div>`;
   }
   function field(label, value){
     if (value === undefined || value === null || value === '') return '';
@@ -2950,7 +2950,10 @@
         if (header) header.insertAdjacentElement('afterend', bar); else parentCard.insertBefore(bar, parentCard.firstChild);
 
         bar.querySelectorAll('.filter-ctrl').forEach(ctrl => {
-          ctrl.addEventListener(ctrl.tagName === 'SELECT' ? 'change' : 'input', () => this.triggerFiltering(moduleKey));
+          ctrl.addEventListener(ctrl.tagName === 'SELECT' ? 'change' : 'input', () => {
+            if (ctrl.tagName === 'SELECT') ctrl.dataset.userHasChanged = '1';
+            this.triggerFiltering(moduleKey);
+          });
         });
         bar.querySelector('.btn-clear-filters')?.addEventListener('click', () => this.clearFilters(moduleKey));
         bar.querySelector('.btn-export-excel')?.addEventListener('click', () => this.exportExcel(moduleKey, true));
@@ -2962,7 +2965,16 @@
         const current = select.value;
         const values = this.getUniqueValues(this.caches[moduleKey] || [], field);
         select.innerHTML = `<option value="">Todos</option>${values.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('')}`;
-        if ([...select.options].some(o => o.value === current)) select.value = current;
+        
+        if (!select.dataset.userHasChanged) {
+          if (field === 'status' && (moduleKey === 'clientes' || moduleKey === 'chamados')) {
+            if (values.includes('Pendente')) {
+              select.value = 'Pendente';
+            }
+          }
+        } else if ([...select.options].some(o => o.value === current)) {
+          select.value = current;
+        }
       });
     },
 
@@ -3017,7 +3029,10 @@
 
     clearFilters(moduleKey) {
       const parentCard = document.getElementById(this.configs[moduleKey].tbodyId)?.closest('.card');
-      parentCard?.querySelectorAll('.filter-ctrl').forEach(ctrl => { ctrl.value = ''; });
+      parentCard?.querySelectorAll('.filter-ctrl').forEach(ctrl => {
+        ctrl.value = '';
+        if (ctrl.tagName === 'SELECT') ctrl.dataset.userHasChanged = '1';
+      });
       this.triggerFiltering(moduleKey);
     },
 
