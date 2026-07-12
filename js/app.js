@@ -2090,9 +2090,20 @@ const App = {
 
     // 7c. Submit Seller Abertura de Chamado
     const ticketOpenForm = document.getElementById('ticket-open-form');
-    if (ticketOpenForm) {
+    if (ticketOpenForm && ticketOpenForm.dataset.submitBound !== '1') {
+      ticketOpenForm.dataset.submitBound = '1';
       ticketOpenForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (ticketOpenForm.dataset.saving === '1') return;
+        ticketOpenForm.dataset.saving = '1';
+
+        const submitBtn = ticketOpenForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.dataset.originalText = submitBtn.textContent;
+          submitBtn.textContent = 'Gravando chamado...';
+        }
+
         const unitId = document.getElementById('ticket-open-unit').value;
         const userId = document.getElementById('ticket-open-seller').value;
         // Usa foundModel (detectado via lookup) se o select estiver vazio
@@ -2102,6 +2113,8 @@ const App = {
         const equipmentType = typeSelectVal || foundModel;
         if (!equipmentType) {
           alert('Selecione ou aguarde a detecção do Tipo de Equipamento.');
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Salvar'; }
+          delete ticketOpenForm.dataset.saving;
           return;
         }
         const serial = document.getElementById('ticket-open-serial').value.trim();
@@ -2192,13 +2205,20 @@ const App = {
           this.showToast(`Chamado aberto com sucesso! OS: ${result.id || ticketId}`);
         } catch (err) {
           alert('Erro ao abrir chamado: ' + err.message);
+        } finally {
+          delete ticketOpenForm.dataset.saving;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = submitBtn.dataset.originalText || 'Salvar';
+          }
         }
       });
     }
 
     // 8. Add Support Ticket Form Submit (Mechanic Ficha Técnica)
     const ticketForm = document.getElementById('ticket-form');
-    if (ticketForm) {
+    if (ticketForm && ticketForm.dataset.submitBound !== '1') {
+      ticketForm.dataset.submitBound = '1';
       ticketForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const ticketId = ticketForm.dataset.ticketId;
@@ -2207,6 +2227,18 @@ const App = {
           return;
         }
 
+        if (ticketForm.dataset.saving === '1') return;
+        ticketForm.dataset.saving = '1';
+
+        const submitBtn = ticketForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.dataset.originalText = submitBtn.textContent;
+          submitBtn.textContent = 'Salvando ficha técnica...';
+        }
+
+        const dateVal = document.getElementById('ticket-start-date')?.value || '';
+        const dateFormatted = dateVal ? dateVal.split('-').reverse().join('/') : '';
         const endTime = document.getElementById('ticket-end-time').value;
         const faultDescription = document.getElementById('ticket-fault-description').value.trim();
         const solutionDescription = document.getElementById('ticket-solution-description').value.trim();
@@ -2263,6 +2295,7 @@ const App = {
           await this.fetchFromApi(`/api/chamados/${encodeURIComponent(ticketId)}/ficha`, {
             method: 'PUT',
             body: JSON.stringify({
+              date: dateFormatted,
               endTime,
               faultDescription,
               solutionDescription,
@@ -2293,30 +2326,104 @@ const App = {
           this.showToast(`Ficha técnica da OS ${ticketId} salva com sucesso!`);
         } catch (err) {
           alert('Erro ao salvar ficha técnica: ' + err.message);
+        } finally {
+          delete ticketForm.dataset.saving;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico';
+          }
         }
       });
     }
 
-    // 8b. Setup Photo Previews for Ticket Form
-    const setupTicketPhotoPreview = (inputId, previewImgId, containerId) => {
-      const input = document.getElementById(inputId);
-      const img = document.getElementById(previewImgId);
-      const container = document.getElementById(containerId);
-      if (input && img && container) {
-        input.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            img.src = URL.createObjectURL(file);
-            container.style.display = 'block';
-          } else {
-            container.style.display = 'none';
+    // 8b. Setup Photo Previews for Ticket Form with background uploading and "Remover" button
+    const bindFichaInstantUpload = (inputId, previewImgId, containerId, mediaType) => {
+      const inputEl = document.getElementById(inputId);
+      const previewImg = document.getElementById(previewImgId);
+      const containerEl = document.getElementById(containerId);
+      if (!inputEl) return;
+
+      inputEl.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (inputEl.dataset.uploadedUrl) {
+          const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
+          if (oldId && oldId.length > 5) {
+            this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
           }
-        });
-      }
+          inputEl.dataset.uploadedUrl = '';
+          inputEl.dataset.uploadId = '';
+        }
+
+        if (!file) {
+          if (containerEl) containerEl.style.display = 'none';
+          return;
+        }
+
+        if (previewImg && containerEl) {
+          previewImg.src = URL.createObjectURL(file);
+          containerEl.style.display = 'block';
+        }
+
+        let statusEl = document.getElementById(`upload-status-${inputId}`);
+        if (!statusEl) {
+          statusEl = document.createElement('div');
+          statusEl.id = `upload-status-${inputId}`;
+          statusEl.style.cssText = 'margin-top:6px; font-size:0.72rem; font-weight:600; display:flex; align-items:center; gap:4px;';
+          inputEl.parentNode.appendChild(statusEl);
+        }
+
+        let removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
+        if (!removeBtn) {
+          removeBtn = document.createElement('button');
+          removeBtn.id = `btn-remove-upload-${inputId}`;
+          removeBtn.type = 'button';
+          removeBtn.className = 'btn btn-danger btn-sm';
+          removeBtn.textContent = '✕ Remover';
+          removeBtn.style.cssText = 'padding: 2px 6px; font-size: 0.65rem; width: auto !important; height: auto !important; margin-left: 8px; vertical-align: middle; display: inline-block;';
+          removeBtn.addEventListener('click', () => {
+            if (inputEl.dataset.uploadedUrl) {
+              const oldId = inputEl.dataset.uploadId || inputEl.dataset.uploadedUrl.split('/').pop();
+              if (oldId && oldId.length > 5) {
+                this.fetchFromApi(`/api/uploads/${oldId}`, { method: 'DELETE' }).catch(() => {});
+              }
+            }
+            inputEl.value = '';
+            inputEl.dataset.uploadedUrl = '';
+            inputEl.dataset.uploadId = '';
+            if (containerEl) containerEl.style.display = 'none';
+            if (statusEl) statusEl.innerHTML = '';
+            removeBtn.style.display = 'none';
+          });
+          if (containerEl) {
+            containerEl.appendChild(removeBtn);
+          } else {
+            inputEl.parentNode.appendChild(removeBtn);
+          }
+        }
+        if (removeBtn) removeBtn.style.display = 'inline-block';
+
+        (async () => {
+          try {
+            statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
+            const savedUrl = await this.uploadFile(file);
+            if (savedUrl) {
+              inputEl.dataset.uploadedUrl = savedUrl;
+              inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
+              statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+            } else {
+              throw new Error('Servidor retornou link vazio.');
+            }
+          } catch (err) {
+            statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
+            console.error(`Erro no upload instantâneo (${inputId}):`, err);
+          }
+        })();
+      });
     };
-    setupTicketPhotoPreview('ticket-foto-antes', 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes');
-    setupTicketPhotoPreview('ticket-foto-depois', 'preview-img-ticket-foto-depois', 'preview-ticket-foto-depois');
-    setupTicketPhotoPreview('ticket-foto-plaqueta', 'preview-img-ticket-foto-plaqueta', 'preview-ticket-foto-plaqueta');
+    bindFichaInstantUpload('ticket-foto-antes', 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes', 'image');
+    bindFichaInstantUpload('ticket-foto-depois', 'preview-img-ticket-foto-depois', 'preview-ticket-foto-depois', 'image');
+    bindFichaInstantUpload('ticket-foto-plaqueta', 'preview-img-ticket-foto-plaqueta', 'preview-ticket-foto-plaqueta', 'image');
+    bindFichaInstantUpload('ticket-video', null, null, 'video');
 
     // --- Dynamic Expense Form Behaviors ---
     const expFinalidade = document.getElementById('exp-finalidade');
@@ -3496,17 +3603,31 @@ const App = {
       if (mechInput) mechInput.value = ticket.mechanic || (loggedUser ? loggedUser.name : '');
       
       // Convert DD/MM/YYYY to YYYY-MM-DD for date input
-      let parts = (ticket.date || '').split('/');
-      let formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : new Date().toISOString().split('T')[0];
+      let formattedDate;
+      if (isResolved) {
+        let parts = (ticket.date || '').split('/');
+        formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : new Date().toISOString().split('T')[0];
+      } else {
+        const localNow = new Date();
+        const year = localNow.getFullYear();
+        const month = String(localNow.getMonth() + 1).padStart(2, '0');
+        const day = String(localNow.getDate()).padStart(2, '0');
+        formattedDate = `${year}-${month}-${day}`;
+      }
       const startDateInput = document.getElementById('ticket-start-date');
       if (startDateInput) startDateInput.value = formattedDate;
       
-      const now = new Date();
       const startTimeInput = document.getElementById('ticket-start-time');
-      if (startTimeInput) startTimeInput.value = ticket.startTime || now.toTimeString().slice(0,5);
+      if (startTimeInput) startTimeInput.value = ticket.startTime || new Date().toLocaleTimeString('pt-BR', { hour12: false }).slice(0,5);
       
       const endTimeInput = document.getElementById('ticket-end-time');
-      if (endTimeInput) endTimeInput.value = ticket.endTime || '';
+      if (endTimeInput) {
+        if (isResolved) {
+          endTimeInput.value = ticket.endTime || '';
+        } else {
+          endTimeInput.value = ticket.endTime || new Date().toLocaleTimeString('pt-BR', { hour12: false }).slice(0,5);
+        }
+      }
 
       const eqTypeInput = document.getElementById('ticket-eq-type-text');
       if (eqTypeInput) eqTypeInput.value = ticket.equipmentType || '';
@@ -3588,11 +3709,22 @@ const App = {
       });
 
       // Display previews of already selected files
-      const renderPreviewIfExists = (url, imgId, containerId) => {
+      const renderPreviewIfExists = (url, imgId, containerId, inputId) => {
         const img = document.getElementById(imgId);
         const container = document.getElementById(containerId);
+        const inp = document.getElementById(inputId);
         const finalUrl = (window.TempPhotosCache && window.TempPhotosCache[url]) || url;
         const isValid = finalUrl && finalUrl !== 'null' && finalUrl !== 'undefined' && finalUrl !== '/uploads/null' && finalUrl !== '/uploads/undefined' && finalUrl !== '/uploads/';
+        if (inp) {
+          inp.dataset.initialUrl = isValid ? finalUrl : '';
+          inp.dataset.uploadedUrl = isValid ? finalUrl : '';
+          inp.dataset.uploadId = isValid && finalUrl.includes('/api/uploads/') ? finalUrl.split('/').pop() : '';
+          inp.value = '';
+          const removeBtn = document.getElementById(`btn-remove-upload-${inputId}`);
+          if (removeBtn) removeBtn.style.display = isValid ? 'inline-block' : 'none';
+          const statusEl = document.getElementById(`upload-status-${inputId}`);
+          if (statusEl) statusEl.innerHTML = '';
+        }
         if (isValid && img && container) {
           img.src = finalUrl;
           container.style.display = 'block';
@@ -3603,12 +3735,62 @@ const App = {
         }
       };
 
-      renderPreviewIfExists(ticket.fotoAntes, 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes');
-      renderPreviewIfExists(ticket.fotoDepois, 'preview-img-ticket-foto-depois', 'preview-ticket-foto-depois');
-      renderPreviewIfExists(ticket.fotoPlaqueta, 'preview-img-ticket-foto-plaqueta', 'preview-ticket-foto-plaqueta');
+      renderPreviewIfExists(ticket.fotoAntes, 'preview-img-ticket-foto-antes', 'preview-ticket-foto-antes', 'ticket-foto-antes');
+      renderPreviewIfExists(ticket.fotoDepois, 'preview-img-ticket-foto-depois', 'preview-ticket-foto-depois', 'ticket-foto-depois');
+      renderPreviewIfExists(ticket.fotoPlaqueta, 'preview-img-ticket-foto-plaqueta', 'preview-ticket-foto-plaqueta', 'ticket-foto-plaqueta');
+
+      const videoInput = document.getElementById('ticket-video');
+      if (videoInput) {
+        const finalUrl = ticket.videoAtendimento || '';
+        const isValid = finalUrl && finalUrl !== 'null' && finalUrl !== 'undefined' && finalUrl !== '/uploads/null' && finalUrl !== '/uploads/undefined' && finalUrl !== '/uploads/';
+        videoInput.dataset.initialUrl = isValid ? finalUrl : '';
+        videoInput.dataset.uploadedUrl = isValid ? finalUrl : '';
+        videoInput.dataset.uploadId = isValid && finalUrl.includes('/api/uploads/') ? finalUrl.split('/').pop() : '';
+        videoInput.value = '';
+        const removeBtn = document.getElementById('btn-remove-upload-ticket-video');
+        if (removeBtn) removeBtn.style.display = isValid ? 'inline-block' : 'none';
+        const statusEl = document.getElementById('upload-status-ticket-video');
+        if (statusEl) statusEl.innerHTML = '';
+      }
     }
 
     modal.style.display = 'flex';
+  },
+
+  /**
+   * Cancel Ficha Técnica (Mechanic) - removes newly uploaded files from server and restores initial state
+   */
+  cancelFichaTecnica() {
+    const ids = ['ticket-foto-antes', 'ticket-foto-depois', 'ticket-foto-plaqueta', 'ticket-video'];
+    ids.forEach(id => {
+      const inp = document.getElementById(id);
+      if (inp && inp.dataset.uploadedUrl && inp.dataset.uploadedUrl !== inp.dataset.initialUrl) {
+        const uploadId = inp.dataset.uploadId || inp.dataset.uploadedUrl.split('/').pop();
+        if (uploadId && uploadId.length > 5) {
+          this.fetchFromApi(`/api/uploads/${uploadId}`, { method: 'DELETE' }).catch(() => {});
+        }
+      }
+      if (inp) {
+        inp.value = '';
+        inp.dataset.uploadedUrl = inp.dataset.initialUrl || '';
+        inp.dataset.uploadId = (inp.dataset.initialUrl || '').includes('/api/uploads/') ? inp.dataset.initialUrl.split('/').pop() : '';
+      }
+    });
+
+    document.getElementById('modal-ficha-tecnica').style.display = 'none';
+
+    ids.forEach(id => {
+      const statusEl = document.getElementById(`upload-status-${id}`);
+      if (statusEl) statusEl.innerHTML = '';
+      const containerId = id === 'ticket-video' ? null : `preview-${id}`;
+      const containerEl = containerId ? document.getElementById(containerId) : null;
+      if (containerEl) {
+        const inp = document.getElementById(id);
+        containerEl.style.display = inp.dataset.uploadedUrl ? 'block' : 'none';
+        const img = containerEl.querySelector('img');
+        if (img) img.src = inp.dataset.uploadedUrl || '';
+      }
+    });
   },
 
   /**

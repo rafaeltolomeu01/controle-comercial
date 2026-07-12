@@ -5955,7 +5955,6 @@
     style.textContent = `
       /* Remove o seletor antigo de vendedor da barra lateral, sem apagar dados nem lógica interna. */
       #seller-filter { display: none !important; }
-      .global-unit-container { display: none !important; }
 
       .cc-autofill-locked {
         background-color: rgba(255,255,255,0.035) !important;

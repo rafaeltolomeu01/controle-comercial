@@ -193,7 +193,7 @@
             <h1 id="header-page-title">Painel Geral</h1>
           </div>
           
-          <div class="global-unit-container" style="display: none !important; align-items: center; gap: 8px; background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 8px;">
+          <div class="global-unit-container" style="display: flex; align-items: center; gap: 8px; background-color: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 8px;">
             <label for="global-unit-selector" style="margin: 0; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; stroke: var(--primary-color);"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path><circle cx="12" cy="10" r="3"></circle></svg>
               Unidade:
@@ -963,7 +963,7 @@
     <div class="login-card" style="max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 24px; text-align: left; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
         <h3 style="font-family: var(--font-title); margin: 0; color: var(--primary-color); font-size: 1.25rem;">Ficha Técnica de Manutenção - OS #<span id="ficha-ticket-id-title"></span></h3>
-        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="document.getElementById('modal-ficha-tecnica').style.display='none'">✕</span>
+        <span style="font-size: 1.5rem; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="App.cancelFichaTecnica()">✕</span>
       </div>
 
       <form id="ticket-form">
@@ -1143,7 +1143,7 @@
         <div style="display:flex; gap:12px; margin-top:24px;">
           <button type="submit" class="btn btn-primary" style="flex:1; height:44px; font-weight:600; font-size:1rem;">Registrar Atendimento Técnico</button>
           <button type="button" id="btn-gerar-pdf-ficha" class="btn btn-secondary" onclick="App.generateTicketPdfFromForm()" style="width:150px; height:44px; font-weight:600; font-size:1rem; background-color:#2c3e50; color:#fff; border:1px solid #34495e;">Gerar PDF</button>
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-ficha-tecnica').style.display='none'" style="width:150px; height:44px; font-weight:600; font-size:1rem;">Cancelar</button>
+          <button type="button" class="btn btn-secondary" onclick="App.cancelFichaTecnica()" style="width:150px; height:44px; font-weight:600; font-size:1rem;">Cancelar</button>
         </div>
       </form>
     </div>

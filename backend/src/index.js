@@ -5411,7 +5411,7 @@ app.post('/api/chamados', async (req, res) => {
       defectVideo: body.defectVideo || '',
       status: 'Aberto',
       mechanic: '',
-      date: now.toLocaleDateString('pt-BR'),
+      date: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       startTime: '',
       endTime: '',
       faultDescription: '',
@@ -5547,8 +5547,8 @@ app.put('/api/chamados/:id/status', async (req, res) => {
     const updates = { status, updated_at: new Date().toISOString() };
     if (status === 'Em Atendimento') {
       updates.mechanic = req.user.name || req.user.id;
-      updates.startTime = new Date().toTimeString().slice(0,5);
-      updates.date = new Date().toLocaleDateString('pt-BR');
+      updates.startTime = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
+      updates.date = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     }
     await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update(updates);
     res.json({ success: true });
@@ -5562,12 +5562,13 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
   try {
     const chamado = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!chamado) return res.status(404).json({ error: 'Chamado não encontrado' });
-    const staff = canSeeAllMechanicalTickets(req.user);
+    const staff = canSeeAllMechanicalTickets(req.user) || ['Gerente', 'Supervisor', 'Mecânico', 'Mecanico'].includes(req.user.profile);
     if (!staff) return res.status(403).json({ error: 'Acesso negado: somente equipe técnica pode finalizar ficha.' });
     const b = req.body || {};
     await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({
       status: 'Resolvido',
       mechanic: b.mechanic || chamado.mechanic || req.user.name || req.user.id,
+      date: b.date || chamado.date || '',
       endTime: b.endTime || '',
       faultDescription: b.faultDescription || '',
       solutionDescription: b.solutionDescription || '',
