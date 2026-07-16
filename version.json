@@ -1,7 +1,7 @@
 {
-  "version": "20260702..NaN",
-  "updatedAt": "2026-07-02T21:54:45.986Z",
-  "description": "Restringe fila de aprovação, corrige persistência de aprovar/reprovar e notifica vendedor para correção",
-  "build": "20260702-1835-equipamentos-importados",
-  "buildDate": "2026-07-03T20:17:02.683Z"
+  "version": "20260716.1",
+  "updatedAt": "2026-07-16T18:00:00.000Z",
+  "description": "Edicao segura de despesas pendentes, fotos com zoom e filtros encadeados com ordenacao",
+  "build": "20260716-1-despesas-filtros-zoom",
+  "buildDate": "2026-07-16T18:00:00.000Z"
 }

@@ -656,6 +656,30 @@
     border-radius: 10px !important;
     font-size: 0.82rem !important;
   }
+
+  /* As acoes de despesas precisam continuar acessiveis no formato de cartao. */
+  #expenses-table-body td[data-label="Acoes"],
+  #expenses-table-body td[data-label="Ações"] {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid rgba(255,255,255,0.08) !important;
+  }
+  #expenses-table-body td[data-label="Acoes"] > div,
+  #expenses-table-body td[data-label="Ações"] > div {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  #expenses-table-body td[data-label="Acoes"] button,
+  #expenses-table-body td[data-label="Ações"] button {
+    width: 100% !important;
+    min-height: var(--mobile-action-min-h) !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+  }
 }
 
 /* ============================================================

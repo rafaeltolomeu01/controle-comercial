@@ -8167,13 +8167,18 @@
       </div>`;
     }
     let correction = '';
+    let edit = '';
     const user = getUser();
     if (normalize(exp && exp.status).includes('correc') && user && String(exp && exp.userId) === String(user.id)) {
-      correction = `<button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); App.correctExpenseAndResubmit && App.correctExpenseAndResubmit('${id}')">Corrigir</button>`;
+      correction = `<button class="btn btn-warning btn-sm cc-btn-corrigir-despesa" onclick="event.stopPropagation(); App.correctExpenseAndResubmit && App.correctExpenseAndResubmit('${id}')">Corrigir</button>`;
+    }
+    if (pending(exp && exp.status) && user && String(exp && exp.userId) === String(user.id)) {
+      edit = `<button class="btn btn-warning btn-sm cc-btn-editar-despesa" onclick="event.stopPropagation(); App.editPendingExpense && App.editPendingExpense('${id}')">Editar</button>`;
     }
     return `<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
       <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.__ccOpenExpenseDetails('${id}')">Ver Detalhes</button>
       <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); App.generateExpenseComprovantePdf && App.generateExpenseComprovantePdf('${id}')">PDF</button>
+      ${edit}
       ${correction}
     </div>`;
   }
@@ -9467,4 +9472,3 @@
   else start();
   window.addEventListener('hashchange', function(){ setTimeout(start, 150); });
 })();
-

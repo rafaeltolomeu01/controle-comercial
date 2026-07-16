@@ -3685,59 +3685,75 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
       'Equipamentos', 'Avaliação de Movimentação', 'Confirmação de Movimentação'
     ]);
 
-    let query = db('equipamentos_movimentacoes').where(function() {
-      this.where('equipamentos_movimentacoes.excluido', false).orWhereNull('equipamentos_movimentacoes.excluido');
-    }).andWhere(function() {
-      this.where('equipamentos_movimentacoes.empresa', req.user.empresa_name)
-        .orWhere('equipamentos_movimentacoes.empresa', req.user.empresa_id);
-    });
+    const companyCandidates = [
+      req.user && req.user.empresa_id,
+      req.user && req.user.empresa_name,
+      req.user && req.user.companyName
+    ].filter(isFilterValValid);
+    if (!companyCandidates.length) {
+      return res.status(403).json({ error: 'Usuario sem empresa vinculada.' });
+    }
+
+    // Registros antigos podem ter o nome ou o identificador da empresa na coluna
+    // `empresa`. O vinculo do vendedor funciona como segunda chave segura de escopo,
+    // sem liberar registros de outra empresa e sem reescrever dados historicos.
+    let query = db('equipamentos_movimentacoes as em')
+      .leftJoin('usuarios as movement_seller', 'em.vendedor_id', 'movement_seller.id')
+      .where(function() {
+        this.where('em.excluido', false).orWhereNull('em.excluido');
+      })
+      .andWhere(function() {
+        this.whereIn('em.empresa', companyCandidates);
+        if (isFilterValValid(req.user && req.user.empresa_id)) {
+          this.orWhere('movement_seller.empresa_id', req.user.empresa_id);
+        }
+      })
+      .select('em.*');
 
     if (!isActorAdmin) {
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.join('usuarios', 'equipamentos_movimentacoes.vendedor_id', '=', 'usuarios.id')
-                     .where('usuarios.unitId', req.user.unitId)
-                     .select('equipamentos_movimentacoes.*');
+        query = query.where('movement_seller.unitId', req.user.unitId);
       }
     }
 
     // Aplica cadeia hierárquica também nas movimentações
     if (!isActorAdmin) {
       const permittedIds = await getPermittedSellerIds(req.user, db);
-      query = query.whereIn('equipamentos_movimentacoes.vendedor_id', permittedIds);
+      query = query.whereIn('em.vendedor_id', permittedIds);
     }
 
     // Filtros dinâmicos
     if (isFilterValValid(req.query.empresa)) {
-      query = query.where('equipamentos_movimentacoes.empresa', req.query.empresa);
+      query = query.where('em.empresa', req.query.empresa);
     }
     if (isFilterValValid(req.query.cidade)) {
-      query = query.where('equipamentos_movimentacoes.cliente_cidade', 'like', `%${req.query.cidade}%`);
+      query = query.where('em.cliente_cidade', 'like', `%${req.query.cidade}%`);
     }
     if (isFilterValValid(req.query.vendedor)) {
-      query = query.where('equipamentos_movimentacoes.vendedor_solicitante', 'like', `%${req.query.vendedor}%`);
+      query = query.where('em.vendedor_solicitante', 'like', `%${req.query.vendedor}%`);
     }
     if (isFilterValValid(req.query.patrimonio)) {
       const p = req.query.patrimonio;
       query = query.andWhere(function() {
-        this.where('equipamentos_movimentacoes.patrimonio', 'like', `%${p}%`)
-            .orWhere('equipamentos_movimentacoes.patrimonio_novo', 'like', `%${p}%`);
+        this.where('em.patrimonio', 'like', `%${p}%`)
+            .orWhere('em.patrimonio_novo', 'like', `%${p}%`);
       });
     }
     if (isFilterValValid(req.query.tipo_solicitacao)) {
-      query = query.where('equipamentos_movimentacoes.tipo_solicitacao', req.query.tipo_solicitacao);
+      query = query.where('em.tipo_solicitacao', req.query.tipo_solicitacao);
     }
     if (isFilterValValid(req.query.status)) {
-      query = query.where('equipamentos_movimentacoes.status', req.query.status);
+      query = query.where('em.status', req.query.status);
     }
     if (isFilterValValid(req.query.data_inicio)) {
-      query = query.where('equipamentos_movimentacoes.created_at', '>=', req.query.data_inicio);
+      query = query.where('em.created_at', '>=', req.query.data_inicio);
     }
     if (isFilterValValid(req.query.data_fim)) {
-      query = query.where('equipamentos_movimentacoes.created_at', '<=', req.query.data_fim + 'T23:59:59');
+      query = query.where('em.created_at', '<=', req.query.data_fim + 'T23:59:59');
     }
 
-    const list = await query.orderBy('equipamentos_movimentacoes.id', 'desc');
+    const list = await query.orderBy('em.id', 'desc');
     res.json(list);
   } catch (err) {
     console.error(err);
@@ -5093,10 +5109,75 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
 
 
 // Corrigir despesa devolvida para correção. Apenas o dono do lançamento pode reenviar.
+// Editar uma despesa ainda pendente. A verificacao tambem ocorre no UPDATE para
+// impedir corrida com uma aprovacao feita ao mesmo tempo.
+app.put('/api/despesas-reembolsos/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const record = await db('despesas_reembolsos')
+      .where({ id, empresa_id: req.user.empresa_id })
+      .first();
+
+    if (!record) return res.status(404).json({ error: 'Despesa nao encontrada.' });
+    if (String(record.userId) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Voce so pode editar despesas lancadas por voce.' });
+    }
+    if (record.status !== 'Pendente') {
+      return res.status(409).json({ error: 'Somente despesas pendentes podem ser editadas.' });
+    }
+
+    const b = req.body || {};
+    const nextValue = b.value !== undefined && b.value !== '' ? ccNum(b.value) : Number(record.value);
+    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+      return res.status(400).json({ error: 'Informe um valor de despesa valido e maior que zero.' });
+    }
+
+    const requestedUnit = b.unitId !== undefined && b.unitId !== '' ? String(b.unitId) : record.unitId;
+    const safeUnit = req.user.unitId && req.user.unitId !== 'all' ? req.user.unitId : requestedUnit;
+    const updates = {
+      unitId: safeUnit,
+      date: b.date !== undefined && b.date !== '' ? String(b.date) : record.date,
+      time: b.time !== undefined && b.time !== '' ? String(b.time) : record.time,
+      finalidade: b.finalidade || record.finalidade,
+      operacao: b.operacao || record.operacao,
+      descreva: b.descreva !== undefined ? String(b.descreva || '') : record.descreva,
+      veiculo: b.veiculo !== undefined ? String(b.veiculo || '') : record.veiculo,
+      km: b.km === null || b.km === '' ? null : (b.km !== undefined && !isNaN(parseInt(b.km, 10)) ? parseInt(b.km, 10) : record.km),
+      foto_odometro: b.foto_odometro !== undefined ? String(b.foto_odometro || '') : record.foto_odometro,
+      foto_comprovante: b.foto_comprovante !== undefined ? String(b.foto_comprovante || '') : record.foto_comprovante,
+      value: nextValue,
+      observation: b.observation !== undefined ? String(b.observation || '') : (b.observacao !== undefined ? String(b.observacao || '') : record.observation),
+      updated_at: new Date().toISOString()
+    };
+
+    const updated = await db('despesas_reembolsos')
+      .where({ id, empresa_id: req.user.empresa_id, userId: req.user.id, status: 'Pendente' })
+      .update(updates);
+
+    if (!updated) {
+      return res.status(409).json({ error: 'A despesa mudou de status e nao pode mais ser editada.' });
+    }
+
+    await db('auditoria_logs').insert({
+      usuario_id: req.user.id,
+      acao: 'EDITOU_DESPESA_PENDENTE',
+      detalhes: `Despesa pendente #${id} editada pelo proprio solicitante.`,
+      empresa_id: req.user.empresa_id
+    }).catch(() => {});
+
+    res.json({ success: true, id, status: 'Pendente' });
+  } catch (err) {
+    console.error('Erro ao editar despesa pendente:', err);
+    res.status(500).json({ error: 'Erro ao editar despesa pendente.' });
+  }
+});
+
 app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
   const { id } = req.params;
   try {
-    const record = await db('despesas_reembolsos').where({ id }).first();
+    const record = await db('despesas_reembolsos')
+      .where({ id, empresa_id: req.user.empresa_id })
+      .first();
     if (!record) return res.status(404).json({ error: 'Despesa não encontrada.' });
     if (String(record.userId) !== String(req.user.id)) return res.status(403).json({ error: 'Você só pode corrigir despesas lançadas por você.' });
     if (record.status !== 'Correção Solicitada') return res.status(400).json({ error: 'Esta despesa não está aguardando correção.' });
@@ -5117,7 +5198,10 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
       status: 'Pendente',
       updated_at: new Date().toISOString()
     };
-    await db('despesas_reembolsos').where({ id }).update(updates);
+    const updated = await db('despesas_reembolsos')
+      .where({ id, empresa_id: req.user.empresa_id, userId: req.user.id, status: record.status })
+      .update(updates);
+    if (!updated) return res.status(409).json({ error: 'A despesa mudou de status e nao pode mais ser corrigida.' });
     await db('auditoria_logs').insert({ usuario_id: req.user.id, acao: 'CORRIGIU_DESPESA', detalhes: `Despesa #${id} corrigida e reenviada para aprovação.`, empresa_id: req.user.empresa_id }).catch(()=>{});
     const targets = await obterDestinatarios('DESPESA_CORRIGIDA', record.userId, record.empresa_id || req.user.empresa_id);
     await notifyUsers(targets, {

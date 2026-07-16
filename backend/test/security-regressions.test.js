@@ -9,6 +9,14 @@ const moneyMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '20260703_fix_expense_values_cents_to_decimal.js'),
   'utf8'
 );
+const listUpdates = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'js', 'atualizacoes-listas-20260716.js'),
+  'utf8'
+);
+const compatibility = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'js', 'compatibilidade-consolidada.js'),
+  'utf8'
+);
 
 test('nao contem credencial administrativa padrao', () => {
   assert.equal(server.includes("password: '123456'"), false);
@@ -42,4 +50,48 @@ test('nao existe conversao automatica heuristica de valores', () => {
 test('uploads de banco usam escopo da empresa', () => {
   assert.match(server, /id: req\.params\.id, empresa_id: req\.user\.empresa_id/);
   assert.match(server, /empresa_id: req\.user\.empresa_id[\s\S]{0,180}whereIn\('id', cleanIds\)/);
+});
+
+test('edicao de despesa pendente e bloqueada no servidor por dono, empresa e status', () => {
+  const routeStart = server.indexOf("app.put('/api/despesas-reembolsos/:id',");
+  const routeEnd = server.indexOf("app.put('/api/despesas-reembolsos/:id/correct'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /empresa_id: req\.user\.empresa_id/);
+  assert.match(route, /String\(record\.userId\) !== String\(req\.user\.id\)/);
+  assert.match(route, /record\.status !== 'Pendente'/);
+  assert.match(route, /status: 'Pendente'/);
+  assert.equal(route.includes("status: 'Aprovado'"), false);
+});
+
+test('acoes de despesa nao duplicam corrigir e oferecem editar ao dono enquanto pendente', () => {
+  assert.match(compatibility, /cc-btn-corrigir-despesa/);
+  assert.match(compatibility, /cc-btn-editar-despesa/);
+  assert.match(compatibility, /App\.editPendingExpense/);
+});
+
+test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça', () => {
+  assert.match(listUpdates, /cc-image-original/);
+  assert.match(listUpdates, /data-action="plus"/);
+  assert.match(listUpdates, /pointermove/);
+  assert.match(listUpdates, /pinchStart/);
+  assert.equal(listUpdates.includes('canvas.toDataURL'), false);
+});
+
+test('listas possuem filtros encadeados e ordenacao antes da paginacao', () => {
+  assert.match(listUpdates, /rebuildCascadingFilters/);
+  assert.match(listUpdates, /FiltersManager\.filterData = function/);
+  assert.match(listUpdates, /applySort\(baseFilterData/);
+  assert.match(listUpdates, /aria-sort/);
+});
+
+test('movimentacoes antigas usam escopo seguro por empresa sem depender de nome opcional', () => {
+  const routeStart = server.indexOf("app.get('/api/equipamentos/movimentacoes'");
+  const routeEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /companyCandidates/);
+  assert.match(route, /leftJoin\('usuarios as movement_seller'/);
+  assert.match(route, /orWhere\('movement_seller\.empresa_id', req\.user\.empresa_id\)/);
+  assert.equal(route.includes("where('equipamentos_movimentacoes.empresa', req.user.empresa_name)"), false);
 });
