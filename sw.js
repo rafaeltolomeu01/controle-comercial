@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-9-remocao-saldo-alertas';
+const CACHE_VERSION = '20260716-10-filtros-tabela-mobile-saldo';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

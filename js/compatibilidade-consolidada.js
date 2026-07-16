@@ -305,17 +305,17 @@
   // 03/04/05/06 - Exclusão em massa, somente Admin. Implementação segura para principais listas locais/API.
   function addBulkForTable(tbodyId, storeGetter, storeSaver, label){
     if (!isAdmin()) return;
-    const tbody = document.getElementById(tbodyId); if (!tbody || tbody.dataset.bulkReady) return;
+    const tbody = document.getElementById(tbodyId); if (!tbody) return;
     const table = tbody.closest('table'); if (!table) return;
-    tbody.dataset.bulkReady = '1';
+    table.classList.add('cc-bulk-table');
     const headRow = table.querySelector('thead tr');
-    if (headRow && !headRow.querySelector('.cc-bulk-all')) headRow.insertAdjacentHTML('afterbegin','<th style="width:34px;"><input type="checkbox" class="cc-bulk-all"></th>');
+    if (headRow && !headRow.querySelector('.cc-bulk-all')) headRow.insertAdjacentHTML('afterbegin','<th class="cc-bulk-cell"><input type="checkbox" class="cc-bulk-all" aria-label="Selecionar todos"></th>');
     [...tbody.querySelectorAll('tr')].forEach(tr => {
       if (tr.querySelector('.cc-bulk-row')) return;
       const onclick = tr.getAttribute('onclick') || '';
       const m = onclick.match(/['"]([^'"]+)['"]\)/);
       const id = tr.dataset.id || (m && m[1]) || (tr.children[0] && tr.children[0].textContent.replace('#','').trim());
-      tr.insertAdjacentHTML('afterbegin', `<td onclick="event.stopPropagation()"><input type="checkbox" class="cc-bulk-row" value="${id||''}"></td>`);
+      tr.insertAdjacentHTML('afterbegin', `<td class="cc-bulk-cell" data-label="Selecionar" onclick="event.stopPropagation()"><input type="checkbox" class="cc-bulk-row" aria-label="Selecionar registro ${id||''}" value="${id||''}"></td>`);
     });
     let btn = table.parentElement.querySelector('.cc-bulk-delete-btn');
     if (!btn) {
@@ -326,8 +326,12 @@
       table.parentElement.insertBefore(btn, table);
     }
     const update = () => { btn.style.display = tbody.querySelectorAll('.cc-bulk-row:checked').length ? 'inline-block' : 'none'; };
-    table.querySelector('.cc-bulk-all')?.addEventListener('change', e => { tbody.querySelectorAll('.cc-bulk-row').forEach(c => c.checked = e.target.checked); update(); });
-    tbody.addEventListener('change', update);
+    if (tbody.dataset.bulkReady !== '1') {
+      tbody.dataset.bulkReady = '1';
+      table.querySelector('.cc-bulk-all')?.addEventListener('change', e => { tbody.querySelectorAll('.cc-bulk-row').forEach(c => c.checked = e.target.checked); update(); });
+      tbody.addEventListener('change', update);
+    }
+    update();
     btn.onclick = async () => {
       if (!isAdmin()) return alert('Somente administrador pode excluir registros.');
       const ids = [...tbody.querySelectorAll('.cc-bulk-row:checked')].map(c => String(c.value)).filter(Boolean);

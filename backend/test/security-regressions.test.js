@@ -194,3 +194,32 @@ test('dossie visual exibe o motivo da troca usado no PDF', () => {
   assert.match(appJs, /mov\.detalhe_troca_adicao \|\| mov\.motivo_troca/);
   assert.match(appJs, /exchangeReason\.textContent/);
 });
+
+test('tabela de saldos mantem selecao alinhada apos redesenhar as linhas', () => {
+  assert.match(compatibility, /table\.classList\.add\('cc-bulk-table'\)/);
+  assert.match(compatibility, /class="cc-bulk-cell"/);
+  assert.match(compatibility, /class="cc-bulk-row"/);
+  assert.equal(compatibility.includes('if (!tbody || tbody.dataset.bulkReady) return'), false);
+});
+
+test('filtro da aprovacao de saldo e reativado quando a guia e recriada', () => {
+  const appJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(appJs, /dashboardFilterForm\.dataset\.filtersConfigured/);
+  assert.match(appJs, /dashboardFilterForm\.addEventListener\('submit'/);
+  assert.equal(appJs.includes('this.despesasFiltrosConfigured = true'), false);
+});
+
+test('botao de adicionar ou remover saldo reaparece depois do login', () => {
+  assert.match(listUpdates, /const existingButton = document\.getElementById\('cc-btn-direct-balance'\)/);
+  assert.match(listUpdates, /if \(!canLaunchDirectBalance\(\)\)/);
+  assert.match(listUpdates, /existingButton\?\.remove\(\)/);
+  assert.equal(listUpdates.includes('function installDirectBalanceCredit() {\n    if (!canLaunchDirectBalance()) return;'), false);
+});
+
+test('guias financeiras ficam abaixo da unidade e rolam no celular', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', '..', 'css', 'main.css'), 'utf8');
+  assert.match(css, /#view-despesas-dashboard > \.view-tabs/);
+  assert.match(css, /flex-flow: row nowrap !important/);
+  assert.match(css, /overflow-x: auto !important/);
+  assert.match(css, /min-height: 76px !important/);
+});

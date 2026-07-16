@@ -568,9 +568,13 @@
   }
 
   function installDirectBalanceCredit() {
-    if (!canLaunchDirectBalance()) return;
     const ensureButton = () => {
-      if (window.location.hash !== '#despesas-dashboard' || document.getElementById('cc-btn-direct-balance')) return;
+      const existingButton = document.getElementById('cc-btn-direct-balance');
+      if (!canLaunchDirectBalance()) {
+        existingButton?.remove();
+        return;
+      }
+      if (window.location.hash !== '#despesas-dashboard' || existingButton) return;
       const tabs = document.querySelector('#tab-balance-approvals-dashboard')?.closest('.view-tabs');
       if (!tabs) return;
       const button = document.createElement('button');

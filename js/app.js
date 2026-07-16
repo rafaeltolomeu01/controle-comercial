@@ -4422,8 +4422,12 @@ const App = {
       document.getElementById('metric-despesas-rejeitado').textContent = fmt(summary.totalRejeitado);
       document.getElementById('metric-despesas-pendentes').textContent = summary.countPendente;
 
-      if (!this.despesasFiltrosConfigured) {
-        document.getElementById('despesas-filtro-form').addEventListener('submit', (e) => {
+      const dashboardFilterForm = document.getElementById('despesas-filtro-form');
+      // A tela e recriada ao trocar de guia. A marcacao precisa ficar no
+      // formulario atual, e nao no App, para o filtro continuar funcionando.
+      if (dashboardFilterForm && dashboardFilterForm.dataset.filtersConfigured !== '1') {
+        dashboardFilterForm.dataset.filtersConfigured = '1';
+        dashboardFilterForm.addEventListener('submit', (e) => {
           e.preventDefault();
           this.loadDespesasDashboard();
         });
@@ -4434,7 +4438,6 @@ const App = {
           document.getElementById('filter-despesa-fim').value = '';
           this.loadDespesasDashboard();
         });
-        this.despesasFiltrosConfigured = true;
       }
     } catch (err) {
       console.error(err);

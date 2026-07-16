@@ -2057,3 +2057,88 @@ select { text-overflow: ellipsis; }
     display: none !important;
   }
 }
+
+/* Ajustes 16/07: guias financeiras no celular e selecao em massa alinhada. */
+.cc-bulk-table .cc-bulk-cell {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  padding-left: 12px !important;
+  padding-right: 8px !important;
+  text-align: center !important;
+  box-sizing: border-box;
+}
+
+.cc-bulk-table .cc-bulk-cell input[type="checkbox"] {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 15px !important;
+  height: 15px !important;
+  margin: 0 !important;
+  cursor: pointer;
+}
+
+#view-solicitacao-despesas .table-responsive,
+#view-despesas-dashboard .table-responsive {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 901px) {
+  #view-solicitacao-despesas .table-responsive table,
+  #view-despesas-dashboard .table-responsive table {
+    min-width: 1120px;
+    table-layout: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .page-header.no-print {
+    min-height: 76px !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    flex: 0 0 auto !important;
+  }
+
+  .page-body {
+    position: relative !important;
+    z-index: 1 !important;
+    padding-top: 12px !important;
+  }
+
+  #view-despesas > .view-tabs,
+  #view-solicitacao-despesas > .view-tabs,
+  #view-despesas-dashboard > .view-tabs {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 0 12px !important;
+    padding: 0 0 8px !important;
+    position: relative !important;
+    top: auto !important;
+    z-index: 1 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    background: var(--bg-main) !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  #view-despesas > .view-tabs .view-tab-btn,
+  #view-solicitacao-despesas > .view-tabs .view-tab-btn,
+  #view-despesas-dashboard > .view-tabs .view-tab-btn {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  .cc-bulk-table .cc-bulk-cell {
+    display: flex !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    justify-content: space-between !important;
+  }
+}
