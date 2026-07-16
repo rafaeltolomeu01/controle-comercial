@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-1-despesas-filtros-zoom';
+const CACHE_VERSION = '20260716-2-zoom-arraste-livre';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

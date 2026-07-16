@@ -1,7 +1,7 @@
 {
-  "version": "20260716.1",
+  "version": "20260716.2",
   "updatedAt": "2026-07-16T18:00:00.000Z",
-  "description": "Edicao segura de despesas pendentes, fotos com zoom e filtros encadeados com ordenacao",
-  "build": "20260716-1-despesas-filtros-zoom",
+  "description": "Fotos com zoom e arraste livre, edicao segura de despesas e filtros encadeados",
+  "build": "20260716-2-zoom-arraste-livre",
   "buildDate": "2026-07-16T18:00:00.000Z"
 }

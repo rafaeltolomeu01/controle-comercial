@@ -196,7 +196,8 @@
     viewer.setAttribute('aria-label', 'Visualizador de imagem');
     viewer.innerHTML = `
       <div class="cc-image-stage">
-        <img class="cc-image-original" alt="Imagem ampliada">
+        <img class="cc-image-original" alt="Imagem ampliada" draggable="false">
+        <div class="cc-image-drag-hint">Arraste a foto para ver todas as partes</div>
       </div>
       <div class="cc-image-toolbar" aria-label="Controles da imagem">
         <button type="button" data-action="minus" aria-label="Reduzir zoom">−</button>
@@ -213,9 +214,11 @@
     style.textContent = `
       #cc-image-viewer{display:none;position:fixed;inset:0;z-index:1000000;background:rgba(3,7,18,.97);overflow:hidden;touch-action:none;user-select:none;}
       #cc-image-viewer.is-open{display:block;}
-      .cc-image-stage{position:absolute;inset:0 0 72px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:grab;}
+      .cc-image-stage{position:absolute;inset:0 0 72px;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;}
       .cc-image-stage.is-dragging{cursor:grabbing;}
-      .cc-image-original{display:block;max-width:calc(100vw - 24px);max-height:calc(100vh - 96px);width:auto;height:auto;object-fit:contain;transform-origin:center center;will-change:transform;box-shadow:0 12px 40px rgba(0,0,0,.55);}
+      .cc-image-original{display:block;max-width:calc(100vw - 24px);max-height:calc(100vh - 96px);width:auto;height:auto;object-fit:contain;transform-origin:center center;will-change:transform;box-shadow:0 12px 40px rgba(0,0,0,.55);pointer-events:none;-webkit-user-drag:none;user-select:none;}
+      .cc-image-drag-hint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;padding:7px 12px;border-radius:999px;background:rgba(15,23,42,.86);color:#fff;font-size:.78rem;font-weight:700;pointer-events:none;opacity:0;transition:opacity .18s ease;white-space:nowrap;}
+      #cc-image-viewer.is-zoomed .cc-image-drag-hint{opacity:1;}
       .cc-image-toolbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;padding:8px;background:rgba(15,23,42,.92);border:1px solid rgba(255,255,255,.18);border-radius:12px;max-width:calc(100vw - 16px);}
       .cc-image-toolbar button{min-width:42px;height:42px;padding:0 12px;border:1px solid rgba(255,255,255,.22);border-radius:8px;background:#1e293b;color:#fff;font-weight:700;cursor:pointer;white-space:nowrap;}
       .cc-image-toolbar button:hover{background:#334155;}
@@ -241,6 +244,7 @@
 
     const render = () => {
       image.style.transform = `translate3d(${offsetX}px,${offsetY}px,0) scale(${scale})`;
+      viewer.classList.toggle('is-zoomed', scale > 1);
       zoomLabel.textContent = `${Math.round(scale * 100)}%`;
     };
     const reset = () => { scale = 1; offsetX = 0; offsetY = 0; render(); };
@@ -280,8 +284,11 @@
       setScale(scale * (event.deltaY < 0 ? 1.15 : 0.87));
     }, { passive: false });
     image.addEventListener('dblclick', event => { event.preventDefault(); setScale(scale > 1 ? 1 : 2); });
+    image.addEventListener('dragstart', event => event.preventDefault());
 
     stage.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
       stage.setPointerCapture?.(event.pointerId);
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointers.size === 1) {
@@ -294,6 +301,7 @@
     });
     stage.addEventListener('pointermove', event => {
       if (!pointers.has(event.pointerId)) return;
+      event.preventDefault();
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (pointers.size === 2 && pinchStart) {
         const points = [...pointers.values()];
@@ -321,6 +329,10 @@
       if (event.key === 'Escape') close();
       if (event.key === '+') setScale(scale * 1.25);
       if (event.key === '-') setScale(scale / 1.25);
+      if (scale > 1 && event.key === 'ArrowUp') { event.preventDefault(); offsetY += 80; render(); }
+      if (scale > 1 && event.key === 'ArrowDown') { event.preventDefault(); offsetY -= 80; render(); }
+      if (scale > 1 && event.key === 'ArrowLeft') { event.preventDefault(); offsetX += 80; render(); }
+      if (scale > 1 && event.key === 'ArrowRight') { event.preventDefault(); offsetX -= 80; render(); }
     });
   }
 
