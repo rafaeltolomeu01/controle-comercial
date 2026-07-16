@@ -2943,6 +2943,132 @@ app.post('/api/despesas', async (req, res) => {
   }
 });
 
+// Lanca saldo diretamente para um vendedor, sem solicitacao previa.
+// Restrito aos perfis que realmente aprovam saldo/despesas e sempre dentro da empresa do token.
+app.post('/api/despesas/direct-credit', async (req, res) => {
+  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const profile = normalizeRole(req.user.profile || '');
+  const canLaunchDirectCredit = isAdminUser(req.user)
+    || ['financeiro', 'responsavel financeiro'].includes(profile)
+    || perms.some(permission => [
+      'Financeiro', 'Aprovação de Saldo', 'Aprovacao de Saldo',
+      'Aprovação de Despesas', 'Aprovacao de Despesas'
+    ].includes(permission));
+
+  if (!canLaunchDirectCredit) {
+    return res.status(403).json({ error: 'Acesso negado: apenas aprovadores financeiros podem lançar saldo direto.' });
+  }
+
+  const vendorId = String(req.body && req.body.vendor_id || '').trim();
+  const periodStart = String(req.body && req.body.period_start || '').trim();
+  const periodEnd = String(req.body && req.body.period_end || '').trim();
+  const observation = String(req.body && req.body.observation || '').trim().slice(0, 1000);
+  const amount = Number(req.body && req.body.amount);
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+
+  if (!vendorId || !isoDate.test(periodStart) || !isoDate.test(periodEnd)) {
+    return res.status(400).json({ error: 'Vendedor e período são obrigatórios.' });
+  }
+  if (periodStart > periodEnd) {
+    return res.status(400).json({ error: 'A data inicial não pode ser posterior à data final.' });
+  }
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999.99) {
+    return res.status(400).json({ error: 'Informe um valor válido e maior que zero.' });
+  }
+  if (!req.user.empresa_id) {
+    return res.status(403).json({ error: 'Usuário aprovador sem empresa vinculada.' });
+  }
+
+  try {
+    const vendor = await db('usuarios')
+      .where({ id: vendorId, empresa_id: req.user.empresa_id })
+      .first();
+    if (!vendor || normalizeRole(vendor.profile || '') !== 'vendedor') {
+      return res.status(404).json({ error: 'Vendedor não encontrado nesta empresa.' });
+    }
+
+    const bdt = getBrasiliaDateTime();
+    const startBR = periodStart.split('-').reverse().join('/');
+    const endBR = periodEnd.split('-').reverse().join('/');
+    const periodText = startBR === endBR ? startBR : `${startBR} a ${endBR}`;
+    const now = bdt.iso;
+    const description = `Saldo direto - período ${periodText}`;
+
+    const requestId = await db.transaction(async (trx) => {
+      const insertedRequest = await trx('despesas_solicitacoes')
+        .insert({
+          empresa_id: req.user.empresa_id,
+          solicitante: vendor.name,
+          justificativa: observation || `Saldo lançado diretamente pelo aprovador para o período ${periodText}.`,
+          data_solicitacao: bdt.date,
+          hora_solicitacao: bdt.time,
+          usuario_id: vendor.id,
+          status: 'Aprovada',
+          valor_hotel_alim: 0,
+          valor_abastecimento: 0,
+          rota_destino: `Período: ${periodText}`,
+          placa_veiculo: '',
+          created_at: now,
+          updated_at: now
+        })
+        .returning('id');
+      const newId = typeof insertedRequest[0] === 'object' ? insertedRequest[0].id : insertedRequest[0];
+
+      await trx('despesas_itens_extras').insert({
+        solicitacao_id: newId,
+        valor: amount,
+        descricao: description,
+        created_at: now,
+        updated_at: now
+      });
+      await trx('despesas_solicitacoes_itens').insert({
+        solicitacao_id: newId,
+        categoria: 'Saldo lançado diretamente',
+        valor_solicitado: amount,
+        quantidade_solicitada: null,
+        valor_aprovado: amount,
+        quantidade_aprovada: null,
+        status: 'aprovado',
+        justificativa: observation || description,
+        data_aprovacao: bdt.date,
+        usuario_aprovador: req.user.name || req.user.id,
+        created_at: now,
+        updated_at: now
+      });
+      await trx('despesas_aprovacoes').insert({
+        solicitacao_id: newId,
+        gerente_id: req.user.id,
+        data_aprovacao: bdt.date,
+        hora_aprovacao: bdt.time,
+        observacao: observation || description,
+        status: 'Aprovada',
+        created_at: now,
+        updated_at: now
+      });
+      await trx('auditoria_logs').insert({
+        usuario_id: req.user.id,
+        acao: 'LANCOU_SALDO_DIRETO',
+        detalhes: `Saldo direto de R$ ${amount.toFixed(2)} lançado para ${vendor.name} (${vendor.id}), período ${periodText}.`,
+        empresa_id: req.user.empresa_id
+      });
+      return newId;
+    });
+
+    const targets = await obterDestinatarios('PARECER_SALDO', vendor.id, req.user.empresa_id);
+    await notifyUsers(targets, {
+      empresa_id: req.user.empresa_id,
+      module: 'saldo', record_id: String(requestId), target_hash: '#despesas',
+      title: 'Saldo lançado diretamente',
+      body: `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
+    });
+
+    res.json({ success: true, id: requestId, amount, vendor: vendor.name, period: periodText });
+  } catch (err) {
+    console.error('Erro ao lançar saldo direto:', err);
+    res.status(500).json({ error: 'Erro ao lançar saldo direto.' });
+  }
+});
+
 // List all expense requests for user's company (applying filters & roles)
 app.get('/api/despesas', async (req, res) => {
   try {

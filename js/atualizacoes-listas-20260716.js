@@ -10,6 +10,9 @@
 
   const normalize = value => String(value == null ? '' : value)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
 
   const api = (path, options = {}) => {
     if (window.App && typeof App.fetchFromApi === 'function') return App.fetchFromApi(path, options);
@@ -336,6 +339,121 @@
     });
   }
 
+  function canLaunchDirectBalance() {
+    const user = currentUser();
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    const profile = normalize(user.profile);
+    return profile === 'administrador' || profile === 'financeiro' || profile === 'responsavel financeiro'
+      || permissions.some(permission => [
+        'financeiro', 'aprovacao de saldo', 'aprovacao de despesas', 'administrador'
+      ].includes(normalize(permission)));
+  }
+
+  function createDirectBalanceModal() {
+    let modal = document.getElementById('cc-direct-balance-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'cc-direct-balance-modal';
+    modal.className = 'modal';
+    modal.style.display = 'none';
+    modal.innerHTML = `
+      <div class="login-card" style="max-width:620px;width:min(94vw,620px);">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;">
+          <div><h2 style="margin:0;color:var(--primary-color);">Lançar saldo direto</h2><small style="color:var(--text-muted);">Sem solicitação prévia do vendedor</small></div>
+          <button type="button" class="btn btn-secondary" data-direct-close>Fechar</button>
+        </div>
+        <form id="cc-direct-balance-form">
+          <div class="form-group"><label for="cc-direct-vendor">Vendedor</label><select id="cc-direct-vendor" required><option value="">Carregando vendedores...</option></select></div>
+          <div class="form-grid two-columns">
+            <div class="form-group"><label for="cc-direct-start">Início do período</label><input id="cc-direct-start" type="date" required></div>
+            <div class="form-group"><label for="cc-direct-end">Fim do período</label><input id="cc-direct-end" type="date" required></div>
+          </div>
+          <div class="form-group"><label for="cc-direct-amount">Valor do saldo</label><input id="cc-direct-amount" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" placeholder="0,00" required></div>
+          <div class="form-group"><label for="cc-direct-observation">Observação</label><textarea id="cc-direct-observation" maxlength="1000" rows="3" placeholder="Motivo ou referência do lançamento (opcional)"></textarea></div>
+          <div style="padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.12);color:var(--warning);font-size:.82rem;margin-bottom:16px;">O saldo será lançado como aprovado e ficará registrado na auditoria.</div>
+          <button class="btn btn-primary" type="submit" style="width:100%;">Confirmar lançamento</button>
+        </form>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('[data-direct-close]').addEventListener('click', () => { modal.style.display = 'none'; });
+    modal.addEventListener('click', event => { if (event.target === modal) modal.style.display = 'none'; });
+    modal.querySelector('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector('button[type="submit"]');
+      const vendorSelect = document.getElementById('cc-direct-vendor');
+      const amount = Number(document.getElementById('cc-direct-amount').value);
+      const periodStart = document.getElementById('cc-direct-start').value;
+      const periodEnd = document.getElementById('cc-direct-end').value;
+      if (!vendorSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
+      const vendorName = vendorSelect.options[vendorSelect.selectedIndex]?.textContent || 'o vendedor';
+      if (!window.confirm(`Confirma o lançamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${vendorName}?`)) return;
+      button.disabled = true;
+      button.textContent = 'Lançando...';
+      try {
+        await api('/api/despesas/direct-credit', {
+          method: 'POST',
+          body: JSON.stringify({
+            vendor_id: vendorSelect.value,
+            period_start: periodStart,
+            period_end: periodEnd,
+            amount,
+            observation: document.getElementById('cc-direct-observation').value.trim()
+          })
+        });
+        modal.style.display = 'none';
+        form.reset();
+        App.showToast?.('Saldo lançado diretamente com sucesso!');
+        await App.loadDespesasDashboard?.();
+        await App.loadBalances?.();
+      } catch (error) {
+        alert(`Não foi possível lançar o saldo: ${error.message}`);
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Confirmar lançamento';
+      }
+    });
+    return modal;
+  }
+
+  async function openDirectBalanceModal() {
+    const modal = createDirectBalanceModal();
+    const select = modal.querySelector('#cc-direct-vendor');
+    select.innerHTML = '<option value="">Carregando vendedores...</option>';
+    modal.style.display = 'flex';
+    const today = new Date();
+    const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    modal.querySelector('#cc-direct-start').value = localDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    modal.querySelector('#cc-direct-end').value = localDate(today);
+    try {
+      const vendors = await api('/api/usuarios/vendedores');
+      select.innerHTML = `<option value="">Selecione o vendedor</option>${(vendors || []).map(vendor => `<option value="${escapeHtml(vendor.id)}">${escapeHtml(vendor.name)}${vendor.unitId ? ` — ${escapeHtml(vendor.unitId)}` : ''}</option>`).join('')}`;
+    } catch (error) {
+      select.innerHTML = '<option value="">Erro ao carregar vendedores</option>';
+      App.showToast?.('Erro ao carregar vendedores.');
+    }
+  }
+
+  function installDirectBalanceCredit() {
+    if (!canLaunchDirectBalance()) return;
+    const ensureButton = () => {
+      if (window.location.hash !== '#despesas-dashboard' || document.getElementById('cc-btn-direct-balance')) return;
+      const tabs = document.querySelector('#tab-balance-approvals-dashboard')?.closest('.view-tabs');
+      if (!tabs) return;
+      const button = document.createElement('button');
+      button.id = 'cc-btn-direct-balance';
+      button.type = 'button';
+      button.className = 'btn btn-primary';
+      button.style.marginLeft = 'auto';
+      button.textContent = '+ Lançar saldo direto';
+      button.addEventListener('click', openDirectBalanceModal);
+      tabs.appendChild(button);
+    };
+    ensureButton();
+    window.addEventListener('hashchange', () => setTimeout(ensureButton, 80));
+    new MutationObserver(ensureButton).observe(document.body, { childList: true, subtree: true });
+  }
+
   const sortState = {};
   const lastChangedField = {};
   let baseFilterData = null;
@@ -570,6 +688,7 @@
   function installAll() {
     installExpenseEditing();
     installImageViewer();
+    installDirectBalanceCredit();
     if (!installFiltersAndSorting()) setTimeout(installFiltersAndSorting, 250);
   }
 

@@ -95,3 +95,18 @@ test('movimentacoes antigas usam escopo seguro por empresa sem depender de nome 
   assert.match(route, /orWhere\('movement_seller\.empresa_id', req\.user\.empresa_id\)/);
   assert.equal(route.includes("where('equipamentos_movimentacoes.empresa', req.user.empresa_name)"), false);
 });
+
+test('lancamento direto de saldo exige aprovador, vendedor da mesma empresa e transacao auditada', () => {
+  const routeStart = server.indexOf("app.post('/api/despesas/direct-credit'");
+  const routeEnd = server.indexOf("app.get('/api/despesas'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /canLaunchDirectCredit/);
+  assert.match(route, /empresa_id: req\.user\.empresa_id/);
+  assert.match(route, /normalizeRole\(vendor\.profile/);
+  assert.match(route, /db\.transaction/);
+  assert.match(route, /LANCOU_SALDO_DIRETO/);
+  assert.match(route, /status: 'Aprovada'/);
+  assert.match(listUpdates, /cc-btn-direct-balance/);
+  assert.match(listUpdates, /\/api\/despesas\/direct-credit/);
+});

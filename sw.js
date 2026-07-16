@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-2-zoom-arraste-livre';
+const CACHE_VERSION = '20260716-3-saldo-direto';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

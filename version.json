@@ -1,7 +1,7 @@
 {
-  "version": "20260716.2",
+  "version": "20260716.3",
   "updatedAt": "2026-07-16T18:00:00.000Z",
-  "description": "Fotos com zoom e arraste livre, edicao segura de despesas e filtros encadeados",
-  "build": "20260716-2-zoom-arraste-livre",
+  "description": "Lancamento direto de saldo, fotos com arraste livre e filtros encadeados",
+  "build": "20260716-3-saldo-direto",
   "buildDate": "2026-07-16T18:00:00.000Z"
 }
