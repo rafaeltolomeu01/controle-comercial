@@ -1,7 +1,7 @@
 {
-  "version": "20260716.10",
+  "version": "20260716.11",
   "updatedAt": "2026-07-16T18:00:00.000Z",
   "description": "Adicionar ou remover saldo com auditoria e alertas de correções no Painel Geral",
-  "build": "20260716-10-filtros-tabela-mobile-saldo",
+  "build": "20260716-11-escopo-global-unidade",
   "buildDate": "2026-07-16T18:00:00.000Z"
 }

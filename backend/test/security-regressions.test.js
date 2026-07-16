@@ -223,3 +223,49 @@ test('guias financeiras ficam abaixo da unidade e rolam no celular', () => {
   assert.match(css, /overflow-x: auto !important/);
   assert.match(css, /min-height: 76px !important/);
 });
+
+test('unidade global limita listas, filtros dinamicos e paginacao inclusive para administrador', () => {
+  assert.match(listUpdates, /UNIT_SCOPED_MODULES/);
+  assert.match(listUpdates, /scopeByGlobalUnit\(data, moduleKey\)/);
+  assert.match(listUpdates, /const unitScopedData = scopeByGlobalUnit\(data, moduleKey\)/);
+  assert.match(listUpdates, /rebuildCascadingFilters\(moduleKey, ''\)/);
+  const visibilityStart = compatibility.indexOf('function visibilityFilter(moduleKey, list)');
+  const visibilityEnd = compatibility.indexOf('function fullFilter(moduleKey, raw)', visibilityStart);
+  const visibility = compatibility.slice(visibilityStart, visibilityEnd);
+  assert.match(visibility, /activeUnitId && activeUnitId !== 'all'/);
+  assert.equal(visibility.includes("!isAdminOrAllUnits(user) && activeUnitId !== 'all'"), false);
+});
+
+test('cartoes de despesas usam somente saldos e despesas aprovados do mesmo filtro', () => {
+  assert.match(listUpdates, /const totalApproved = balances\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const totalSpent = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /metric-balance-remaining/);
+  assert.match(listUpdates, /totalApproved - totalSpent/);
+});
+
+test('painel de aprovacao zera graficos sem saldo correspondente e atualiza opcoes dinamicas', () => {
+  assert.match(listUpdates, /refreshApprovalDashboardFromFilters/);
+  assert.match(listUpdates, /renderApprovalFinanceCharts\(filteredBalances, expenses\)/);
+  assert.match(listUpdates, /if \(filteredBalances\.length && matchingNames\.size\)/);
+  assert.match(listUpdates, /statusSelect\.innerHTML/);
+  assert.match(listUpdates, /statusCandidates/);
+  assert.match(listUpdates, /availableDates/);
+});
+
+test('consultas operacionais enviam e aplicam a unidade global sem ampliar permissoes', () => {
+  const appJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(appJs, /\/api\/equipamentos\/movimentacoes\$\{query\}/);
+  assert.match(appJs, /\/api\/despesas-reembolsos\$\{query\}/);
+  assert.match(appJs, /\/api\/despesas\$\{query\}/);
+  const movementStart = server.indexOf("app.get('/api/equipamentos/movimentacoes'");
+  const movementEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", movementStart);
+  const movementRoute = server.slice(movementStart, movementEnd);
+  assert.match(movementRoute, /requestedUnitId/);
+  assert.match(movementRoute, /movement_seller\.unitId/);
+  const expenseStart = server.indexOf("app.get('/api/despesas-reembolsos'");
+  const expenseEnd = server.indexOf("app.get('/api/despesas-reembolsos/:id'", expenseStart);
+  const expenseRoute = server.slice(expenseStart, expenseEnd);
+  assert.match(expenseRoute, /requestedUnitId/);
+  assert.match(expenseRoute, /dr\.unitId/);
+  assert.match(expenseRoute, /getPermittedSellerIds/);
+});

@@ -6567,9 +6567,11 @@ const App = {
    */
   async loadMovements() {
     try {
+      const activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
+      const query = activeUnit && activeUnit !== 'all' ? `?unitId=${encodeURIComponent(activeUnit)}` : '';
       await this.loadListFast({
         key: 'movements_api',
-        endpoint: '/api/equipamentos/movimentacoes',
+        endpoint: `/api/equipamentos/movimentacoes${query}`,
         render: (list) => UI.renderMovements(list)
       });
     } catch (err) {
@@ -6616,9 +6618,11 @@ const App = {
   async loadExpenses() {
     try {
       await this.syncLocalExpenses();
+      const activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
+      const query = activeUnit && activeUnit !== 'all' ? `?unitId=${encodeURIComponent(activeUnit)}` : '';
       await this.loadListFast({
         key: 'despesas_reembolsos_api',
-        endpoint: '/api/despesas-reembolsos',
+        endpoint: `/api/despesas-reembolsos${query}`,
         assign: (list) => { window.AppExpensesCache = list; },
         render: (list) => UI.renderExpenses(list)
       });
@@ -6629,9 +6633,11 @@ const App = {
 
   async loadBalances() {
     try {
+      const activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
+      const query = activeUnit && activeUnit !== 'all' ? `?unitId=${encodeURIComponent(activeUnit)}` : '';
       await this.loadListFast({
         key: 'despesas_solicitacoes_api',
-        endpoint: '/api/despesas',
+        endpoint: `/api/despesas${query}`,
         assign: (list) => { window.AppBalancesCache = list; },
         render: (list) => UI.renderBalances(list)
       });

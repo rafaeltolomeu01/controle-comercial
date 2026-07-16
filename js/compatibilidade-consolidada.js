@@ -8196,7 +8196,9 @@
     const user = getUser();
     const activeUnitId = getActiveUnitId();
     let out = Array.isArray(list) ? list.slice() : [];
-    if ((moduleKey === 'despesas' || moduleKey === 'chamados') && !isAdminOrAllUnits(user) && activeUnitId && activeUnitId !== 'all') {
+    // A unidade global selecionada vale tambem para administradores e usuarios
+    // com acesso a todas as unidades. "all" e a unica opcao que consolida tudo.
+    if (activeUnitId && activeUnitId !== 'all') {
       out = out.filter(item => String(item.unitId || item.unit_id || '') === String(activeUnitId));
     }
     if ((moduleKey === 'despesas' || moduleKey === 'chamados') && user && user.profile === 'Vendedor' && !isAdminOrAllUnits(user)) {

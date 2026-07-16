@@ -4017,11 +4017,16 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
       })
       .select('em.*');
 
-    if (!isActorAdmin) {
-      // Apply unit isolation
-      if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('movement_seller.unitId', req.user.unitId);
-      }
+    const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
+      ? req.query.unitId
+      : null;
+    if (!isActorAdmin && !['supervisor', 'gerente'].includes(profileNorm) && req.user.unitId && req.user.unitId !== 'all') {
+      // Perfis de unidade fixa nunca podem ampliar o proprio escopo pela URL.
+      query = query.where('movement_seller.unitId', req.user.unitId);
+    } else if (requestedUnitId) {
+      // Administradores e gestores ainda ficam limitados pela empresa e pela
+      // cadeia hierarquica, mas a unidade global selecionada passa a ser respeitada.
+      query = query.where('movement_seller.unitId', requestedUnitId);
     }
 
     // Aplica cadeia hierárquica também nas movimentações
@@ -5327,17 +5332,23 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
     let query = db('despesas_reembolsos as dr')
       .where('dr.empresa_id', req.user.empresa_id);
 
+    const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
+      ? req.query.unitId
+      : null;
+
     if (!isActorAdmin) {
       // Supervisor/Gerente pode possuir vendedores vinculados em outras unidades.
       // A hierarquia abaixo continua sendo a barreira de acesso nesses casos.
       if (!['supervisor', 'gerente'].includes(actorProfile) && req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('dr.unitId', req.user.unitId);
+      } else if (requestedUnitId) {
+        query = query.where('dr.unitId', requestedUnitId);
       }
 
       const permittedIds = await getPermittedSellerIds(req.user, db);
       query = query.whereIn('dr.userId', permittedIds);
-    } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-      query = query.where('dr.unitId', req.query.unitId);
+    } else if (requestedUnitId) {
+      query = query.where('dr.unitId', requestedUnitId);
     }
 
     const list = await query

@@ -18,6 +18,12 @@
 - Lockfile foi reconstruido e a auditoria do backend terminou com zero vulnerabilidades conhecidas.
 - Adicionados seis testes de regressao de seguranca.
 - Removidos arquivos `.bak` e o backend legado da versao de entrega.
+- A unidade global selecionada agora limita listas, indicadores, graficos, paginacao e exportacoes, inclusive para administradores.
+- Todos os filtros de selecao passaram a ser encadeados: cada escolha reduz dinamicamente as opcoes ainda validas nos demais filtros.
+- Os tres cartoes financeiros usam a mesma base filtrada: saldo aprovado, despesas aprovadas utilizadas e saldo restante.
+- O painel de aprovacao de saldo atualiza tabela, totais, graficos e ranking com os mesmos filtros de solicitante, status, datas e unidade.
+- As consultas de despesas e movimentacoes reforcam o filtro de unidade no servidor sem ampliar a empresa ou a cadeia hierarquica permitida.
+- Adicionados 25 testes de regressao, incluindo isolamento por unidade e coerencia dos filtros financeiros.
 
 ## Limites desta entrega
 

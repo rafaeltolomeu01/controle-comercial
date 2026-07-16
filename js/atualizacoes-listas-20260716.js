@@ -45,6 +45,43 @@
     return Number(raw);
   }
 
+  const UNIT_SCOPED_MODULES = new Set([
+    'clientes', 'aprovacao', 'prospeccao', 'equipamentos', 'movimentacao',
+    'chamados', 'despesas', 'solicitacao-despesas', 'usuarios',
+    'simulador-troca', 'exportar-arquivos'
+  ]);
+
+  function activeGlobalUnitId() {
+    try { return String(Store.getActiveUnitId?.() || 'all'); }
+    catch (_) { return 'all'; }
+  }
+
+  function activeGlobalUnitName(unitId) {
+    const unit = (Store.getUnits?.() || []).find(item => String(item.id) === String(unitId));
+    return normalize(unit?.name || '');
+  }
+
+  function recordMatchesGlobalUnit(record, moduleKey, unitId) {
+    if (!record || !unitId || unitId === 'all' || !UNIT_SCOPED_MODULES.has(moduleKey)) return true;
+    const directIds = ['unitId', 'unit_id', 'unidadeId', 'unidade_id']
+      .map(key => record[key]).filter(value => value !== undefined && value !== null && String(value).trim() !== '');
+    if (directIds.length) {
+      return directIds.some(value => String(value) === String(unitId)
+        || (moduleKey === 'usuarios' && String(value).toLowerCase() === 'all'));
+    }
+    const selectedName = activeGlobalUnitName(unitId);
+    const recordNames = ['unitName', 'unit_name', 'unidade_nome', 'unidade', 'empresa_nome', 'empresa']
+      .map(key => normalize(record[key])).filter(Boolean);
+    return Boolean(selectedName && recordNames.includes(selectedName));
+  }
+
+  function scopeByGlobalUnit(data, moduleKey) {
+    const list = Array.isArray(data) ? data : [];
+    const unitId = activeGlobalUnitId();
+    if (unitId === 'all' || !UNIT_SCOPED_MODULES.has(moduleKey)) return list.slice();
+    return list.filter(record => recordMatchesGlobalUnit(record, moduleKey, unitId));
+  }
+
   function showExistingPreview(kind, source) {
     const preview = document.getElementById(kind === 'receipt' ? 'preview-comprovante' : 'preview-odometro');
     const image = document.getElementById(kind === 'receipt' ? 'img-preview-comprovante' : 'img-preview-odometro');
@@ -704,7 +741,8 @@
     const readFilters = () => manager.getFilterValues(moduleKey);
     const valuesFor = (field, filters) => {
       const withoutSelf = { ...filters, [field]: '' };
-      return [...new Set(baseFilterData(data, withoutSelf, moduleKey)
+      const unitScopedData = scopeByGlobalUnit(data, moduleKey);
+      return [...new Set(baseFilterData(unitScopedData, withoutSelf, moduleKey)
         .map(item => String(manager.getFilterValue(item, field) || '').trim())
         .filter(value => value && !['null', 'undefined', '-', '—'].includes(value.toLowerCase())))]
         .sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
@@ -778,8 +816,25 @@
     const originalTrigger = FiltersManager.triggerFiltering.bind(FiltersManager);
 
     FiltersManager.filterData = function (data, filters, moduleKey) {
-      return applySort(baseFilterData(data, filters, moduleKey), moduleKey);
+      const unitScopedData = scopeByGlobalUnit(data, moduleKey);
+      return applySort(baseFilterData(unitScopedData, filters, moduleKey), moduleKey);
     };
+
+    if (!FiltersManager.__ccGlobalUnitExport20260716 && typeof FiltersManager.exportExcel === 'function') {
+      FiltersManager.__ccGlobalUnitExport20260716 = true;
+      const originalExportExcel = FiltersManager.exportExcel.bind(FiltersManager);
+      FiltersManager.exportExcel = function (moduleKey, useFiltered) {
+        return originalExportExcel(moduleKey, activeGlobalUnitId() !== 'all' ? true : useFiltered);
+      };
+    }
+
+    if (!FiltersManager.__ccGlobalUnitFiles20260716 && typeof FiltersManager.getCollectedFiles === 'function') {
+      FiltersManager.__ccGlobalUnitFiles20260716 = true;
+      const originalCollectedFiles = FiltersManager.getCollectedFiles.bind(FiltersManager);
+      FiltersManager.getCollectedFiles = function () {
+        return scopeByGlobalUnit(originalCollectedFiles(), 'exportar-arquivos');
+      };
+    }
     FiltersManager.ensureFilterPanel = function (moduleKey) {
       const result = originalEnsure(moduleKey);
       rebuildCascadingFilters(moduleKey, lastChangedField[moduleKey]);
@@ -897,7 +952,8 @@
     }
 
     const totalApproved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
-    const totalSpent = expenses.filter(isExpenseConsidered).reduce((sum, item) => sum + expenseValue(item), 0);
+    // "Utilizado" representa somente despesas efetivamente aprovadas.
+    const totalSpent = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = formatMoney(value); };
     set('metric-balance-available', totalApproved);
     set('metric-balance-used', totalSpent);
@@ -914,14 +970,158 @@
     }).join('');
   }
 
+  function approvalRequestTotal(record) {
+    return numericValue(pick(record, ['totalGeral', 'total_geral', 'valor_solicitado', 'value', 'valor']));
+  }
+
+  function approvalRecordDate(record) {
+    const raw = String(pick(record, ['created_at', 'createdAt', 'data_solicitacao', 'date', 'data']) || '').trim();
+    let match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+    match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  }
+
+  function approvalStatusKind(record) {
+    const status = normalize(record?.status);
+    if (status.includes('aprov')) return 'approved';
+    if (status.includes('rejeit') || status.includes('reprov')) return 'rejected';
+    if (status.includes('correc') || status.includes('ajuste')) return 'correction';
+    return 'pending';
+  }
+
+  function filterApprovalRecords(records, filters, ignoreStatus = false) {
+    const search = normalize(filters.solicitante);
+    const selectedStatus = normalize(filters.status);
+    return scopeByGlobalUnit(records, 'solicitacao-despesas').filter(record => {
+      if (search && !recordOwnerName(record).includes(search)) return false;
+      if (!ignoreStatus && selectedStatus && normalize(record.status) !== selectedStatus) return false;
+      const date = approvalRecordDate(record);
+      if (filters.inicio && (!date || date < filters.inicio)) return false;
+      if (filters.fim && (!date || date > filters.fim)) return false;
+      return true;
+    });
+  }
+
+  function renderApprovalFinanceCharts(balances, expenses) {
+    const body = document.getElementById('finance-charts-body');
+    if (!body) return;
+    const values = { approved: 0, pending: 0, rejected: 0, correction: 0 };
+    balances.forEach(record => {
+      const kind = approvalStatusKind(record);
+      values[kind] += kind === 'approved' ? approvedBalanceValue(record) : approvalRequestTotal(record);
+    });
+    const approvedExpenses = expenses.filter(isApproved).reduce((sum, record) => sum + expenseValue(record), 0);
+    const remaining = values.approved - approvedExpenses;
+    const maximum = Math.max(values.approved, approvedExpenses, Math.abs(remaining), values.pending, values.rejected, values.correction, 1);
+    const bar = (label, value) => {
+      const width = Math.max(value ? 3 : 0, Math.round((Math.abs(Number(value) || 0) / maximum) * 100));
+      return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:.78rem"><span>${escapeHtml(label)}</span><strong>${escapeHtml(formatMoney(value))}</strong></div><div style="height:10px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden"><div style="width:${width}%;height:100%;background:var(--primary-color);border-radius:999px"></div></div></div>`;
+    };
+    const situationTotal = values.approved + values.pending + values.rejected + values.correction || 1;
+    const approvedDeg = Math.round((values.approved / situationTotal) * 360);
+    const pendingDeg = approvedDeg + Math.round((values.pending / situationTotal) * 360);
+    const correctionDeg = pendingDeg + Math.round((values.correction / situationTotal) * 360);
+    const unitRows = {};
+    balances.forEach(record => {
+      const unitId = String(pick(record, ['unitId', 'unit_id', 'unidadeId', 'unidade_id']) || 'Sem unidade');
+      unitRows[unitId] = unitRows[unitId] || { balance: 0, expense: 0 };
+      if (approvalStatusKind(record) === 'approved') unitRows[unitId].balance += approvedBalanceValue(record);
+    });
+    expenses.filter(isApproved).forEach(record => {
+      const unitId = String(pick(record, ['unitId', 'unit_id', 'unidadeId', 'unidade_id']) || 'Sem unidade');
+      unitRows[unitId] = unitRows[unitId] || { balance: 0, expense: 0 };
+      unitRows[unitId].expense += expenseValue(record);
+    });
+    const ranking = Object.entries(unitRows).map(([unitId, value]) => `<li style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-color)"><span>${escapeHtml(UI.getUnitName?.(unitId) || unitId)}</span><strong>${escapeHtml(formatMoney(value.balance - value.expense))}</strong></li>`).join('') || '<li style="color:var(--text-muted)">Sem dados para os filtros selecionados.</li>';
+    body.innerHTML = `<div><h4>Resumo por Status</h4>${bar('Saldo aprovado', values.approved)}${bar('Despesas aprovadas', approvedExpenses)}${bar('Saldo restante', remaining)}${bar('Saldos pendentes', values.pending)}${bar('Correção', values.correction)}${bar('Reprovados', values.rejected)}</div><div><h4>Pizza por situação</h4><div style="min-height:160px;border-radius:12px;background:conic-gradient(var(--success) 0 ${approvedDeg}deg,var(--warning) ${approvedDeg}deg ${pendingDeg}deg,#3b82f6 ${pendingDeg}deg ${correctionDeg}deg,var(--danger) ${correctionDeg}deg 360deg);display:flex;align-items:center;justify-content:center"><span style="background:var(--bg-card);padding:14px;border-radius:999px;font-weight:700">${escapeHtml(formatMoney(remaining))}</span></div></div><div><h4>Ranking / Unidade</h4><ol style="padding-left:18px;margin:0">${ranking}</ol></div>`;
+  }
+
+  async function refreshApprovalDashboardFromFilters() {
+    if (window.location.hash !== '#despesas-dashboard') return;
+    const filters = {
+      solicitante: document.getElementById('filter-despesa-solicitante')?.value?.trim() || '',
+      status: document.getElementById('filter-despesa-status')?.value || '',
+      inicio: document.getElementById('filter-despesa-inicio')?.value || '',
+      fim: document.getElementById('filter-despesa-fim')?.value || ''
+    };
+    const unitId = activeGlobalUnitId();
+    const query = unitId !== 'all' ? `?unitId=${encodeURIComponent(unitId)}` : '';
+    const allBalances = await api(`/api/despesas${query}`);
+    const scopedBalances = scopeByGlobalUnit(allBalances, 'solicitacao-despesas');
+    const filteredBalances = filterApprovalRecords(scopedBalances, filters);
+    const statusCandidates = filterApprovalRecords(scopedBalances, filters, true);
+    const statusSelect = document.getElementById('filter-despesa-status');
+    if (statusSelect) {
+      const current = statusSelect.value;
+      const statuses = [...new Set(statusCandidates.map(record => String(record.status || '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      if (current && !statuses.includes(current)) statuses.push(current);
+      statusSelect.innerHTML = '<option value="">Todos</option>' + statuses.map(status => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join('');
+      statusSelect.value = current;
+    }
+    const availableDates = statusCandidates.map(approvalRecordDate).filter(Boolean).sort();
+    const startInput = document.getElementById('filter-despesa-inicio');
+    const endInput = document.getElementById('filter-despesa-fim');
+    if (availableDates.length) {
+      if (startInput) { startInput.min = availableDates[0]; startInput.max = availableDates[availableDates.length - 1]; }
+      if (endInput) { endInput.min = availableDates[0]; endInput.max = availableDates[availableDates.length - 1]; }
+    }
+    App.renderDespesasTable?.(filteredBalances);
+    window.AppBalancesCache = filteredBalances;
+    const sums = filteredBalances.reduce((total, record) => {
+      const kind = approvalStatusKind(record);
+      total.requested += approvalRequestTotal(record);
+      if (kind === 'approved') total.approved += approvedBalanceValue(record);
+      if (kind === 'rejected') total.rejected += approvalRequestTotal(record);
+      if (kind === 'pending') total.pending += 1;
+      return total;
+    }, { requested: 0, approved: 0, rejected: 0, pending: 0 });
+    const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+    set('metric-despesas-solicitado', formatMoney(sums.requested));
+    set('metric-despesas-aprovado', formatMoney(sums.approved));
+    set('metric-despesas-rejeitado', formatMoney(sums.rejected));
+    set('metric-despesas-pendentes', String(sums.pending));
+    const matchingNames = new Set(filteredBalances.map(recordOwnerName).filter(Boolean));
+    let expenses = [];
+    // Sem saldo correspondente ao filtro, o grafico tambem deve zerar. Isso evita
+    // misturar despesas de outros usuarios/unidades quando a pesquisa nao encontra nada.
+    if (filteredBalances.length && matchingNames.size) {
+      expenses = scopeByGlobalUnit(window.AppExpensesCache || Store.getExpenses?.() || [], 'despesas')
+        .filter(record => {
+          const date = approvalRecordDate(record);
+          if (filters.inicio && (!date || date < filters.inicio)) return false;
+          if (filters.fim && (!date || date > filters.fim)) return false;
+          if (filters.solicitante && !recordOwnerName(record).includes(normalize(filters.solicitante))) return false;
+          return matchingNames.has(recordOwnerName(record));
+        });
+    }
+    if (filters.status && !normalize(filters.status).includes('aprov')) expenses = [];
+    renderApprovalFinanceCharts(filteredBalances, expenses);
+  }
+
+  function installApprovalDashboardFilters() {
+    if (!window.App || App.__ccApprovalDashboardFilters20260716) return;
+    App.__ccApprovalDashboardFilters20260716 = true;
+    const originalLoad = App.loadDespesasDashboard?.bind(App);
+    App.loadDespesasDashboard = async function () {
+      const result = await originalLoad?.();
+      try { await refreshApprovalDashboardFromFilters(); }
+      catch (error) { console.warn('Falha ao aplicar filtros completos da aprovação de saldo.', error); }
+      return result;
+    };
+  }
+
   function updatePersonalDashboard() {
     const user = currentUser();
     if (!user) return;
     const own = list => (Array.isArray(list) ? list : []).filter(item => belongsToUser(item, user));
-    const clients = own(Store.getClients?.() || []);
-    const tickets = own(Store.getTickets?.() || []);
-    const expenses = own(window.AppExpensesCache || Store.getExpenses?.() || []);
-    const balances = own(window.AppBalancesCache || Store.getBalanceRequests?.() || []);
+    const clients = own(scopeByGlobalUnit(Store.getClients?.() || [], 'clientes'));
+    const tickets = own(scopeByGlobalUnit(Store.getTickets?.() || [], 'chamados'));
+    const expenses = own(scopeByGlobalUnit(window.AppExpensesCache || Store.getExpenses?.() || [], 'despesas'));
+    const balances = own(scopeByGlobalUnit(window.AppBalancesCache || Store.getBalanceRequests?.() || [], 'solicitacao-despesas'));
     const approved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
     const spent = expenses.filter(isExpenseConsidered).reduce((sum, item) => sum + expenseValue(item), 0);
     const pendingExpenses = expenses.filter(item => normalize(item.status) === 'pendente').reduce((sum, item) => sum + expenseValue(item), 0);
@@ -989,6 +1189,34 @@
     installDirectBalanceCredit();
     if (!installFiltersAndSorting()) setTimeout(installFiltersAndSorting, 250);
     if (!installDashboardAndExpenseScopes()) setTimeout(installDashboardAndExpenseScopes, 250);
+    installApprovalDashboardFilters();
+
+    if (!window.__ccGlobalUnitRefresh20260716) {
+      window.__ccGlobalUnitRefresh20260716 = true;
+      document.addEventListener('change', event => {
+        if (event.target?.id !== 'global-unit-selector') return;
+        setTimeout(() => {
+          const importedUnit = document.getElementById('imported-equipment-unit');
+          const activeUnit = activeGlobalUnitId();
+          if (importedUnit && [...importedUnit.options].some(option => option.value === activeUnit)) {
+            importedUnit.value = activeUnit;
+            window.EquipamentosImportados?.loadList?.();
+          }
+          if (window.FiltersManager?.configs) {
+            Object.keys(FiltersManager.configs).forEach(moduleKey => {
+              try {
+                rebuildCascadingFilters(moduleKey, '');
+                FiltersManager.triggerFiltering(moduleKey);
+              } catch (_) {}
+            });
+          }
+          updatePersonalDashboard();
+          updateExpenseCardsForLocalFilters();
+          UI.updateBalanceCards?.();
+          refreshApprovalDashboardFromFilters().catch(error => console.warn('Falha ao atualizar painel financeiro por unidade.', error));
+        }, 120);
+      }, true);
+    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installAll);
