@@ -1,3 +1,8 @@
+const ccEscapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[char]));
+const ccEscapeAttr = ccEscapeHtml;
+
 const App = {
   currentRoute: '',
   isLoggedIn: false,
@@ -474,7 +479,7 @@ const App = {
           const loggedUser = Store.getLoggedUser();
           if (expSeller && loggedUser) {
             const name = loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado';
-            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${name}</option>`;
+            expSeller.innerHTML = `<option value="${ccEscapeAttr(loggedUser.id || '')}" selected>${ccEscapeHtml(name)}</option>`;
             expSeller.disabled = true;
           }
         }
@@ -571,13 +576,13 @@ const App = {
     const select = document.getElementById('mov-modelo-adicao') || document.getElementById('mov-equipment-type');
     if (!select) return;
     const types = Store.getEquipmentTypes();
-    select.innerHTML = '<option value="" selected disabled>Selecione o modelo...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    select.innerHTML = '<option value="" selected disabled>Selecione o modelo...</option>' + types.map(t => `<option value="${ccEscapeAttr(t)}">${ccEscapeHtml(t)}</option>`).join('');
 
     // Also populate unit dropdown
     const unitSel = document.getElementById('mov-unit');
     if (unitSel) {
       const units = Store.getUnits();
-      unitSel.innerHTML = units.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+      unitSel.innerHTML = units.map(u => `<option value="${ccEscapeAttr(u.id)}">${ccEscapeHtml(u.name)}</option>`).join('');
     }
 
     // Set default date to today
@@ -1505,7 +1510,7 @@ const App = {
           const loggedUser = Store.getLoggedUser();
           const expSeller = document.getElementById('exp-seller');
           if (expSeller && loggedUser) {
-            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado'}</option>`;
+            expSeller.innerHTML = `<option value="${ccEscapeAttr(loggedUser.id || '')}" selected>${ccEscapeHtml(loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado')}</option>`;
             expSeller.disabled = true;
           }
         }
@@ -1739,8 +1744,8 @@ const App = {
                   } else {
                     checklist.innerHTML = sellers.map(s => `
                       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0;">
-                        <input type="checkbox" class="new-user-vendedor-check" value="${s.id}" style="width:16px;height:16px;cursor:pointer;">
-                        <span>${s.name} (${s.username})</span>
+                        <input type="checkbox" class="new-user-vendedor-check" value="${ccEscapeAttr(s.id)}" style="width:16px;height:16px;cursor:pointer;">
+                        <span>${ccEscapeHtml(s.name)} (${ccEscapeHtml(s.username)})</span>
                       </label>`).join('');
                   }
                 } catch (err) {
@@ -1759,7 +1764,7 @@ const App = {
                     if (!supervisors || supervisors.length === 0) {
                       selectSup.innerHTML = '<option value="">Nenhum supervisor cadastrado nesta empresa</option>';
                     } else {
-                      selectSup.innerHTML = '<option value="">Selecione um Supervisor...</option>' + supervisors.map(s => `<option value="${s.id}">${s.name} (${s.username})</option>`).join('');
+                      selectSup.innerHTML = '<option value="">Selecione um Supervisor...</option>' + supervisors.map(s => `<option value="${ccEscapeAttr(s.id)}">${ccEscapeHtml(s.name)} (${ccEscapeHtml(s.username)})</option>`).join('');
                     }
                   } catch (err) {
                     selectSup.innerHTML = '<option value="">Erro ao carregar supervisores</option>';
@@ -2764,7 +2769,7 @@ const App = {
           UI.populateUnitDropdowns();
           const expSeller = document.getElementById('exp-seller');
           if (expSeller && loggedUser) {
-            expSeller.innerHTML = `<option value="${loggedUser.id || ''}" selected>${loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado'}</option>`;
+            expSeller.innerHTML = `<option value="${ccEscapeAttr(loggedUser.id || '')}" selected>${ccEscapeHtml(loggedUser.name || loggedUser.username || loggedUser.email || 'Usuário logado')}</option>`;
             expSeller.disabled = true;
           }
           resetExpensePreviews();
@@ -8862,7 +8867,7 @@ App.applyClientCorrectionsToSelects = function() {
   if (requested) {
     const current = App.normalizeConfigText(requested.value);
     const types = App.getCleanEquipmentTypes();
-    requested.innerHTML = '<option value="" disabled>Selecione...</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+    requested.innerHTML = '<option value="" disabled>Selecione...</option>' + types.map(t => `<option value="${ccEscapeAttr(t)}">${ccEscapeHtml(t)}</option>`).join('');
     if (current && types.includes(current)) requested.value = current;
   }
 

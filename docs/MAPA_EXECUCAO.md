@@ -7,8 +7,8 @@ Este documento registra o fluxo oficial identificado no projeto.
 Arquivo: `render.yaml`
 
 ```yaml
-buildCommand: npm install
-startCommand: npm start
+buildCommand: npm ci --prefix backend
+startCommand: npm start --prefix backend
 ```
 
 ## Script da raiz
@@ -16,8 +16,7 @@ startCommand: npm start
 Arquivo: `package.json`
 
 ```json
-"build": "npm install --prefix backend",
-"postinstall": "npm install --prefix backend",
+"build": "npm ci --prefix backend",
 "start": "npm start --prefix backend"
 ```
 
@@ -39,15 +38,19 @@ Esse e o arquivo que deve receber novas rotas, correcoes de API, ajustes de banc
 
 ## Frontend oficial
 
-O backend serve a raiz do projeto como frontend:
+O backend publica somente as pastas e os arquivos necessarios do frontend:
 
 ```js
 const FRONTEND_ROOT = path.join(__dirname, '..', '..');
-app.use(express.static(FRONTEND_ROOT, ...));
+app.use('/css', express.static(path.join(FRONTEND_ROOT, 'css'), ...));
+app.use('/js', express.static(path.join(FRONTEND_ROOT, 'js'), ...));
+app.use('/pages', express.static(path.join(FRONTEND_ROOT, 'pages'), ...));
 app.get('/', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
 });
 ```
+
+O diretorio `backend/`, migracoes, documentacao e arquivos de configuracao nao sao servidos publicamente.
 
 Portanto, o frontend oficial e composto por:
 

@@ -2,7 +2,7 @@ services:
   - type: web
     name: controle-campo-v2
     env: node
-    buildCommand: npm install
+    buildCommand: npm ci --prefix backend
     startCommand: npm start
     envVars:
       - key: NODE_ENV
