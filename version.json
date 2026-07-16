@@ -1,7 +1,7 @@
 {
-  "version": "20260716.3",
+  "version": "20260716.4",
   "updatedAt": "2026-07-16T18:00:00.000Z",
-  "description": "Lancamento direto de saldo, fotos com arraste livre e filtros encadeados",
-  "build": "20260716-3-saldo-direto",
+  "description": "Saldo direto para todos os perfis com filtro, motoristas e ajudantes",
+  "build": "20260716-4-saldo-todos-perfis",
   "buildDate": "2026-07-16T18:00:00.000Z"
 }

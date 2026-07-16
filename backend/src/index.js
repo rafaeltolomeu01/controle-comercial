@@ -2784,6 +2784,17 @@ function canApproveFinancial(user) {
     || perms.includes('Despesas');
 }
 
+function canLaunchDirectCredit(user) {
+  const perms = Array.isArray(user && user.permissions) ? user.permissions : [];
+  const profile = normalizeRole(user && user.profile || '');
+  return isAdminUser(user)
+    || ['financeiro', 'responsavel financeiro'].includes(profile)
+    || perms.some(permission => [
+      'Financeiro', 'Aprovação de Saldo', 'Aprovacao de Saldo',
+      'Aprovação de Despesas', 'Aprovacao de Despesas'
+    ].includes(permission));
+}
+
 async function getRequestAndVerifyAccess(id, user) {
   const request = await db('despesas_solicitacoes').where({ id }).first();
   if (!request) return { errorStatus: 404, errorMessage: 'Solicitação não encontrada' };
@@ -2946,28 +2957,19 @@ app.post('/api/despesas', async (req, res) => {
 // Lanca saldo diretamente para um vendedor, sem solicitacao previa.
 // Restrito aos perfis que realmente aprovam saldo/despesas e sempre dentro da empresa do token.
 app.post('/api/despesas/direct-credit', async (req, res) => {
-  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
-  const profile = normalizeRole(req.user.profile || '');
-  const canLaunchDirectCredit = isAdminUser(req.user)
-    || ['financeiro', 'responsavel financeiro'].includes(profile)
-    || perms.some(permission => [
-      'Financeiro', 'Aprovação de Saldo', 'Aprovacao de Saldo',
-      'Aprovação de Despesas', 'Aprovacao de Despesas'
-    ].includes(permission));
-
-  if (!canLaunchDirectCredit) {
+  if (!canLaunchDirectCredit(req.user)) {
     return res.status(403).json({ error: 'Acesso negado: apenas aprovadores financeiros podem lançar saldo direto.' });
   }
 
-  const vendorId = String(req.body && req.body.vendor_id || '').trim();
+  const recipientId = String(req.body && (req.body.recipient_id || req.body.vendor_id) || '').trim();
   const periodStart = String(req.body && req.body.period_start || '').trim();
   const periodEnd = String(req.body && req.body.period_end || '').trim();
   const observation = String(req.body && req.body.observation || '').trim().slice(0, 1000);
   const amount = Number(req.body && req.body.amount);
   const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-  if (!vendorId || !isoDate.test(periodStart) || !isoDate.test(periodEnd)) {
-    return res.status(400).json({ error: 'Vendedor e período são obrigatórios.' });
+  if (!recipientId || !isoDate.test(periodStart) || !isoDate.test(periodEnd)) {
+    return res.status(400).json({ error: 'Usuário e período são obrigatórios.' });
   }
   if (periodStart > periodEnd) {
     return res.status(400).json({ error: 'A data inicial não pode ser posterior à data final.' });
@@ -2980,11 +2982,11 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   }
 
   try {
-    const vendor = await db('usuarios')
-      .where({ id: vendorId, empresa_id: req.user.empresa_id })
+    const recipient = await db('usuarios')
+      .where({ id: recipientId, empresa_id: req.user.empresa_id })
       .first();
-    if (!vendor || normalizeRole(vendor.profile || '') !== 'vendedor') {
-      return res.status(404).json({ error: 'Vendedor não encontrado nesta empresa.' });
+    if (!recipient || normalizeRole(recipient.status || '') === 'inativo') {
+      return res.status(404).json({ error: 'Usuário não encontrado ou inativo nesta empresa.' });
     }
 
     const bdt = getBrasiliaDateTime();
@@ -2998,11 +3000,11 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       const insertedRequest = await trx('despesas_solicitacoes')
         .insert({
           empresa_id: req.user.empresa_id,
-          solicitante: vendor.name,
+          solicitante: recipient.name,
           justificativa: observation || `Saldo lançado diretamente pelo aprovador para o período ${periodText}.`,
           data_solicitacao: bdt.date,
           hora_solicitacao: bdt.time,
-          usuario_id: vendor.id,
+          usuario_id: recipient.id,
           status: 'Aprovada',
           valor_hotel_alim: 0,
           valor_abastecimento: 0,
@@ -3048,13 +3050,13 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       await trx('auditoria_logs').insert({
         usuario_id: req.user.id,
         acao: 'LANCOU_SALDO_DIRETO',
-        detalhes: `Saldo direto de R$ ${amount.toFixed(2)} lançado para ${vendor.name} (${vendor.id}), período ${periodText}.`,
+        detalhes: `Saldo direto de R$ ${amount.toFixed(2)} lançado para ${recipient.name} (${recipient.profile || 'Sem perfil'}, ${recipient.id}), período ${periodText}.`,
         empresa_id: req.user.empresa_id
       });
       return newId;
     });
 
-    const targets = await obterDestinatarios('PARECER_SALDO', vendor.id, req.user.empresa_id);
+    const targets = await obterDestinatarios('PARECER_SALDO', recipient.id, req.user.empresa_id);
     await notifyUsers(targets, {
       empresa_id: req.user.empresa_id,
       module: 'saldo', record_id: String(requestId), target_hash: '#despesas',
@@ -3062,10 +3064,29 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       body: `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
     });
 
-    res.json({ success: true, id: requestId, amount, vendor: vendor.name, period: periodText });
+    res.json({ success: true, id: requestId, amount, recipient: recipient.name, profile: recipient.profile, period: periodText });
   } catch (err) {
     console.error('Erro ao lançar saldo direto:', err);
     res.status(500).json({ error: 'Erro ao lançar saldo direto.' });
+  }
+});
+
+// Lista minima e segura de pessoas que podem receber saldo direto.
+// Nao expoe senha, telefone, e-mail ou permissoes administrativas.
+app.get('/api/despesas/direct-credit/recipients', async (req, res) => {
+  if (!canLaunchDirectCredit(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado: apenas aprovadores financeiros podem consultar destinatários.' });
+  }
+  try {
+    const recipients = await db('usuarios')
+      .where({ empresa_id: req.user.empresa_id })
+      .whereNot('status', 'INATIVO')
+      .select('id', 'name', 'profile', 'unitId', 'status')
+      .orderBy([{ column: 'profile', order: 'asc' }, { column: 'name', order: 'asc' }]);
+    res.json(recipients);
+  } catch (err) {
+    console.error('Erro ao listar destinatários de saldo direto:', err);
+    res.status(500).json({ error: 'Erro ao carregar usuários para lançamento de saldo.' });
   }
 });
 
@@ -4539,7 +4560,9 @@ function getDefaultPermissionsForProfile(profile) {
     'Financeiro': ['Dashboard','Financeiro','Solicitação de Saldo','Aprovação de Saldo','Despesas','Despesas de Campo','Aprovação de Despesas','Relatórios'],
     'Conferente': ['Dashboard','Chamados','Equipamentos','Movimentação'],
     'Responsável Equipamentos': ['Dashboard','Equipamentos','Movimentação','Chamados','Chamados Mecânicos'],
-    'Mecânico': ['Dashboard','Chamados','Chamados Mecânicos']
+    'Mecânico': ['Dashboard','Chamados','Chamados Mecânicos'],
+    'Motorista': ['Dashboard','Despesas','Despesas de Campo','Solicitação de Saldo'],
+    'Ajudante de Motorista': ['Dashboard','Despesas','Despesas de Campo','Solicitação de Saldo']
   };
   return defaults[profile] || ['Dashboard'];
 }

@@ -349,6 +349,17 @@
       ].includes(normalize(permission)));
   }
 
+  let directBalanceRecipients = [];
+
+  function renderDirectBalanceRecipients(modal) {
+    const profileSelect = modal.querySelector('#cc-direct-profile');
+    const recipientSelect = modal.querySelector('#cc-direct-recipient');
+    if (!profileSelect || !recipientSelect) return;
+    const selectedProfile = profileSelect.value;
+    const filtered = directBalanceRecipients.filter(person => !selectedProfile || String(person.profile || '') === selectedProfile);
+    recipientSelect.innerHTML = `<option value="">Selecione o usuário</option>${filtered.map(person => `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name)} — ${escapeHtml(person.profile || 'Sem perfil')}${person.unitId ? ` — ${escapeHtml(person.unitId)}` : ''}</option>`).join('')}`;
+  }
+
   function createDirectBalanceModal() {
     let modal = document.getElementById('cc-direct-balance-modal');
     if (modal) return modal;
@@ -359,11 +370,14 @@
     modal.innerHTML = `
       <div class="login-card" style="max-width:620px;width:min(94vw,620px);">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;">
-          <div><h2 style="margin:0;color:var(--primary-color);">Lançar saldo direto</h2><small style="color:var(--text-muted);">Sem solicitação prévia do vendedor</small></div>
+          <div><h2 style="margin:0;color:var(--primary-color);">Lançar saldo direto</h2><small style="color:var(--text-muted);">Sem solicitação prévia do usuário</small></div>
           <button type="button" class="btn btn-secondary" data-direct-close>Fechar</button>
         </div>
         <form id="cc-direct-balance-form">
-          <div class="form-group"><label for="cc-direct-vendor">Vendedor</label><select id="cc-direct-vendor" required><option value="">Carregando vendedores...</option></select></div>
+          <div class="form-grid two-columns">
+            <div class="form-group"><label for="cc-direct-profile">Categoria / Perfil</label><select id="cc-direct-profile"><option value="">Todos os perfis</option></select></div>
+            <div class="form-group"><label for="cc-direct-recipient">Usuário</label><select id="cc-direct-recipient" required><option value="">Carregando usuários...</option></select></div>
+          </div>
           <div class="form-grid two-columns">
             <div class="form-group"><label for="cc-direct-start">Início do período</label><input id="cc-direct-start" type="date" required></div>
             <div class="form-group"><label for="cc-direct-end">Fim do período</label><input id="cc-direct-end" type="date" required></div>
@@ -377,24 +391,25 @@
     document.body.appendChild(modal);
     modal.querySelector('[data-direct-close]').addEventListener('click', () => { modal.style.display = 'none'; });
     modal.addEventListener('click', event => { if (event.target === modal) modal.style.display = 'none'; });
+    modal.querySelector('#cc-direct-profile').addEventListener('change', () => renderDirectBalanceRecipients(modal));
     modal.querySelector('form').addEventListener('submit', async event => {
       event.preventDefault();
       const form = event.currentTarget;
       const button = form.querySelector('button[type="submit"]');
-      const vendorSelect = document.getElementById('cc-direct-vendor');
+      const recipientSelect = document.getElementById('cc-direct-recipient');
       const amount = Number(document.getElementById('cc-direct-amount').value);
       const periodStart = document.getElementById('cc-direct-start').value;
       const periodEnd = document.getElementById('cc-direct-end').value;
-      if (!vendorSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
-      const vendorName = vendorSelect.options[vendorSelect.selectedIndex]?.textContent || 'o vendedor';
-      if (!window.confirm(`Confirma o lançamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${vendorName}?`)) return;
+      if (!recipientSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
+      const recipientName = recipientSelect.options[recipientSelect.selectedIndex]?.textContent || 'o usuário';
+      if (!window.confirm(`Confirma o lançamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${recipientName}?`)) return;
       button.disabled = true;
       button.textContent = 'Lançando...';
       try {
         await api('/api/despesas/direct-credit', {
           method: 'POST',
           body: JSON.stringify({
-            vendor_id: vendorSelect.value,
+            recipient_id: recipientSelect.value,
             period_start: periodStart,
             period_end: periodEnd,
             amount,
@@ -418,19 +433,25 @@
 
   async function openDirectBalanceModal() {
     const modal = createDirectBalanceModal();
-    const select = modal.querySelector('#cc-direct-vendor');
-    select.innerHTML = '<option value="">Carregando vendedores...</option>';
+    const profileSelect = modal.querySelector('#cc-direct-profile');
+    const recipientSelect = modal.querySelector('#cc-direct-recipient');
+    profileSelect.innerHTML = '<option value="">Carregando perfis...</option>';
+    recipientSelect.innerHTML = '<option value="">Carregando usuários...</option>';
     modal.style.display = 'flex';
     const today = new Date();
     const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     modal.querySelector('#cc-direct-start').value = localDate(new Date(today.getFullYear(), today.getMonth(), 1));
     modal.querySelector('#cc-direct-end').value = localDate(today);
     try {
-      const vendors = await api('/api/usuarios/vendedores');
-      select.innerHTML = `<option value="">Selecione o vendedor</option>${(vendors || []).map(vendor => `<option value="${escapeHtml(vendor.id)}">${escapeHtml(vendor.name)}${vendor.unitId ? ` — ${escapeHtml(vendor.unitId)}` : ''}</option>`).join('')}`;
+      directBalanceRecipients = await api('/api/despesas/direct-credit/recipients');
+      const profiles = [...new Set((directBalanceRecipients || []).map(person => String(person.profile || 'Sem perfil')))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+      profileSelect.innerHTML = `<option value="">Todos os perfis</option>${profiles.map(profile => `<option value="${escapeHtml(profile)}">${escapeHtml(profile)}</option>`).join('')}`;
+      renderDirectBalanceRecipients(modal);
     } catch (error) {
-      select.innerHTML = '<option value="">Erro ao carregar vendedores</option>';
-      App.showToast?.('Erro ao carregar vendedores.');
+      profileSelect.innerHTML = '<option value="">Erro ao carregar perfis</option>';
+      recipientSelect.innerHTML = '<option value="">Erro ao carregar usuários</option>';
+      App.showToast?.('Erro ao carregar usuários.');
     }
   }
 

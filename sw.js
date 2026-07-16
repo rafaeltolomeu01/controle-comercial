@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-3-saldo-direto';
+const CACHE_VERSION = '20260716-4-saldo-todos-perfis';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
