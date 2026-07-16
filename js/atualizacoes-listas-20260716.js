@@ -350,6 +350,47 @@
   }
 
   let directBalanceRecipients = [];
+  let directSummaryRequest = 0;
+
+  const formatMoney = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
+
+  function resetDirectBalanceSummary(modal, message = 'Selecione o usuario e o periodo para calcular.') {
+    const panel = modal?.querySelector('#cc-direct-summary');
+    if (!panel) return;
+    panel.querySelector('[data-direct-summary-status]').textContent = message;
+    panel.querySelectorAll('[data-direct-summary-value]').forEach(element => { element.textContent = '\u2014'; });
+    const useButton = panel.querySelector('[data-use-direct-suggestion]');
+    useButton.dataset.value = '0';
+    useButton.disabled = true;
+  }
+
+  async function loadDirectBalanceSummary(modal) {
+    const recipientId = modal.querySelector('#cc-direct-recipient')?.value;
+    const unitId = modal.querySelector('#cc-direct-unit')?.value;
+    const periodStart = modal.querySelector('#cc-direct-start')?.value;
+    const periodEnd = modal.querySelector('#cc-direct-end')?.value;
+    if (!recipientId || !unitId || !periodStart || !periodEnd) return resetDirectBalanceSummary(modal);
+    const panel = modal.querySelector('#cc-direct-summary');
+    const requestNumber = ++directSummaryRequest;
+    panel.querySelector('[data-direct-summary-status]').textContent = 'Calculando valores...';
+    try {
+      const params = new URLSearchParams({ recipient_id: recipientId, unit_id: unitId, period_start: periodStart, period_end: periodEnd });
+      const summary = await api(`/api/despesas/direct-credit/summary?${params.toString()}`);
+      if (requestNumber !== directSummaryRequest) return;
+      panel.querySelector('[data-direct-summary-status]').textContent = `${Number(summary.notes_count) || 0} nota(s) no periodo`;
+      panel.querySelector('[data-summary="notes"]').textContent = formatMoney(summary.notes_total);
+      panel.querySelector('[data-summary="expenses"]').textContent = formatMoney(summary.expenses_considered);
+      panel.querySelector('[data-summary="approved"]').textContent = formatMoney(summary.approved_balance);
+      panel.querySelector('[data-summary="pending"]').textContent = formatMoney(summary.pending_balance);
+      panel.querySelector('[data-summary="suggestion"]').textContent = formatMoney(summary.suggested_credit);
+      const useButton = panel.querySelector('[data-use-direct-suggestion]');
+      useButton.dataset.value = String(Number(summary.suggested_credit) || 0);
+      useButton.disabled = !(Number(summary.suggested_credit) > 0);
+    } catch (error) {
+      if (requestNumber !== directSummaryRequest) return;
+      resetDirectBalanceSummary(modal, `Nao foi possivel calcular: ${error.message}`);
+    }
+  }
 
   function renderDirectBalanceRecipients(modal) {
     const profileSelect = modal.querySelector('#cc-direct-profile');
@@ -378,9 +419,21 @@
             <div class="form-group"><label for="cc-direct-profile">Categoria / Perfil</label><select id="cc-direct-profile"><option value="">Todos os perfis</option></select></div>
             <div class="form-group"><label for="cc-direct-recipient">Usuário</label><select id="cc-direct-recipient" required><option value="">Carregando usuários...</option></select></div>
           </div>
+          <div class="form-group"><label for="cc-direct-unit">Unidade que receberá o saldo</label><select id="cc-direct-unit" required><option value="">Selecione a unidade</option></select></div>
           <div class="form-grid two-columns">
             <div class="form-group"><label for="cc-direct-start">Início do período</label><input id="cc-direct-start" type="date" required></div>
             <div class="form-group"><label for="cc-direct-end">Fim do período</label><input id="cc-direct-end" type="date" required></div>
+          </div>
+          <div id="cc-direct-summary" style="border:1px solid var(--border-color);border-radius:10px;padding:14px;margin-bottom:16px;background:rgba(37,99,235,.06);">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;"><strong>Resumo do periodo</strong><small data-direct-summary-status style="color:var(--text-muted);">Selecione o usuario e o periodo para calcular.</small></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;font-size:.84rem;">
+              <span>Valor das notas</span><strong data-direct-summary-value data-summary="notes">\u2014</strong>
+              <span>Despesas consideradas</span><strong data-direct-summary-value data-summary="expenses">\u2014</strong>
+              <span>Saldo aprovado</span><strong data-direct-summary-value data-summary="approved">\u2014</strong>
+              <span>Saldo pendente de aprovacao</span><strong data-direct-summary-value data-summary="pending">\u2014</strong>
+              <span>Sugestao para quitar despesas</span><strong data-direct-summary-value data-summary="suggestion" style="color:var(--success);">\u2014</strong>
+            </div>
+            <button type="button" class="btn btn-secondary" data-use-direct-suggestion disabled style="width:100%;margin-top:12px;">Usar valor sugerido</button>
           </div>
           <div class="form-group"><label for="cc-direct-amount">Valor do saldo</label><input id="cc-direct-amount" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" placeholder="0,00" required></div>
           <div class="form-group"><label for="cc-direct-observation">Observação</label><textarea id="cc-direct-observation" maxlength="1000" rows="3" placeholder="Motivo ou referência do lançamento (opcional)"></textarea></div>
@@ -391,16 +444,33 @@
     document.body.appendChild(modal);
     modal.querySelector('[data-direct-close]').addEventListener('click', () => { modal.style.display = 'none'; });
     modal.addEventListener('click', event => { if (event.target === modal) modal.style.display = 'none'; });
-    modal.querySelector('#cc-direct-profile').addEventListener('change', () => renderDirectBalanceRecipients(modal));
+    modal.querySelector('#cc-direct-profile').addEventListener('change', () => {
+      renderDirectBalanceRecipients(modal);
+      resetDirectBalanceSummary(modal);
+    });
+    modal.querySelector('#cc-direct-recipient').addEventListener('change', () => {
+      const person = directBalanceRecipients.find(item => String(item.id) === modal.querySelector('#cc-direct-recipient').value);
+      const unitSelect = modal.querySelector('#cc-direct-unit');
+      if (person?.unitId && person.unitId !== 'all' && [...unitSelect.options].some(option => option.value === String(person.unitId))) unitSelect.value = String(person.unitId);
+      loadDirectBalanceSummary(modal);
+    });
+    modal.querySelector('#cc-direct-unit').addEventListener('change', () => loadDirectBalanceSummary(modal));
+    modal.querySelector('#cc-direct-start').addEventListener('change', () => loadDirectBalanceSummary(modal));
+    modal.querySelector('#cc-direct-end').addEventListener('change', () => loadDirectBalanceSummary(modal));
+    modal.querySelector('[data-use-direct-suggestion]').addEventListener('click', event => {
+      const value = Number(event.currentTarget.dataset.value) || 0;
+      if (value > 0) modal.querySelector('#cc-direct-amount').value = value.toFixed(2);
+    });
     modal.querySelector('form').addEventListener('submit', async event => {
       event.preventDefault();
       const form = event.currentTarget;
       const button = form.querySelector('button[type="submit"]');
       const recipientSelect = document.getElementById('cc-direct-recipient');
+      const unitSelect = document.getElementById('cc-direct-unit');
       const amount = Number(document.getElementById('cc-direct-amount').value);
       const periodStart = document.getElementById('cc-direct-start').value;
       const periodEnd = document.getElementById('cc-direct-end').value;
-      if (!recipientSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
+      if (!recipientSelect.value || !unitSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
       const recipientName = recipientSelect.options[recipientSelect.selectedIndex]?.textContent || 'o usuário';
       if (!window.confirm(`Confirma o lançamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${recipientName}?`)) return;
       button.disabled = true;
@@ -410,6 +480,7 @@
           method: 'POST',
           body: JSON.stringify({
             recipient_id: recipientSelect.value,
+            unit_id: unitSelect.value,
             period_start: periodStart,
             period_end: periodEnd,
             amount,
@@ -435,13 +506,17 @@
     const modal = createDirectBalanceModal();
     const profileSelect = modal.querySelector('#cc-direct-profile');
     const recipientSelect = modal.querySelector('#cc-direct-recipient');
+    const unitSelect = modal.querySelector('#cc-direct-unit');
     profileSelect.innerHTML = '<option value="">Carregando perfis...</option>';
     recipientSelect.innerHTML = '<option value="">Carregando usuários...</option>';
+    const units = (Store.getUnits?.() || []).filter(unit => String(unit.id) !== 'all');
+    unitSelect.innerHTML = `<option value="">Selecione a unidade</option>${units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`).join('')}`;
     modal.style.display = 'flex';
     const today = new Date();
     const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     modal.querySelector('#cc-direct-start').value = localDate(new Date(today.getFullYear(), today.getMonth(), 1));
     modal.querySelector('#cc-direct-end').value = localDate(today);
+    resetDirectBalanceSummary(modal);
     try {
       directBalanceRecipients = await api('/api/despesas/direct-credit/recipients');
       const profiles = [...new Set((directBalanceRecipients || []).map(person => String(person.profile || 'Sem perfil')))]
@@ -664,6 +739,7 @@
       setTimeout(() => {
         rebuildCascadingFilters(moduleKey, '');
         updateSortHeaders(moduleKey);
+        if (moduleKey === 'despesas') updateExpenseCardsForLocalFilters();
       }, 0);
       return result;
     };
@@ -706,11 +782,131 @@
     return true;
   }
 
+  function recordOwnerId(record) {
+    return String(pick(record, ['userId', 'user_id', 'usuario_id', 'vendedor_id', 'seller_id', 'created_by', 'responsavel_id', 'solicitante_id']) || '');
+  }
+
+  function recordOwnerName(record) {
+    return normalize(pick(record, ['vendedor', 'vendedor_nome', 'seller_name', 'usuario_nome', 'responsavel', 'solicitante_nome']));
+  }
+
+  function belongsToUser(record, user) {
+    const ownerId = recordOwnerId(record);
+    if (ownerId) return ownerId === String(user?.id || '');
+    const ownerName = recordOwnerName(record);
+    return Boolean(ownerName && ownerName === normalize(user?.name || user?.nome || ''));
+  }
+
+  function approvedBalanceValue(balance) {
+    return numericValue(pick(balance, ['totalAprovado', 'total_aprovado', 'total_liberado', 'approved_total', 'valor_aprovado', 'totalGeral', 'total_geral', 'value', 'valor']));
+  }
+
+  function expenseValue(expense) {
+    return numericValue(pick(expense, ['value', 'valor', 'amount', 'total']));
+  }
+
+  function isApproved(record) {
+    return normalize(record?.status).includes('aprov');
+  }
+
+  function isExpenseConsidered(record) {
+    const status = normalize(record?.status);
+    return status === 'pendente' || status.includes('aprov');
+  }
+
+  function updateExpenseCardsForLocalFilters() {
+    if (!window.FiltersManager?.configs?.despesas) return;
+    const rawExpenses = FiltersManager.caches.despesas || window.AppExpensesCache || Store.getExpenses?.() || [];
+    const filters = FiltersManager.getFilterValues('despesas');
+    const expenses = FiltersManager.filterData(rawExpenses, filters, 'despesas');
+    const rawBalances = window.AppBalancesCache || Store.getBalanceRequests?.() || [];
+    const balanceFilters = {
+      empresa: filters.empresa || '', unitId: filters.unitId || '', vendedor: filters.vendedor || '',
+      supervisor: filters.supervisor || '', period: filters.period || '', search: '', status: ''
+    };
+    let balances = FiltersManager.filterData(rawBalances, balanceFilters, 'solicitacao-despesas');
+
+    // When a person filter is active, also match by IDs found in the already filtered expense list.
+    if (filters.vendedor || filters.supervisor) {
+      const visibleIds = new Set(expenses.map(recordOwnerId).filter(Boolean));
+      const visibleNames = new Set(expenses.map(recordOwnerName).filter(Boolean));
+      balances = balances.filter(item => visibleIds.has(recordOwnerId(item)) || visibleNames.has(recordOwnerName(item)));
+    }
+
+    const totalApproved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
+    const totalSpent = expenses.filter(isExpenseConsidered).reduce((sum, item) => sum + expenseValue(item), 0);
+    const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = formatMoney(value); };
+    set('metric-balance-available', totalApproved);
+    set('metric-balance-used', totalSpent);
+    set('metric-balance-remaining', totalApproved - totalSpent);
+  }
+
+  function renderDashboardBars(elementId, rows, formatter) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    const max = Math.max(...rows.map(row => Number(row.value) || 0), 1);
+    element.innerHTML = rows.map(row => {
+      const width = Math.max(4, Math.round(((Number(row.value) || 0) / max) * 100));
+      return `<div class="mini-chart-row"><span>${escapeHtml(row.label)}</span><div class="mini-chart-track"><div class="mini-chart-fill" style="width:${width}%"></div></div><span class="mini-chart-value">${escapeHtml(formatter(row.value))}</span></div>`;
+    }).join('');
+  }
+
+  function updatePersonalDashboard() {
+    const user = currentUser();
+    if (!user) return;
+    const own = list => (Array.isArray(list) ? list : []).filter(item => belongsToUser(item, user));
+    const clients = own(Store.getClients?.() || []);
+    const tickets = own(Store.getTickets?.() || []);
+    const expenses = own(window.AppExpensesCache || Store.getExpenses?.() || []);
+    const balances = own(window.AppBalancesCache || Store.getBalanceRequests?.() || []);
+    const approved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
+    const spent = expenses.filter(isExpenseConsidered).reduce((sum, item) => sum + expenseValue(item), 0);
+    const pendingExpenses = expenses.filter(item => normalize(item.status) === 'pendente').reduce((sum, item) => sum + expenseValue(item), 0);
+    const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+    set('dash-pending-approvals', String(clients.filter(item => normalize(item.status) === 'pendente').length));
+    set('dash-open-tickets', String(tickets.filter(item => ['aberto', 'em atendimento'].includes(normalize(item.status))).length));
+    set('dash-pending-expenses', formatMoney(pendingExpenses));
+    set('dash-pending-balances', formatMoney(approved - spent));
+    renderDashboardBars('dash-expense-bars', [
+      { label: 'Pendentes', value: pendingExpenses },
+      { label: 'Aprovadas', value: expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0) },
+      { label: 'Reprovadas', value: expenses.filter(item => normalize(item.status).includes('reprov')).reduce((sum, item) => sum + expenseValue(item), 0) }
+    ], formatMoney);
+    renderDashboardBars('dash-balance-bars', [
+      { label: 'Pendentes', value: balances.filter(item => normalize(item.status) === 'pendente').length },
+      { label: 'Aprovadas', value: balances.filter(isApproved).length },
+      { label: 'Reprovadas', value: balances.filter(item => normalize(item.status).includes('reprov')).length }
+    ], value => String(value || 0));
+  }
+
+  function installDashboardAndExpenseScopes() {
+    if (!window.UI || UI.__ccPersonalDashboard20260716) return false;
+    UI.__ccPersonalDashboard20260716 = true;
+    const originalDashboard = UI.renderDashboard;
+    UI.renderDashboard = function () {
+      const result = originalDashboard?.apply(this, arguments);
+      setTimeout(updatePersonalDashboard, 0);
+      return result;
+    };
+    const originalExpenses = UI.renderExpenses;
+    UI.renderExpenses = function () {
+      const result = originalExpenses?.apply(this, arguments);
+      setTimeout(updateExpenseCardsForLocalFilters, 0);
+      return result;
+    };
+    setTimeout(() => {
+      updatePersonalDashboard();
+      updateExpenseCardsForLocalFilters();
+    }, 50);
+    return true;
+  }
+
   function installAll() {
     installExpenseEditing();
     installImageViewer();
     installDirectBalanceCredit();
     if (!installFiltersAndSorting()) setTimeout(installFiltersAndSorting, 250);
+    if (!installDashboardAndExpenseScopes()) setTimeout(installDashboardAndExpenseScopes, 250);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installAll);

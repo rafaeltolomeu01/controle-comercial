@@ -17,6 +17,10 @@ const compatibility = fs.readFileSync(
   path.join(__dirname, '..', '..', 'js', 'compatibilidade-consolidada.js'),
   'utf8'
 );
+const balanceUnitMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '20260716_add_expense_request_unit_scope.js'),
+  'utf8'
+);
 
 test('nao contem credencial administrativa padrao', () => {
   assert.equal(server.includes("password: '123456'"), false);
@@ -122,4 +126,51 @@ test('cadastro oferece perfis motorista e ajudante com acesso inicial de despesa
   const usersPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'usuarios.html'), 'utf8');
   assert.match(usersPage, /option value="Motorista"/);
   assert.match(usersPage, /option value="Ajudante de Motorista"/);
+});
+
+test('resumo do saldo direto considera usuario, unidade e periodo sem misturar empresas', () => {
+  const summaryStart = server.indexOf("app.get('/api/despesas/direct-credit/summary'");
+  const summaryEnd = server.indexOf("app.get('/api/despesas'", summaryStart + 20);
+  const summary = server.slice(summaryStart, summaryEnd);
+  assert.match(summary, /canLaunchDirectCredit/);
+  assert.match(summary, /unit_id/);
+  assert.match(summary, /empresa_id: req\.user\.empresa_id/);
+  assert.match(summary, /notes_total/);
+  assert.match(summary, /pending_balance/);
+  assert.match(summary, /suggested_credit/);
+  assert.match(listUpdates, /cc-direct-summary/);
+  assert.match(listUpdates, /data-use-direct-suggestion/);
+  assert.match(listUpdates, /unit_id: unitSelect\.value/);
+});
+
+test('unidade do saldo e persistida com migracao aditiva e historico preservado', () => {
+  assert.match(balanceUnitMigration, /hasColumn\('despesas_solicitacoes', 'unitId'\)/);
+  assert.match(balanceUnitMigration, /table\.string\('unitId'\)\.nullable\(\)\.index\(\)/);
+  assert.equal(balanceUnitMigration.includes('dropColumn'), false);
+  const directStart = server.indexOf("app.post('/api/despesas/direct-credit'");
+  const directEnd = server.indexOf("app.get('/api/despesas/direct-credit/recipients'", directStart);
+  const direct = server.slice(directStart, directEnd);
+  assert.match(direct, /db\('unidades'\)\.where\(\{ id: unitId, empresa_id: req\.user\.empresa_id \}\)/);
+  assert.match(direct, /unitId: selectedUnit\.id/);
+  const normalStart = server.indexOf("app.post('/api/despesas',");
+  const normalEnd = server.indexOf("app.post('/api/despesas/direct-credit'", normalStart);
+  const normalRequest = server.slice(normalStart, normalEnd);
+  assert.match(normalRequest, /requestUnitId/);
+  assert.match(normalRequest, /unitId: requestUnit\.id/);
+});
+
+test('painel pessoal e cartoes de despesas seguem o usuario e filtros locais', () => {
+  assert.match(listUpdates, /updatePersonalDashboard/);
+  assert.match(listUpdates, /belongsToUser/);
+  assert.match(listUpdates, /updateExpenseCardsForLocalFilters/);
+  assert.match(listUpdates, /FiltersManager\.getFilterValues\('despesas'\)/);
+  assert.match(listUpdates, /metric-balance-available/);
+});
+
+test('dossie visual exibe o motivo da troca usado no PDF', () => {
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
+  const appJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(indexHtml, /dossie-sol-motivo-troca/);
+  assert.match(appJs, /mov\.detalhe_troca_adicao \|\| mov\.motivo_troca/);
+  assert.match(appJs, /exchangeReason\.textContent/);
 });

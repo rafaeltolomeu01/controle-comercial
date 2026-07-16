@@ -2843,6 +2843,7 @@ app.post('/api/despesas', async (req, res) => {
     valor_abastecimento,
     rota_destino,
     placa_veiculo,
+    unitId,
     extras
   } = req.body;
 
@@ -2855,6 +2856,13 @@ app.post('/api/despesas', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
 
+  const requestUnitId = req.user.unitId && req.user.unitId !== 'all' ? String(req.user.unitId) : String(unitId || '').trim();
+  if (!requestUnitId || requestUnitId === 'all') {
+    return res.status(400).json({ error: 'Selecione a unidade da solicitação de saldo.' });
+  }
+  const requestUnit = await db('unidades').where({ id: requestUnitId, empresa_id: targetEmpresaId }).first();
+  if (!requestUnit) return res.status(400).json({ error: 'Unidade não encontrada nesta empresa.' });
+
   const bdt = getBrasiliaDateTime();
   const data_solicitacao = bdt.date;
   const hora_solicitacao = bdt.time;
@@ -2866,6 +2874,7 @@ app.post('/api/despesas', async (req, res) => {
     data_solicitacao,
     hora_solicitacao,
     usuario_id: req.user.id,
+    unitId: requestUnit.id,
     status: 'Pendente',
     valor_hotel_alim: valor_hotel_alim || 0,
     valor_abastecimento: valor_abastecimento || 0,
@@ -2962,13 +2971,14 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   }
 
   const recipientId = String(req.body && (req.body.recipient_id || req.body.vendor_id) || '').trim();
+  const unitId = String(req.body && (req.body.unit_id || req.body.unitId) || '').trim();
   const periodStart = String(req.body && req.body.period_start || '').trim();
   const periodEnd = String(req.body && req.body.period_end || '').trim();
   const observation = String(req.body && req.body.observation || '').trim().slice(0, 1000);
   const amount = Number(req.body && req.body.amount);
   const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-  if (!recipientId || !isoDate.test(periodStart) || !isoDate.test(periodEnd)) {
+  if (!recipientId || !unitId || unitId === 'all' || !isoDate.test(periodStart) || !isoDate.test(periodEnd)) {
     return res.status(400).json({ error: 'Usuário e período são obrigatórios.' });
   }
   if (periodStart > periodEnd) {
@@ -2989,6 +2999,9 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado ou inativo nesta empresa.' });
     }
 
+    const selectedUnit = await db('unidades').where({ id: unitId, empresa_id: req.user.empresa_id }).first();
+    if (!selectedUnit) return res.status(400).json({ error: 'Unidade nao encontrada nesta empresa.' });
+
     const bdt = getBrasiliaDateTime();
     const startBR = periodStart.split('-').reverse().join('/');
     const endBR = periodEnd.split('-').reverse().join('/');
@@ -3005,6 +3018,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
           data_solicitacao: bdt.date,
           hora_solicitacao: bdt.time,
           usuario_id: recipient.id,
+          unitId: selectedUnit.id,
           status: 'Aprovada',
           valor_hotel_alim: 0,
           valor_abastecimento: 0,
@@ -3064,7 +3078,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       body: `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
     });
 
-    res.json({ success: true, id: requestId, amount, recipient: recipient.name, profile: recipient.profile, period: periodText });
+    res.json({ success: true, id: requestId, amount, recipient: recipient.name, profile: recipient.profile, unitId: selectedUnit.id, unit: selectedUnit.name, period: periodText });
   } catch (err) {
     console.error('Erro ao lançar saldo direto:', err);
     res.status(500).json({ error: 'Erro ao lançar saldo direto.' });
@@ -3090,6 +3104,95 @@ app.get('/api/despesas/direct-credit/recipients', async (req, res) => {
   }
 });
 
+// Resumo financeiro do usuario e periodo selecionados no lancamento direto.
+app.get('/api/despesas/direct-credit/summary', async (req, res) => {
+  if (!canLaunchDirectCredit(req.user)) {
+    return res.status(403).json({ error: 'Acesso negado: apenas aprovadores financeiros podem consultar este resumo.' });
+  }
+  const recipientId = String(req.query.recipient_id || '').trim();
+  const unitId = String(req.query.unit_id || req.query.unitId || '').trim();
+  const periodStart = String(req.query.period_start || '').trim();
+  const periodEnd = String(req.query.period_end || '').trim();
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+  if (!recipientId || !unitId || unitId === 'all' || !isoDate.test(periodStart) || !isoDate.test(periodEnd) || periodStart > periodEnd) {
+    return res.status(400).json({ error: 'Usuário e período válidos são obrigatórios.' });
+  }
+
+  try {
+    const recipient = await db('usuarios')
+      .where({ id: recipientId, empresa_id: req.user.empresa_id })
+      .whereNot('status', 'INATIVO')
+      .first();
+    if (!recipient) return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+
+    const selectedUnit = await db('unidades').where({ id: unitId, empresa_id: req.user.empresa_id }).first();
+    if (!selectedUnit) return res.status(400).json({ error: 'Unidade nao encontrada nesta empresa.' });
+
+    const expenses = await db('despesas_reembolsos')
+      .where({ empresa_id: req.user.empresa_id, userId: recipientId })
+      .where({ unitId: selectedUnit.id })
+      .where('date', '>=', periodStart)
+      .where('date', '<=', periodEnd);
+
+    const balanceRequests = await db('despesas_solicitacoes')
+      .where({ empresa_id: req.user.empresa_id, usuario_id: recipientId })
+      .where({ unitId: selectedUnit.id })
+      .where('data_solicitacao', '>=', periodStart)
+      .where('data_solicitacao', '<=', periodEnd);
+    const requestIds = balanceRequests.map(row => row.id);
+    const extras = requestIds.length ? await db('despesas_itens_extras').whereIn('solicitacao_id', requestIds) : [];
+    const items = requestIds.length ? await db('despesas_solicitacoes_itens').whereIn('solicitacao_id', requestIds) : [];
+
+    const requestedValue = request => {
+      const extraTotal = extras.filter(extra => String(extra.solicitacao_id) === String(request.id))
+        .reduce((sum, extra) => sum + ccNum(extra.valor), 0);
+      return ccNum(request.valor_hotel_alim) + ccNum(request.valor_abastecimento) + extraTotal;
+    };
+    const approvedValue = request => {
+      const requestItems = items.filter(item => String(item.solicitacao_id) === String(request.id));
+      if (!requestItems.length) return requestedValue(request);
+      return requestItems.reduce((sum, item) => {
+        const status = normalizeRole(item.status || '');
+        if (status.includes('reprov') || status.includes('correc')) return sum;
+        return sum + ccNum(item.valor_aprovado);
+      }, 0);
+    };
+
+    const notesTotal = expenses.reduce((sum, expense) => sum + ccNum(expense.value), 0);
+    const expensesConsidered = expenses
+      .filter(expense => {
+        const status = normalizeRole(expense.status || 'Pendente');
+        return !status.includes('reprov') && !status.includes('correc');
+      })
+      .reduce((sum, expense) => sum + ccNum(expense.value), 0);
+    const approvedBalance = balanceRequests
+      .filter(request => normalizeRole(request.status || '').includes('aprov'))
+      .reduce((sum, request) => sum + approvedValue(request), 0);
+    const pendingBalance = balanceRequests
+      .filter(request => normalizeRole(request.status || '') === 'pendente')
+      .reduce((sum, request) => sum + requestedValue(request), 0);
+    const currentDifference = approvedBalance - expensesConsidered;
+    const suggestion = Math.max(0, expensesConsidered - approvedBalance - pendingBalance);
+
+    res.json({
+      recipient: { id: recipient.id, name: recipient.name, profile: recipient.profile },
+      unit: { id: selectedUnit.id, name: selectedUnit.name },
+      period_start: periodStart,
+      period_end: periodEnd,
+      notes_count: expenses.length,
+      notes_total: Number(notesTotal.toFixed(2)),
+      expenses_considered: Number(expensesConsidered.toFixed(2)),
+      approved_balance: Number(approvedBalance.toFixed(2)),
+      pending_balance: Number(pendingBalance.toFixed(2)),
+      current_difference: Number(currentDifference.toFixed(2)),
+      suggested_credit: Number(suggestion.toFixed(2))
+    });
+  } catch (err) {
+    console.error('Erro ao calcular resumo de saldo direto:', err);
+    res.status(500).json({ error: 'Erro ao calcular resumo financeiro do usuário.' });
+  }
+});
+
 // List all expense requests for user's company (applying filters & roles)
 app.get('/api/despesas', async (req, res) => {
   try {
@@ -3098,19 +3201,19 @@ app.get('/api/despesas', async (req, res) => {
 
     let query = db('despesas_solicitacoes')
       .leftJoin('usuarios', 'despesas_solicitacoes.usuario_id', '=', 'usuarios.id')
-      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId')
+      .select('despesas_solicitacoes.*')
       .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
     if (!isActorAdmin) {
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.user.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.user.unitId);
       } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.query.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
       }
     } else {
       if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.query.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
       }
     }
 
@@ -3195,19 +3298,19 @@ app.get('/api/despesas/summary', async (req, res) => {
 
     let query = db('despesas_solicitacoes')
       .leftJoin('usuarios', 'despesas_solicitacoes.usuario_id', '=', 'usuarios.id')
-      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId')
+      .select('despesas_solicitacoes.*')
       .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
     if (!isActorAdmin) {
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.user.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.user.unitId);
       } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.query.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
       }
     } else {
       if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('usuarios.unitId', req.query.unitId);
+        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
       }
     }
 
@@ -5161,13 +5264,16 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
   try {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = isAdminUser(req.user);
+    const actorProfile = normalizeRole(req.user.profile || '');
 
-    let query = db('despesas_reembolsos as dr');
+    // Todo perfil, inclusive administrador, permanece limitado a empresa do token.
+    let query = db('despesas_reembolsos as dr')
+      .where('dr.empresa_id', req.user.empresa_id);
 
     if (!isActorAdmin) {
-      query = query.where('dr.empresa_id', req.user.empresa_id);
-
-      if (req.user.unitId && req.user.unitId !== 'all') {
+      // Supervisor/Gerente pode possuir vendedores vinculados em outras unidades.
+      // A hierarquia abaixo continua sendo a barreira de acesso nesses casos.
+      if (!['supervisor', 'gerente'].includes(actorProfile) && req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('dr.unitId', req.user.unitId);
       }
 

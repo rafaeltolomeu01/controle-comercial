@@ -6665,6 +6665,13 @@ const App = {
       document.getElementById('dossie-sol-vendedor').textContent = mov.vendedor_solicitante;
       document.getElementById('dossie-sol-data').textContent = mov.created_at ? new Date(mov.created_at).toLocaleString('pt-BR') : '-';
       document.getElementById('dossie-sol-observacao').textContent = mov.observacao || 'Sem observações';
+      const exchangeReasonContainer = document.getElementById('dossie-sol-motivo-troca-container');
+      const exchangeReason = document.getElementById('dossie-sol-motivo-troca');
+      const exchangeReasonText = mov.detalhe_troca_adicao || mov.motivo_troca || '';
+      if (exchangeReasonContainer && exchangeReason) {
+        exchangeReasonContainer.style.display = mov.tipo_solicitacao === 'Troca' ? 'block' : 'none';
+        exchangeReason.textContent = exchangeReasonText || 'Motivo não informado';
+      }
 
       const divTroca = document.getElementById('dossie-eq-troca-container');
       const divPadrao = document.getElementById('dossie-eq-padrao-container');

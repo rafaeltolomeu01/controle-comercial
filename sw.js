@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-4-saldo-todos-perfis';
+const CACHE_VERSION = '20260716-5-painel-resumo-unidade';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
