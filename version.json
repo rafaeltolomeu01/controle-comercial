@@ -1,7 +1,7 @@
 {
-  "version": "20260716.5",
+  "version": "20260716.9",
   "updatedAt": "2026-07-16T18:00:00.000Z",
-  "description": "Painel pessoal, cartões por filtro, resumo e unidade no saldo direto, e motivo da troca no dossiê",
-  "build": "20260716-5-painel-resumo-unidade",
+  "description": "Adicionar ou remover saldo com auditoria e alertas de correções no Painel Geral",
+  "build": "20260716-9-remocao-saldo-alertas",
   "buildDate": "2026-07-16T18:00:00.000Z"
 }

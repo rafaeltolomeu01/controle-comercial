@@ -2974,6 +2974,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   const unitId = String(req.body && (req.body.unit_id || req.body.unitId) || '').trim();
   const periodStart = String(req.body && req.body.period_start || '').trim();
   const periodEnd = String(req.body && req.body.period_end || '').trim();
+  const operation = String(req.body && req.body.operation || 'add').trim().toLowerCase();
   const observation = String(req.body && req.body.observation || '').trim().slice(0, 1000);
   const amount = Number(req.body && req.body.amount);
   const isoDate = /^\d{4}-\d{2}-\d{2}$/;
@@ -2986,6 +2987,12 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   }
   if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999.99) {
     return res.status(400).json({ error: 'Informe um valor válido e maior que zero.' });
+  }
+  if (!['add', 'remove'].includes(operation)) {
+    return res.status(400).json({ error: 'Operação de saldo inválida.' });
+  }
+  if (operation === 'remove' && !observation) {
+    return res.status(400).json({ error: 'Informe o motivo da remoção do saldo.' });
   }
   if (!req.user.empresa_id) {
     return res.status(403).json({ error: 'Usuário aprovador sem empresa vinculada.' });
@@ -3007,9 +3014,57 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
     const endBR = periodEnd.split('-').reverse().join('/');
     const periodText = startBR === endBR ? startBR : `${startBR} a ${endBR}`;
     const now = bdt.iso;
-    const description = `Saldo direto - período ${periodText}`;
+    const isRemoval = operation === 'remove';
+    const signedAmount = isRemoval ? -amount : amount;
+    const operationLabel = isRemoval ? 'Remoção de saldo' : 'Saldo direto';
+    const description = `${operationLabel} - período ${periodText}`;
 
     const requestId = await db.transaction(async (trx) => {
+      // Bloqueia o destinatário durante o cálculo/gravação para duas remoções
+      // simultâneas não consumirem o mesmo saldo disponível.
+      await trx('usuarios').where({ id: recipient.id, empresa_id: req.user.empresa_id }).forUpdate().first();
+
+      if (isRemoval) {
+        const balanceRequests = await trx('despesas_solicitacoes')
+          .where({ empresa_id: req.user.empresa_id, usuario_id: recipient.id, unitId: selectedUnit.id })
+          .where('data_solicitacao', '>=', periodStart)
+          .where('data_solicitacao', '<=', periodEnd);
+        const requestIds = balanceRequests.map(row => row.id);
+        const extras = requestIds.length ? await trx('despesas_itens_extras').whereIn('solicitacao_id', requestIds) : [];
+        const items = requestIds.length ? await trx('despesas_solicitacoes_itens').whereIn('solicitacao_id', requestIds) : [];
+        const requestedValue = request => {
+          const extraTotal = extras.filter(extra => String(extra.solicitacao_id) === String(request.id)).reduce((sum, extra) => sum + ccNum(extra.valor), 0);
+          return ccNum(request.valor_hotel_alim) + ccNum(request.valor_abastecimento) + extraTotal;
+        };
+        const approvedValue = request => {
+          const requestItems = items.filter(item => String(item.solicitacao_id) === String(request.id));
+          if (!requestItems.length) return requestedValue(request);
+          return requestItems.reduce((sum, item) => {
+            const itemStatus = normalizeRole(item.status || '');
+            return itemStatus.includes('reprov') || itemStatus.includes('correc') ? sum : sum + ccNum(item.valor_aprovado);
+          }, 0);
+        };
+        const approvedBalance = balanceRequests
+          .filter(request => normalizeRole(request.status || '').includes('aprov'))
+          .reduce((sum, request) => sum + approvedValue(request), 0);
+        const expenses = await trx('despesas_reembolsos')
+          .where({ empresa_id: req.user.empresa_id, userId: recipient.id, unitId: selectedUnit.id })
+          .where('date', '>=', periodStart)
+          .where('date', '<=', periodEnd);
+        const expensesConsidered = expenses
+          .filter(expense => {
+            const expenseStatus = normalizeRole(expense.status || 'Pendente');
+            return !expenseStatus.includes('reprov') && !expenseStatus.includes('correc');
+          })
+          .reduce((sum, expense) => sum + ccNum(expense.value), 0);
+        const availableBalance = Number((approvedBalance - expensesConsidered).toFixed(2));
+        if (availableBalance <= 0 || amount > availableBalance) {
+          const error = new Error(`Saldo disponível para remoção: R$ ${Math.max(0, availableBalance).toFixed(2)}.`);
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
       const insertedRequest = await trx('despesas_solicitacoes')
         .insert({
           empresa_id: req.user.empresa_id,
@@ -3032,17 +3087,17 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
 
       await trx('despesas_itens_extras').insert({
         solicitacao_id: newId,
-        valor: amount,
+        valor: signedAmount,
         descricao: description,
         created_at: now,
         updated_at: now
       });
       await trx('despesas_solicitacoes_itens').insert({
         solicitacao_id: newId,
-        categoria: 'Saldo lançado diretamente',
-        valor_solicitado: amount,
+        categoria: isRemoval ? 'Saldo removido diretamente' : 'Saldo lançado diretamente',
+        valor_solicitado: signedAmount,
         quantidade_solicitada: null,
-        valor_aprovado: amount,
+        valor_aprovado: signedAmount,
         quantidade_aprovada: null,
         status: 'aprovado',
         justificativa: observation || description,
@@ -3063,8 +3118,8 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       });
       await trx('auditoria_logs').insert({
         usuario_id: req.user.id,
-        acao: 'LANCOU_SALDO_DIRETO',
-        detalhes: `Saldo direto de R$ ${amount.toFixed(2)} lançado para ${recipient.name} (${recipient.profile || 'Sem perfil'}, ${recipient.id}), período ${periodText}.`,
+        acao: isRemoval ? 'REMOVEU_SALDO_DIRETO' : 'LANCOU_SALDO_DIRETO',
+        detalhes: `${operationLabel} de R$ ${amount.toFixed(2)} para ${recipient.name} (${recipient.profile || 'Sem perfil'}, ${recipient.id}), unidade ${selectedUnit.name} (${selectedUnit.id}), período ${periodText}. Motivo: ${observation || '-'}`,
         empresa_id: req.user.empresa_id
       });
       return newId;
@@ -3074,14 +3129,16 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
     await notifyUsers(targets, {
       empresa_id: req.user.empresa_id,
       module: 'saldo', record_id: String(requestId), target_hash: '#despesas',
-      title: 'Saldo lançado diretamente',
-      body: `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
+      title: isRemoval ? 'Saldo removido' : 'Saldo lançado diretamente',
+      body: isRemoval
+        ? `Foi removido saldo de R$ ${amount.toFixed(2)} para o período ${periodText}. Motivo: ${observation}`
+        : `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
     });
 
-    res.json({ success: true, id: requestId, amount, recipient: recipient.name, profile: recipient.profile, unitId: selectedUnit.id, unit: selectedUnit.name, period: periodText });
+    res.json({ success: true, id: requestId, operation, amount: signedAmount, recipient: recipient.name, profile: recipient.profile, unitId: selectedUnit.id, unit: selectedUnit.name, period: periodText });
   } catch (err) {
     console.error('Erro ao lançar saldo direto:', err);
-    res.status(500).json({ error: 'Erro ao lançar saldo direto.' });
+    res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Erro ao lançar ou remover saldo direto.' });
   }
 });
 

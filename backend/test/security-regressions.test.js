@@ -118,6 +118,12 @@ test('lancamento direto de saldo exige aprovador, usuario da mesma empresa e tra
   assert.match(listUpdates, /\/api\/despesas\/direct-credit/);
   assert.match(listUpdates, /cc-direct-profile/);
   assert.match(listUpdates, /renderDirectBalanceRecipients/);
+  assert.match(route, /REMOVEU_SALDO_DIRETO/);
+  assert.match(route, /signedAmount/);
+  assert.match(route, /availableBalance/);
+  assert.match(route, /forUpdate\(\)/);
+  assert.match(listUpdates, /cc-direct-operation/);
+  assert.match(listUpdates, /Remover saldo disponível/);
 });
 
 test('cadastro oferece perfis motorista e ajudante com acesso inicial de despesas', () => {
@@ -141,6 +147,11 @@ test('resumo do saldo direto considera usuario, unidade e periodo sem misturar e
   assert.match(listUpdates, /cc-direct-summary/);
   assert.match(listUpdates, /data-use-direct-suggestion/);
   assert.match(listUpdates, /unit_id: unitSelect\.value/);
+  assert.match(listUpdates, /max-height:calc\(100dvh - 24px\)/);
+  assert.match(listUpdates, /overflow-y:auto/);
+  assert.match(listUpdates, /syncDirectBalanceRoute/);
+  assert.match(listUpdates, /window\.location\.hash !== '#despesas-dashboard'/);
+  assert.match(listUpdates, /modal\.style\.display = 'none'/);
 });
 
 test('unidade do saldo e persistida com migracao aditiva e historico preservado', () => {
@@ -165,6 +176,15 @@ test('painel pessoal e cartoes de despesas seguem o usuario e filtros locais', (
   assert.match(listUpdates, /updateExpenseCardsForLocalFilters/);
   assert.match(listUpdates, /FiltersManager\.getFilterValues\('despesas'\)/);
   assert.match(listUpdates, /metric-balance-available/);
+  assert.match(listUpdates, /'solicitante'/);
+  assert.match(listUpdates, /sellerIds\.has\(recordOwnerId\(item\)\)/);
+  assert.match(listUpdates, /vendedor: ''/);
+  const dashboardPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'dashboard.html'), 'utf8');
+  assert.match(dashboardPage, /dash-corrections-alert/);
+  assert.match(dashboardPage, /dash-correction-expenses/);
+  assert.match(dashboardPage, /dash-correction-clients/);
+  assert.match(listUpdates, /correctionExpenses/);
+  assert.match(listUpdates, /correctionClients/);
 });
 
 test('dossie visual exibe o motivo da troca usado no PDF', () => {

@@ -41,6 +41,20 @@
             </div>
           </div>
 
+          <div id="dash-corrections-alert" class="card" style="display:none;border-color:rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(239,68,68,.14),rgba(245,158,11,.08));margin-bottom:18px;">
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+              <div class="stat-icon danger" style="min-width:48px;font-size:1.35rem;font-weight:900;">!</div>
+              <div style="flex:1;min-width:220px;">
+                <div style="font-weight:800;color:#f87171;font-size:1rem;margin-bottom:5px;">Atenção: existem informações para corrigir</div>
+                <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:12px;">Corrija e reenvie os registros para que eles possam ser aprovados.</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                  <button id="dash-correction-expenses" type="button" class="btn btn-secondary" style="display:none;border-color:rgba(239,68,68,.55);color:#fca5a5;" onclick="window.location.hash='#despesas'">Despesas para corrigir: <strong data-count>0</strong></button>
+                  <button id="dash-correction-clients" type="button" class="btn btn-secondary" style="display:none;border-color:rgba(245,158,11,.55);color:#fbbf24;" onclick="window.location.hash='#clientes'">Clientes para corrigir: <strong data-count>0</strong></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
             <div class="card-header">
               <span class="card-title">Ações Rápidas de Campo</span>

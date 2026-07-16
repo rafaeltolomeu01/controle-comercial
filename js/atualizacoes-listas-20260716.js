@@ -382,14 +382,39 @@
       panel.querySelector('[data-summary="expenses"]').textContent = formatMoney(summary.expenses_considered);
       panel.querySelector('[data-summary="approved"]').textContent = formatMoney(summary.approved_balance);
       panel.querySelector('[data-summary="pending"]').textContent = formatMoney(summary.pending_balance);
+      panel.querySelector('[data-summary="available"]').textContent = formatMoney(Math.max(0, Number(summary.current_difference) || 0));
       panel.querySelector('[data-summary="suggestion"]').textContent = formatMoney(summary.suggested_credit);
       const useButton = panel.querySelector('[data-use-direct-suggestion]');
       useButton.dataset.value = String(Number(summary.suggested_credit) || 0);
-      useButton.disabled = !(Number(summary.suggested_credit) > 0);
+      useButton.disabled = modal.querySelector('#cc-direct-operation')?.value === 'remove' || !(Number(summary.suggested_credit) > 0);
     } catch (error) {
       if (requestNumber !== directSummaryRequest) return;
       resetDirectBalanceSummary(modal, `Nao foi possivel calcular: ${error.message}`);
     }
+  }
+
+  function updateDirectOperationUi(modal) {
+    const removing = modal.querySelector('#cc-direct-operation')?.value === 'remove';
+    const title = modal.querySelector('[data-direct-title]');
+    const amountLabel = modal.querySelector('label[for="cc-direct-amount"]');
+    const warning = modal.querySelector('[data-direct-warning]');
+    const submit = modal.querySelector('button[type="submit"]');
+    const observation = modal.querySelector('#cc-direct-observation');
+    if (title) title.textContent = removing ? 'Remover saldo disponível' : 'Lançar saldo direto';
+    if (amountLabel) amountLabel.textContent = removing ? 'Valor a remover' : 'Valor do saldo';
+    if (warning) {
+      warning.textContent = removing
+        ? 'A remoção será registrada como lançamento negativo, exige motivo e não poderá ultrapassar o saldo disponível.'
+        : 'O saldo será lançado como aprovado e ficará registrado na auditoria.';
+      warning.style.background = removing ? 'rgba(239,68,68,.12)' : 'rgba(245,158,11,.12)';
+      warning.style.color = removing ? 'var(--danger)' : 'var(--warning)';
+    }
+    if (submit) submit.textContent = removing ? 'Confirmar remoção' : 'Confirmar lançamento';
+    if (observation) {
+      observation.required = removing;
+      observation.placeholder = removing ? 'Informe obrigatoriamente o motivo da remoção' : 'Motivo ou referência do lançamento (opcional)';
+    }
+    loadDirectBalanceSummary(modal);
   }
 
   function renderDirectBalanceRecipients(modal) {
@@ -408,13 +433,18 @@
     modal.id = 'cc-direct-balance-modal';
     modal.className = 'modal';
     modal.style.display = 'none';
+    modal.style.overflowY = 'auto';
+    modal.style.alignItems = 'flex-start';
+    modal.style.padding = '12px';
+    modal.style.overscrollBehavior = 'contain';
     modal.innerHTML = `
-      <div class="login-card" style="max-width:620px;width:min(94vw,620px);">
+      <div class="login-card" style="max-width:620px;width:min(94vw,620px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;margin:auto;">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;">
-          <div><h2 style="margin:0;color:var(--primary-color);">Lançar saldo direto</h2><small style="color:var(--text-muted);">Sem solicitação prévia do usuário</small></div>
+          <div><h2 data-direct-title style="margin:0;color:var(--primary-color);">Lançar saldo direto</h2><small style="color:var(--text-muted);">Sem solicitação prévia do usuário</small></div>
           <button type="button" class="btn btn-secondary" data-direct-close>Fechar</button>
         </div>
         <form id="cc-direct-balance-form">
+          <div class="form-group"><label for="cc-direct-operation">Operação</label><select id="cc-direct-operation" required><option value="add">Adicionar saldo</option><option value="remove">Remover saldo disponível</option></select></div>
           <div class="form-grid two-columns">
             <div class="form-group"><label for="cc-direct-profile">Categoria / Perfil</label><select id="cc-direct-profile"><option value="">Todos os perfis</option></select></div>
             <div class="form-group"><label for="cc-direct-recipient">Usuário</label><select id="cc-direct-recipient" required><option value="">Carregando usuários...</option></select></div>
@@ -431,13 +461,14 @@
               <span>Despesas consideradas</span><strong data-direct-summary-value data-summary="expenses">\u2014</strong>
               <span>Saldo aprovado</span><strong data-direct-summary-value data-summary="approved">\u2014</strong>
               <span>Saldo pendente de aprovacao</span><strong data-direct-summary-value data-summary="pending">\u2014</strong>
+              <span>Saldo disponível agora</span><strong data-direct-summary-value data-summary="available">\u2014</strong>
               <span>Sugestao para quitar despesas</span><strong data-direct-summary-value data-summary="suggestion" style="color:var(--success);">\u2014</strong>
             </div>
             <button type="button" class="btn btn-secondary" data-use-direct-suggestion disabled style="width:100%;margin-top:12px;">Usar valor sugerido</button>
           </div>
           <div class="form-group"><label for="cc-direct-amount">Valor do saldo</label><input id="cc-direct-amount" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" placeholder="0,00" required></div>
           <div class="form-group"><label for="cc-direct-observation">Observação</label><textarea id="cc-direct-observation" maxlength="1000" rows="3" placeholder="Motivo ou referência do lançamento (opcional)"></textarea></div>
-          <div style="padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.12);color:var(--warning);font-size:.82rem;margin-bottom:16px;">O saldo será lançado como aprovado e ficará registrado na auditoria.</div>
+          <div data-direct-warning style="padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.12);color:var(--warning);font-size:.82rem;margin-bottom:16px;">O saldo será lançado como aprovado e ficará registrado na auditoria.</div>
           <button class="btn btn-primary" type="submit" style="width:100%;">Confirmar lançamento</button>
         </form>
       </div>`;
@@ -448,6 +479,7 @@
       renderDirectBalanceRecipients(modal);
       resetDirectBalanceSummary(modal);
     });
+    modal.querySelector('#cc-direct-operation').addEventListener('change', () => updateDirectOperationUi(modal));
     modal.querySelector('#cc-direct-recipient').addEventListener('change', () => {
       const person = directBalanceRecipients.find(item => String(item.id) === modal.querySelector('#cc-direct-recipient').value);
       const unitSelect = modal.querySelector('#cc-direct-unit');
@@ -467,12 +499,14 @@
       const button = form.querySelector('button[type="submit"]');
       const recipientSelect = document.getElementById('cc-direct-recipient');
       const unitSelect = document.getElementById('cc-direct-unit');
+      const operation = document.getElementById('cc-direct-operation').value;
       const amount = Number(document.getElementById('cc-direct-amount').value);
       const periodStart = document.getElementById('cc-direct-start').value;
       const periodEnd = document.getElementById('cc-direct-end').value;
       if (!recipientSelect.value || !unitSelect.value || !periodStart || !periodEnd || !(amount > 0)) return;
       const recipientName = recipientSelect.options[recipientSelect.selectedIndex]?.textContent || 'o usuário';
-      if (!window.confirm(`Confirma o lançamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${recipientName}?`)) return;
+      const operationText = operation === 'remove' ? 'remoção' : 'lançamento';
+      if (!window.confirm(`Confirma a ${operationText} de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} para ${recipientName}?`)) return;
       button.disabled = true;
       button.textContent = 'Lançando...';
       try {
@@ -481,6 +515,7 @@
           body: JSON.stringify({
             recipient_id: recipientSelect.value,
             unit_id: unitSelect.value,
+            operation,
             period_start: periodStart,
             period_end: periodEnd,
             amount,
@@ -489,14 +524,14 @@
         });
         modal.style.display = 'none';
         form.reset();
-        App.showToast?.('Saldo lançado diretamente com sucesso!');
+        App.showToast?.(operation === 'remove' ? 'Saldo removido com sucesso!' : 'Saldo lançado diretamente com sucesso!');
         await App.loadDespesasDashboard?.();
         await App.loadBalances?.();
       } catch (error) {
         alert(`Não foi possível lançar o saldo: ${error.message}`);
       } finally {
         button.disabled = false;
-        button.textContent = 'Confirmar lançamento';
+        updateDirectOperationUi(modal);
       }
     });
     return modal;
@@ -504,6 +539,7 @@
 
   async function openDirectBalanceModal() {
     const modal = createDirectBalanceModal();
+    modal.querySelector('form')?.reset();
     const profileSelect = modal.querySelector('#cc-direct-profile');
     const recipientSelect = modal.querySelector('#cc-direct-recipient');
     const unitSelect = modal.querySelector('#cc-direct-unit');
@@ -517,6 +553,7 @@
     modal.querySelector('#cc-direct-start').value = localDate(new Date(today.getFullYear(), today.getMonth(), 1));
     modal.querySelector('#cc-direct-end').value = localDate(today);
     resetDirectBalanceSummary(modal);
+    updateDirectOperationUi(modal);
     try {
       directBalanceRecipients = await api('/api/despesas/direct-credit/recipients');
       const profiles = [...new Set((directBalanceRecipients || []).map(person => String(person.profile || 'Sem perfil')))]
@@ -541,12 +578,25 @@
       button.type = 'button';
       button.className = 'btn btn-primary';
       button.style.marginLeft = 'auto';
-      button.textContent = '+ Lançar saldo direto';
+      button.textContent = '+ Adicionar / remover saldo';
       button.addEventListener('click', openDirectBalanceModal);
       tabs.appendChild(button);
     };
     ensureButton();
-    window.addEventListener('hashchange', () => setTimeout(ensureButton, 80));
+    const syncDirectBalanceRoute = () => {
+      const modal = document.getElementById('cc-direct-balance-modal');
+      if (window.location.hash !== '#despesas-dashboard') {
+        if (modal) {
+          modal.style.display = 'none';
+          modal.querySelector('form')?.reset();
+          resetDirectBalanceSummary(modal);
+        }
+        return;
+      }
+      setTimeout(ensureButton, 80);
+    };
+    window.addEventListener('hashchange', syncDirectBalanceRoute);
+    window.addEventListener('popstate', syncDirectBalanceRoute);
     new MutationObserver(ensureButton).observe(document.body, { childList: true, subtree: true });
   }
 
@@ -783,11 +833,11 @@
   }
 
   function recordOwnerId(record) {
-    return String(pick(record, ['userId', 'user_id', 'usuario_id', 'vendedor_id', 'seller_id', 'created_by', 'responsavel_id', 'solicitante_id']) || '');
+    return String(pick(record, ['userId', 'user_id', 'usuario_id', 'usuarioId', 'vendedor_id', 'vendedorId', 'seller_id', 'sellerId', 'createdBy', 'created_by', 'created_by_id', 'ownerId', 'responsavel_id', 'solicitante_id']) || '');
   }
 
   function recordOwnerName(record) {
-    return normalize(pick(record, ['vendedor', 'vendedor_nome', 'seller_name', 'usuario_nome', 'responsavel', 'solicitante_nome']));
+    return normalize(pick(record, ['vendedor', 'vendedor_nome', 'vendedor_solicitante', 'seller_name', 'usuario_nome', 'responsavel', 'solicitante_nome', 'solicitante']));
   }
 
   function belongsToUser(record, user) {
@@ -821,16 +871,25 @@
     const expenses = FiltersManager.filterData(rawExpenses, filters, 'despesas');
     const rawBalances = window.AppBalancesCache || Store.getBalanceRequests?.() || [];
     const balanceFilters = {
-      empresa: filters.empresa || '', unitId: filters.unitId || '', vendedor: filters.vendedor || '',
-      supervisor: filters.supervisor || '', period: filters.period || '', search: '', status: ''
+      empresa: filters.empresa || '', unitId: filters.unitId || '', vendedor: '',
+      supervisor: '', period: filters.period || '', search: '', status: ''
     };
     let balances = FiltersManager.filterData(rawBalances, balanceFilters, 'solicitacao-despesas');
 
-    // When a person filter is active, also match by IDs found in the already filtered expense list.
-    if (filters.vendedor || filters.supervisor) {
-      const visibleIds = new Set(expenses.map(recordOwnerId).filter(Boolean));
-      const visibleNames = new Set(expenses.map(recordOwnerName).filter(Boolean));
-      balances = balances.filter(item => visibleIds.has(recordOwnerId(item)) || visibleNames.has(recordOwnerName(item)));
+    // Despesas usam "Vendedor", enquanto solicitacoes de saldo usam "Solicitante".
+    // A correspondencia abaixo aceita tanto o ID quanto o nome sem perder o saldo aprovado.
+    const users = Store.getUsers?.() || [];
+    if (filters.vendedor) {
+      const sellerName = normalize(filters.vendedor);
+      const sellerIds = new Set(users.filter(user => normalize(user.name || user.nome) === sellerName).map(user => String(user.id)));
+      balances = balances.filter(item => sellerIds.has(recordOwnerId(item)) || recordOwnerName(item) === sellerName);
+    }
+    if (filters.supervisor) {
+      const supervisorName = normalize(filters.supervisor);
+      const supervisorIds = new Set(users.filter(user => normalize(user.name || user.nome) === supervisorName).map(user => String(user.id)));
+      const supervisedIds = new Set(users.filter(user => supervisorIds.has(String(user.supervisor_id || user.supervisorId || ''))).map(user => String(user.id)));
+      expenses.map(recordOwnerId).filter(Boolean).forEach(id => supervisedIds.add(id));
+      balances = balances.filter(item => supervisedIds.has(recordOwnerId(item)));
     }
 
     const totalApproved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
@@ -867,6 +926,25 @@
     set('dash-open-tickets', String(tickets.filter(item => ['aberto', 'em atendimento'].includes(normalize(item.status))).length));
     set('dash-pending-expenses', formatMoney(pendingExpenses));
     set('dash-pending-balances', formatMoney(approved - spent));
+    const correctionExpenses = expenses.filter(item => normalize(item.status).includes('correc')).length;
+    const correctionClients = clients.filter(item => {
+      const status = normalize(item.status);
+      return status.includes('correc') || status.includes('ajuste');
+    }).length;
+    const correctionAlert = document.getElementById('dash-corrections-alert');
+    const expenseCorrectionButton = document.getElementById('dash-correction-expenses');
+    const clientCorrectionButton = document.getElementById('dash-correction-clients');
+    if (correctionAlert) correctionAlert.style.display = correctionExpenses || correctionClients ? 'block' : 'none';
+    if (expenseCorrectionButton) {
+      expenseCorrectionButton.style.display = correctionExpenses ? 'inline-flex' : 'none';
+      const count = expenseCorrectionButton.querySelector('[data-count]');
+      if (count) count.textContent = String(correctionExpenses);
+    }
+    if (clientCorrectionButton) {
+      clientCorrectionButton.style.display = correctionClients ? 'inline-flex' : 'none';
+      const count = clientCorrectionButton.querySelector('[data-count]');
+      if (count) count.textContent = String(correctionClients);
+    }
     renderDashboardBars('dash-expense-bars', [
       { label: 'Pendentes', value: pendingExpenses },
       { label: 'Aprovadas', value: expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0) },

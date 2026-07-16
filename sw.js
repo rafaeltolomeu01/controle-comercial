@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-5-painel-resumo-unidade';
+const CACHE_VERSION = '20260716-9-remocao-saldo-alertas';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
