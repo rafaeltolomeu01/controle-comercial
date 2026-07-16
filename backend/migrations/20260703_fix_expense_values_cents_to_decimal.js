@@ -1,16 +1,8 @@
 exports.up = async function(knex) {
-  const rows = await knex('despesas_reembolsos').select('id', 'value');
-  for (const row of rows) {
-    if (row.value !== null && row.value !== undefined) {
-      const val = Number(row.value);
-      // Se for um valor inteiro maior ou igual a 1000, interpretamos como centavos e dividimos por 100
-      if (Number.isInteger(val) && val >= 1000) {
-        await knex('despesas_reembolsos')
-          .where('id', row.id)
-          .update({ value: val / 100 });
-      }
-    }
-  }
+  // Intencionalmente nao altera dados. A regra anterior inferia que qualquer
+  // inteiro >= 1000 estava em centavos e podia transformar R$ 1.000,00 em
+  // R$ 10,00. Correcoes historicas exigem backup e IDs auditados explicitamente.
+  return Promise.resolve();
 };
 
 exports.down = function(knex) {

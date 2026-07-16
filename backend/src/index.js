@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 function ccNum(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -30,7 +31,12 @@ const config = require('../knexfile');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-key-controle-comercial';
+const bcrypt = require('bcryptjs');
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const JWT_SECRET = process.env.JWT_SECRET || (IS_PRODUCTION ? '' : 'dev-only-change-me');
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET e obrigatorio em producao. Configure uma chave longa e aleatoria.');
+}
 const configFilePath = path.join(__dirname, 'emails_config.json');
 
 const db = knex(process.env.NODE_ENV === 'production' ? config.production : config.development);
@@ -199,23 +205,9 @@ async function initDb() {
     });
   }
 
-  // Forçar correção de valores em centavos para decimais na tabela despesas_reembolsos
-  try {
-    const rowsToFix = await db('despesas_reembolsos').select('id', 'value');
-    for (const row of rowsToFix) {
-      if (row.value !== null && row.value !== undefined) {
-        const val = Number(row.value);
-        if (Number.isInteger(val) && val >= 1000) {
-          await db('despesas_reembolsos')
-            .where('id', row.id)
-            .update({ value: val / 100 });
-          console.log(`Database: Corrigido valor da despesa ${row.id} de ${val} para ${val / 100}`);
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Database: Erro ao forçar correção de valores de despesas:', err);
-  }
+  // Valores financeiros nunca sao reinterpretados automaticamente na subida.
+  // Qualquer correcao historica deve usar script separado, backup e lista
+  // explicita de registros previamente auditados.
 
   // 3. Create exchange_products table
   const hasExchangeProducts = await db.schema.hasTable('exchange_products');
@@ -609,11 +601,8 @@ async function initDb() {
   }
 
   // Remover todos os usuários mock/falsos padrão com senha '123'
-  await db('usuarios')
-    .whereIn('username', ['admin', 'supervisor', 'financeiro', 'conferente', 'resp_eq', 'mecanico', 'vendedor1', 'vendedor2', 'vendedor3'])
-    .andWhere('password', '123')
-    .delete();
-  console.log('Database: Usuários mock removidos.');
+  // Contas de demonstracao nunca sao excluidas automaticamente. A revisao deve
+  // ser manual, com backup e registro de auditoria.
 
   // Seed default company
   const hasCompany = await db('empresas').where({ id: '12.345.678/0001-90' }).first();
@@ -663,18 +652,22 @@ async function initDb() {
     "Solicitação de Saldo", "Aprovação de Saldo", "Despesas", 
     "Aprovação de Despesas", "Relatórios", "Usuários", "Configurações", "Administrador"
   ]);
+  const initialAdminPassword = String(process.env.INITIAL_ADMIN_PASSWORD || '');
+  if (initialAdminPassword && initialAdminPassword.length < 12) {
+    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
+  }
 
   const hasAdminCnpj = await db('usuarios')
     .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
     .first();
 
-  if (!hasAdminCnpj) {
+  if (!hasAdminCnpj && initialAdminPassword) {
     await db('usuarios').insert({
       id: 'admin_initial_cnpj',
       name: 'Administrador sistema',
       username: 'admin',
       email: 'admin@controlecampo.com',
-      password: '123456',
+      password: await bcrypt.hash(initialAdminPassword, 12),
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -684,12 +677,12 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial CNPJ cadastrado.');
-  } else if (hasAdminCnpj.email !== 'admin@controlecampo.com' || hasAdminCnpj.password !== '123456') {
+  } else if (hasAdminCnpj && initialAdminPassword && process.env.ROTATE_INITIAL_ADMIN_PASSWORD === 'true') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: '12.345.678/0001-90' })
       .update({
         email: 'admin@controlecampo.com',
-        password: '123456',
+        password: await bcrypt.hash(initialAdminPassword, 12),
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
@@ -702,13 +695,13 @@ async function initDb() {
     .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
     .first();
 
-  if (!hasAdminName) {
+  if (!hasAdminName && initialAdminPassword && process.env.CREATE_LEGACY_ADMIN_ALIAS === 'true') {
     await db('usuarios').insert({
       id: 'admin_initial_name',
       name: 'Administrador sistema',
       username: 'admin',
       email: 'admin@controlecampo.com',
-      password: '123456',
+      password: await bcrypt.hash(initialAdminPassword, 12),
       profile: 'Administrador',
       unitId: 'all',
       status: 'LIBERADO',
@@ -718,12 +711,12 @@ async function initDb() {
       updated_at: new Date().toISOString()
     });
     console.log('Database: Admin inicial Nome cadastrado.');
-  } else if (hasAdminName.email !== 'admin@controlecampo.com' || hasAdminName.password !== '123456') {
+  } else if (hasAdminName && initialAdminPassword && process.env.ROTATE_INITIAL_ADMIN_PASSWORD === 'true' && process.env.CREATE_LEGACY_ADMIN_ALIAS === 'true') {
     await db('usuarios')
       .where({ username: 'admin', empresa_id: 'Distribuidora JDS' })
       .update({
         email: 'admin@controlecampo.com',
-        password: '123456',
+        password: await bcrypt.hash(initialAdminPassword, 12),
         name: 'Administrador sistema',
         profile: 'Administrador',
         status: 'LIBERADO',
@@ -735,23 +728,47 @@ async function initDb() {
 
 const app = express();
 app.set('db', db);
+app.set('trust proxy', 1);
+
+const loginRateBuckets = new Map();
+function loginRateLimit(req, res, next) {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const limit = Number(process.env.LOGIN_RATE_LIMIT || 10);
+  const key = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+  const current = loginRateBuckets.get(key);
+  const bucket = (!current || current.resetAt <= now) ? { count: 0, resetAt: now + windowMs } : current;
+  bucket.count += 1;
+  loginRateBuckets.set(key, bucket);
+  res.setHeader('X-RateLimit-Limit', String(limit));
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, limit - bucket.count)));
+  if (bucket.count > limit) {
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+  }
+  next();
+}
+app.use(['/api/login', '/api/auth/login'], loginRateLimit);
 
 // CORS configurável: em domínio próprio, defina FRONTEND_URL=https://seudominio.com.br
 const allowedOrigins = (process.env.FRONTEND_URL || '')
   .split(',')
   .map(v => v.trim())
   .filter(Boolean);
-app.use(cors({
-  origin(origin, callback) {
-    // Permite chamadas locais, arquivo aberto no navegador e, quando configurado, apenas os domínios autorizados.
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Origem não autorizada pelo CORS'));
-  },
-  credentials: true
-}));
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+  const allowed = !origin
+    || origin === requestOrigin
+    || allowedOrigins.includes(origin)
+    || (!IS_PRODUCTION && allowedOrigins.length === 0);
+  if (!allowed) return res.status(403).json({ error: 'Origem nao autorizada.' });
+  return cors({ origin: origin || false, credentials: true })(req, res, next);
+});
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(self), geolocation=(self), microphone=()');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -763,9 +780,10 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json({ limit: process.env.JSON_LIMIT || '25mb' }));
 
-// Servir o frontend junto com o backend. Assim o projeto pode rodar em um domínio só.
+// Publicar somente os arquivos do frontend. Nunca expor backend, migrations,
+// documentacao, backups ou manifests de dependencias.
 const FRONTEND_ROOT = path.join(__dirname, '..', '..');
-app.use(express.static(FRONTEND_ROOT, {
+const staticOptions = {
   index: false,
   maxAge: 0,
   etag: false,
@@ -774,7 +792,14 @@ app.use(express.static(FRONTEND_ROOT, {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
   }
-}));
+};
+app.use('/css', express.static(path.join(FRONTEND_ROOT, 'css'), staticOptions));
+app.use('/js', express.static(path.join(FRONTEND_ROOT, 'js'), staticOptions));
+app.use('/pages', express.static(path.join(FRONTEND_ROOT, 'pages'), staticOptions));
+app.get('/manifest.json', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'manifest.json')));
+app.get('/sw.js', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'sw.js')));
+app.get('/icon.svg', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'icon.svg')));
+app.get('/version.json', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'version.json')));
 
 const multer = require('multer');
 
@@ -812,9 +837,8 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-// Servir arquivos estáticos da pasta uploads
+// A rota fisica de uploads e registrada depois da autenticacao.
 const UPLOADS_ROOT = path.join(__dirname, '..', 'uploads');
-app.use('/uploads', express.static(UPLOADS_ROOT));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
@@ -824,38 +848,14 @@ app.get('/index.html', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
 });
 
-app.get('/api/system-diag', async (req, res) => {
-  try {
-    const dbType = db.client.config.client;
-    const migrations = await db('knex_migrations').select('*');
-    const sampleDespesas = await db('despesas_reembolsos')
-      .select('id', 'value', 'finalidade', 'date', 'status', 'created_at')
-      .orderBy('created_at', 'desc')
-      .limit(50);
-    const data = {
-      dbType,
-      migrations,
-      sampleDespesas,
-      env: {
-        NODE_ENV: process.env.NODE_ENV,
-        PORT: process.env.PORT
-      }
-    };
-    res.setHeader('Content-Type', 'application/json');
-    res.send(JSON.stringify(data, null, 2));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
-  const publicPaths = ['/api/login', '/api/usuarios/login', '/api/usuarios/register'];
+  const publicPaths = ['/api/login', '/api/auth/login'];
   const isFrontendFile = req.path === '/' || req.path === '/index.html' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/css/') || req.path.startsWith('/js/') || req.path.startsWith('/pages/') || req.path.startsWith('/assets/') || req.path.startsWith('/icon');
   // Permite abrir imagens já salvas sem login, mas protege o POST de upload.
   // Antes o startsWith('/api/uploads/') liberava também /api/uploads/base64,
   // deixando req.user indefinido e quebrando o salvamento das fotos.
-  if (isFrontendFile || (req.method === 'GET' && req.path.startsWith('/api/uploads/'))) return next();
+  if (isFrontendFile) return next();
   
   if (publicPaths.includes(req.path)) {
     return next();
@@ -884,13 +884,16 @@ app.use(async (req, res, next) => {
       return res.status(403).json({ error: 'Acesso negado: Seu acesso foi desativado por um administrador.' });
     }
 
+    const company = user.empresa_id
+      ? await db('empresas').where({ id: user.empresa_id }).first()
+      : null;
     req.user = {
       id: user.id,
       name: user.name,
       username: user.username,
       profile: user.profile,
       empresa_id: user.empresa_id,
-      empresa_name: req.header('X-Company-Name') || user.empresa_id || '001',
+      empresa_name: (company && company.name) || user.empresa_id || '001',
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
     };
@@ -898,6 +901,26 @@ app.use(async (req, res, next) => {
   } catch (err) {
     console.error('JWT Auth verification failed:', err.message);
     return res.status(401).json({ error: 'Sessão expirada ou inválida. Por favor, faça login novamente.' });
+  }
+});
+
+// Arquivos fisicos exigem sessao e ficam limitados a pasta da empresa do token.
+app.use('/uploads', (req, res, next) => {
+  const requestedCompany = String(req.path || '').split('/').filter(Boolean)[0] || '';
+  const userCompany = String(req.user && req.user.empresa_id || '');
+  if (!requestedCompany || requestedCompany !== userCompany) {
+    return res.status(403).json({ error: 'Acesso negado ao arquivo solicitado.' });
+  }
+  next();
+}, express.static(UPLOADS_ROOT, { dotfiles: 'deny', index: false, fallthrough: false }));
+
+app.get('/api/system-diag', async (req, res) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Acesso negado.' });
+  try {
+    const migrations = await db('knex_migrations').select('name', 'batch', 'migration_time');
+    res.json({ ok: true, dbType: db.client.config.client, migrations });
+  } catch (_) {
+    res.status(500).json({ error: 'Falha ao consultar diagnostico do sistema.' });
   }
 });
 
@@ -1108,6 +1131,10 @@ app.post('/api/uploads/base64', async (req, res) => {
     const base64Data = match[2];
     const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf','image/jpg','image/heic','image/heif'];
     if (!allowed.includes(mimeType)) return res.status(400).json({ error: 'Tipo de arquivo não permitido.' });
+    const decodedBytes = Math.floor((base64Data.length * 3) / 4);
+    if (decodedBytes > 5 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Arquivo excede o limite de 5 MB.' });
+    }
 
     const id = 'UP-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     const authUser = req.user || {};
@@ -1139,7 +1166,11 @@ app.post('/api/uploads/delete-batch', async (req, res) => {
     const { ids } = req.body || {};
     if (Array.isArray(ids) && ids.length) {
       const cleanIds = ids.map(String).filter(Boolean);
-      await db('app_uploads').whereIn('id', cleanIds).delete();
+      let deleteQuery = db('app_uploads')
+        .where({ empresa_id: req.user.empresa_id })
+        .whereIn('id', cleanIds);
+      if (!isAdminUser(req.user)) deleteQuery = deleteQuery.andWhere({ user_id: String(req.user.id) });
+      await deleteQuery.delete();
     }
     res.json({ success: true });
   } catch (err) {
@@ -1150,7 +1181,9 @@ app.post('/api/uploads/delete-batch', async (req, res) => {
 
 app.get('/api/uploads/:id', async (req, res) => {
   try {
-    const file = await db('app_uploads').where({ id: req.params.id }).first();
+    const file = await db('app_uploads')
+      .where({ id: req.params.id, empresa_id: req.user.empresa_id })
+      .first();
     if (!file) return res.status(404).json({ error: 'Arquivo não encontrado.' });
     res.setHeader('Content-Type', file.mime_type);
     res.setHeader('Cache-Control', 'private, max-age=3600');
@@ -1360,6 +1393,11 @@ function isAdminUser(user) {
   return userHasRole(user, ['Administrador', 'Admin', 'Administrador Geral', 'Administrador Sistema', 'Administrador sistema']);
 }
 
+function isPasswordStrong(value) {
+  const password = String(value || '');
+  return password.length >= 10 && /[A-Za-z]/.test(password) && /\d/.test(password);
+}
+
 function safeAuditJson(value) {
   try {
     if (value === undefined) return null;
@@ -1553,14 +1591,34 @@ function mapImportedEquipmentRow(row, mapping) {
   };
 }
 
-function parseImportedEquipmentFile(file) {
+async function parseImportedEquipmentFile(file) {
   const ext = path.extname(file.originalname || '').toLowerCase();
-  if (ext === '.xlsx' || ext === '.xls') {
-    let XLSX;
-    try { XLSX = require('xlsx'); } catch (_) { const err = new Error('Dependencia xlsx nao instalada. Rode npm install antes do deploy.'); err.statusCode = 500; throw err; }
-    const wb = XLSX.readFile(file.path, { cellText: true, cellDates: false });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  if (ext === '.xlsx') {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(file.path);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return [];
+    const headerRow = sheet.getRow(1);
+    const headers = [];
+    for (let column = 1; column <= headerRow.cellCount; column += 1) {
+      headers.push(String(headerRow.getCell(column).text || '').trim());
+    }
+    const rows = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const item = {};
+      headers.forEach((header, index) => {
+        if (header) item[header] = String(row.getCell(index + 1).text || '').trim();
+      });
+      rows.push(item);
+    });
+    return rows;
+  }
+  if (ext === '.xls') {
+    const err = new Error('Formato .xls antigo nao e aceito por seguranca. Salve a planilha como .xlsx ou .csv.');
+    err.statusCode = 400;
+    throw err;
   }
   if (ext === '.csv' || ext === '.txt') {
     const raw = fs.readFileSync(file.path, 'utf8').replace(/^\uFEFF/, '');
@@ -1909,7 +1967,7 @@ app.post('/api/equipamentos-importados/preview', upload.single('file'), async (r
   try {
     if (!assertImportedEquipmentAccess(req, res)) return;
     if (!req.file) return res.status(400).json({ error: 'Arquivo nao enviado.' });
-    const rows = parseImportedEquipmentFile(req.file);
+    const rows = await parseImportedEquipmentFile(req.file);
     fs.unlink(req.file.path, () => {});
     const headers = Array.from(new Set(rows.flatMap(row => Object.keys(row || {}))));
     res.json({ success: true, headers, rows, sample: rows.slice(0, 5) });
@@ -1930,7 +1988,7 @@ app.post('/api/equipamentos-importados/import', upload.single('file'), async (re
       mapping = JSON.parse(req.body.mapping_json || 'null');
     } else {
       if (!req.file) return res.status(400).json({ error: 'Arquivo nao enviado.' });
-      rows = parseImportedEquipmentFile(req.file);
+      rows = await parseImportedEquipmentFile(req.file);
     }
     const result = await saveImportedEquipmentRows({ rows, mapping, req });
     if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
@@ -2732,9 +2790,8 @@ async function getRequestAndVerifyAccess(id, user) {
 
   const isAdmin = isAdminUser(user);
 
-  // Administrador enxerga e abre detalhes/PDF/exclui de qualquer empresa.
-  // Para os demais perfis, compara como texto para evitar divergência 1 x "1"/"001".
-  if (!isAdmin && String(request.empresa_id || '') !== String(user.empresa_id || '')) {
+  // Todo usuario, inclusive administrador da empresa, permanece no tenant do token.
+  if (String(request.empresa_id || '') !== String(user.empresa_id || '')) {
     return { errorStatus: 403, errorMessage: 'Acesso negado: empresa divergente' };
   }
 
@@ -2894,11 +2951,10 @@ app.get('/api/despesas', async (req, res) => {
 
     let query = db('despesas_solicitacoes')
       .leftJoin('usuarios', 'despesas_solicitacoes.usuario_id', '=', 'usuarios.id')
-      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId');
+      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId')
+      .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
     if (!isActorAdmin) {
-      query = query.where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
-
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.user.unitId);
@@ -2992,11 +3048,10 @@ app.get('/api/despesas/summary', async (req, res) => {
 
     let query = db('despesas_solicitacoes')
       .leftJoin('usuarios', 'despesas_solicitacoes.usuario_id', '=', 'usuarios.id')
-      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId');
+      .select('despesas_solicitacoes.*', 'usuarios.unitId as unitId')
+      .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
     if (!isActorAdmin) {
-      query = query.where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
-
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.where('usuarios.unitId', req.user.unitId);
@@ -3403,10 +3458,9 @@ app.get('/api/equipamentos/patrimonio', async (req, res) => {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
 
-    let query = db('equipamentos_patrimonio');
-    if (!isActorAdmin) {
-      query = query.where('empresa', req.user.empresa_name);
-    }
+    let query = db('equipamentos_patrimonio').where(function() {
+      this.where('empresa', req.user.empresa_name).orWhere('empresa', req.user.empresa_id);
+    });
     const list = await query.orderBy('patrimonio', 'asc');
     res.json(list);
   } catch (err) {
@@ -3422,10 +3476,9 @@ app.get('/api/equipamentos/patrimonio/:patrimonio', async (req, res) => {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = req.user.profile === 'Administrador' || actorPerms.includes('Administrador');
 
-    let queryItem = db('equipamentos_patrimonio').where({ patrimonio });
-    if (!isActorAdmin) {
-      queryItem = queryItem.where({ empresa: req.user.empresa_name });
-    }
+    let queryItem = db('equipamentos_patrimonio').where({ patrimonio }).andWhere(function() {
+      this.where('empresa', req.user.empresa_name).orWhere('empresa', req.user.empresa_id);
+    });
     const item = await queryItem.first();
 
     if (!item) {
@@ -3439,9 +3492,9 @@ app.get('/api/equipamentos/patrimonio/:patrimonio', async (req, res) => {
         this.where('patrimonio', patrimonio)
             .orWhere('patrimonio_novo', patrimonio);
       });
-    if (!isActorAdmin) {
-      queryHist = queryHist.where({ empresa: req.user.empresa_name });
-    }
+    queryHist = queryHist.andWhere(function() {
+      this.where('empresa', req.user.empresa_name).orWhere('empresa', req.user.empresa_id);
+    });
     const historico = await queryHist.orderBy('created_at', 'desc');
 
     res.json({
@@ -3634,11 +3687,12 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
 
     let query = db('equipamentos_movimentacoes').where(function() {
       this.where('equipamentos_movimentacoes.excluido', false).orWhereNull('equipamentos_movimentacoes.excluido');
+    }).andWhere(function() {
+      this.where('equipamentos_movimentacoes.empresa', req.user.empresa_name)
+        .orWhere('equipamentos_movimentacoes.empresa', req.user.empresa_id);
     });
 
     if (!isActorAdmin) {
-      query = query.where(function(){ this.where('equipamentos_movimentacoes.empresa', req.user.empresa_name || '').orWhere('equipamentos_movimentacoes.empresa', req.user.empresa_id || '').orWhere('equipamentos_movimentacoes.vendedor_id', req.user.id); });
-
       // Apply unit isolation
       if (req.user.unitId && req.user.unitId !== 'all') {
         query = query.join('usuarios', 'equipamentos_movimentacoes.vendedor_id', '=', 'usuarios.id')
@@ -4184,6 +4238,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
 
 // Gerenciamento de e-mails para notificações
 app.get('/api/equipamentos/config/emails', (req, res) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode acessar esta configuracao.' });
   try {
     if (fs.existsSync(configFilePath)) {
       const data = fs.readFileSync(configFilePath, 'utf8');
@@ -4197,6 +4252,7 @@ app.get('/api/equipamentos/config/emails', (req, res) => {
 });
 
 app.post('/api/equipamentos/config/emails', (req, res) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode alterar esta configuracao.' });
   const { emails } = req.body;
   try {
     fs.writeFileSync(configFilePath, JSON.stringify({ emails }), 'utf8');
@@ -4247,14 +4303,13 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
   try {
     const loginKey = String(username).trim().toLowerCase();
     
-    // 1. Tenta achar o usuário com username/email, empresa_id e senha corretos.
-    // Se o frontend antigo não enviar empresa_id, busca em qualquer empresa.
+    // Busca a conta pelo identificador. A senha nunca participa da consulta e
+    // e verificada com bcrypt para evitar armazenamento em texto puro.
     let loginQuery = db('usuarios')
       .where(function() {
         this.where('username', loginKey)
             .orWhere('email', loginKey);
-      })
-      .andWhere({ password });
+      });
 
     if (empresa_id) {
       loginQuery = loginQuery.andWhere({ empresa_id });
@@ -4262,44 +4317,36 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
 
     let user = await loginQuery.first();
 
-    // 2. Se a empresa teve nome/CNPJ alterado, localiza pelo login/senha em qualquer empresa (usa a empresa real do cadastro)
+    // Compatibilidade com clientes antigos que ainda nao enviam empresa_id.
     if (!user) {
       user = await db('usuarios')
         .where(function() {
           this.where('username', loginKey)
               .orWhere('email', loginKey);
         })
-        .andWhere({ password })
         .first();
     }
 
-    // 3. Se ainda assim não encontrou (senha incorreta ou usuário inexistente), 
-    // busca apenas pelo login para poder retornar o status correto ou o erro de senha
     if (!user) {
-      let userLookupQuery = db('usuarios')
-        .where(function() {
-          this.where('username', loginKey)
-              .orWhere('email', loginKey);
-        });
+      return res.status(401).json({ error: 'E-mail, usuario ou senha incorretos' });
+    }
 
-      if (empresa_id) {
-        userLookupQuery = userLookupQuery.andWhere({ empresa_id });
-      }
+    const storedPassword = String(user.password || '');
+    const hasBcryptHash = /^\$2[aby]\$/.test(storedPassword);
+    const passwordMatches = hasBcryptHash
+      ? await bcrypt.compare(String(password), storedPassword)
+      : storedPassword === String(password);
+    if (!passwordMatches) {
+      return res.status(401).json({ error: 'E-mail, usuario ou senha incorretos' });
+    }
 
-      user = await userLookupQuery.first();
-
-      if (!user) {
-        user = await db('usuarios')
-          .where(function() {
-            this.where('username', loginKey)
-                .orWhere('email', loginKey);
-          })
-          .first();
-      }
-
-      if (!user || user.password !== password) {
-        return res.status(401).json({ error: 'E-mail, usuário ou senha incorretos' });
-      }
+    // Migracao gradual e sem perda: somente a senha que acabou de ser validada
+    // e convertida para hash. O valor logico da credencial permanece igual.
+    if (!hasBcryptHash) {
+      await db('usuarios').where({ id: user.id }).update({
+        password: await bcrypt.hash(String(password), 12),
+        updated_at: new Date().toISOString()
+      });
     }
 
     if (user.status === 'AGUARDANDO LIBERAÇÃO') {
@@ -4371,6 +4418,9 @@ app.post('/api/usuarios', async (req, res) => {
   if (!name || !username || !password || !profile || !unitId) {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
+  if (!isPasswordStrong(password)) {
+    return res.status(400).json({ error: 'A senha deve ter ao menos 10 caracteres, com letras e numeros.' });
+  }
 
   try {
     // Check if username already exists for company
@@ -4387,7 +4437,7 @@ app.post('/api/usuarios', async (req, res) => {
       id: userId,
       name,
       username: username.toLowerCase(),
-      password,
+      password: await bcrypt.hash(String(password), 12),
       profile,
       unitId,
       email: email || '',
@@ -4662,7 +4712,10 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
       updatedData.phone = phone;
     }
     if (password !== undefined && String(password).trim() !== '') {
-      updatedData.password = password;
+      if (!isPasswordStrong(password)) {
+        return res.status(400).json({ error: 'A senha deve ter ao menos 10 caracteres, com letras e numeros.' });
+      }
+      updatedData.password = await bcrypt.hash(String(password), 12);
     }
     if (photo !== undefined) {
       updatedData.photo = photo;
@@ -5600,9 +5653,14 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
 
 // 1. Bulk import/update exchange products
 app.post('/api/exchange/products/bulk', async (req, res) => {
+  if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode importar produtos.' });
   const { products } = req.body;
   const companyId = (req.user && req.user.empresa_id) || '001';
   const unitId = req.header('X-Unit-Id') || 'all';
+
+  if (req.user.unitId && req.user.unitId !== 'all' && String(unitId) !== String(req.user.unitId)) {
+    return res.status(403).json({ error: 'Unidade fora do escopo do usuario.' });
+  }
 
   if (!Array.isArray(products)) {
     return res.status(400).json({ error: 'Lista de produtos inválida.' });

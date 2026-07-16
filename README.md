@@ -11,7 +11,7 @@ O projeto esta rodando. Esta documentacao nao remove arquivos nem muda o fluxo d
 O deploy atual no Render usa o arquivo `render.yaml`:
 
 ```yaml
-buildCommand: npm install
+buildCommand: npm ci --prefix backend
 startCommand: npm start
 ```
 

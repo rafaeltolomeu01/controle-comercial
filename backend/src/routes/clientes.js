@@ -3,8 +3,15 @@ const express = require('express');
 const router = express.Router();
 
 // Helper to get client data (placeholder, adjust table/fields as needed)
-async function getClientFullData(db, clientId) {
-  const client = await db('clientes').where({ id: clientId }).first();
+async function getClientFullData(db, clientId, companyId) {
+  const client = await db('clientes')
+    .leftJoin('usuarios', 'clientes.userId', 'usuarios.id')
+    .select('clientes.*')
+    .where('clientes.id', clientId)
+    .andWhere(function() {
+      this.where('clientes.empresa_id', companyId).orWhere('usuarios.empresa_id', companyId);
+    })
+    .first();
   if (!client) return null;
 
   // Related data
@@ -35,7 +42,7 @@ router.get('/api/clientes/:id/ficha', async (req, res) => {
   const { id } = req.params;
   const db = req.app.get('db'); // assume db attached to app
   try {
-    const data = await getClientFullData(db, id);
+    const data = await getClientFullData(db, id, req.user.empresa_id);
     if (!data) return res.status(404).json({ error: 'Cliente não encontrado' });
     // Only approved clients should be accessible
     if (data.status !== 'Aprovado') {
@@ -60,7 +67,15 @@ router.delete('/api/clientes/:id', async (req, res) => {
     const profileNorm = String(user.profile || '').toLowerCase();
     const admin = profileNorm.includes('admin') || perms.some(p => String(p).toLowerCase().includes('admin'));
     if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir clientes.' });
-    const existing = await db('clientes').where({ id }).first();
+    const existing = await db('clientes')
+      .leftJoin('usuarios', 'clientes.userId', 'usuarios.id')
+      .select('clientes.*')
+      .where('clientes.id', id)
+      .andWhere(function() {
+        this.where('clientes.empresa_id', user.empresa_id).orWhere('usuarios.empresa_id', user.empresa_id);
+      })
+      .first();
+    if (!existing) return res.status(404).json({ error: 'Cliente nao encontrado nesta empresa.' });
 
     // Remove também da lista sincronizada do frontend (app_kv_store), senão o cliente volta
     // ao abrir em outro aparelho ou depois de uma sincronização.
@@ -87,7 +102,7 @@ router.delete('/api/clientes/:id', async (req, res) => {
       }
     }
 
-    if (existing) await db('clientes').where({ id }).delete();
+    await db('clientes').where({ id }).delete();
     res.json({ success: true });
   } catch (err) {
     console.error('Erro ao excluir cliente:', err);

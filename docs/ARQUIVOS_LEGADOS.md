@@ -4,9 +4,9 @@ Este inventario nao apaga nada. Ele apenas marca pontos que precisam de validaca
 
 ## Backend
 
-### `backend/server.js`
+### `backend/server.js` — removido da versao corrigida
 
-Parece ser uma versao alternativa/antiga do backend.
+Era uma versao alternativa/antiga do backend e foi retirada do artefato de entrega. O original permanece preservado no ZIP fornecido pelo usuario.
 
 Motivo:
 
@@ -16,8 +16,7 @@ Motivo:
 
 Acao recomendada:
 
-- Nao editar `backend/server.js` para corrigir producao.
-- Depois de validar em teste, mover para `legacy/backend-server.js` ou remover.
+- Usar somente `backend/src/index.js`.
 
 ## Frontend
 
