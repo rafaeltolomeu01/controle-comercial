@@ -941,6 +941,14 @@
   }
 
   function approvedBalanceValue(balance) {
+    const items = Array.isArray(balance?.itens) ? balance.itens : (Array.isArray(balance?.items) ? balance.items : []);
+    if (items.length) {
+      return items.reduce((sum, item) => {
+        const status = normalize(item?.status);
+        if (status.includes('reprov') || status.includes('correc')) return sum;
+        return sum + numericValue(item?.valor_aprovado ?? item?.valorAprovado ?? 0);
+      }, 0);
+    }
     return numericValue(pick(balance, ['totalAprovado', 'total_aprovado', 'total_liberado', 'approved_total', 'valor_aprovado', 'totalGeral', 'total_geral', 'value', 'valor']));
   }
 

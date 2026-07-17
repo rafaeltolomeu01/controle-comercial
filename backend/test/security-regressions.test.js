@@ -108,9 +108,12 @@ test('envio de movimentacao aguarda upload e nao falha por erro de notificacao',
 test('aprovacao parcial usa valor efetivamente aprovado em listas e somatorios', () => {
   const appClient = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
   assert.match(server, /total_exibicao: isLiberado \? totalAprovado : totalGeral/);
-  assert.match(appClient, /req\.total_exibicao \?\? req\.total_liberado/);
+  assert.match(appClient, /getEffectiveApprovedRequestTotal\(req\)/);
+  assert.match(appClient, /item\?\.valor_aprovado \?\? item\?\.valorAprovado/);
+  assert.match(appClient, /status\.includes\('reprov'\) \|\| status\.includes\('correc'\)/);
   assert.match(compatibility, /e\.total_liberado \?\? e\.totalAprovado/);
-  assert.match(listUpdates, /'total_liberado', 'totalAprovado', 'total_aprovado'/);
+  assert.match(listUpdates, /Array\.isArray\(balance\?\.itens\)/);
+  assert.match(listUpdates, /item\?\.valor_aprovado \?\? item\?\.valorAprovado/);
 });
 
 test('dono pode refazer despesa reprovada mantendo dados e fotos existentes', () => {
@@ -121,6 +124,8 @@ test('dono pode refazer despesa reprovada mantendo dados e fotos existentes', ()
   assert.match(route, /foto_odometro: b\.foto_odometro !== undefined \? b\.foto_odometro : record\.foto_odometro/);
   assert.match(route, /foto_comprovante: b\.foto_comprovante !== undefined \? b\.foto_comprovante : record\.foto_comprovante/);
   assert.match(compatibility, /expenseStatus\.includes\('reprov'\) \? 'Refazer Despesa'/);
+  assert.match(compatibility, /admin \|\| String\(exp && exp\.userId\) === String\(user\.id\)/);
+  assert.match(compatibility, /expenseStatus\.includes\('correc'\) \|\| expenseStatus\.includes\('reprov'\)/);
 });
 
 test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça', () => {

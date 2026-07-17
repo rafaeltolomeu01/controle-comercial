@@ -8201,8 +8201,10 @@
     let correction = '';
     let edit = '';
     const user = getUser();
-    if (normalize(exp && exp.status).includes('correc') && canCorrectExpense(exp, user)) {
-      correction = `<button class="btn btn-warning btn-sm cc-btn-corrigir-despesa" onclick="event.stopPropagation(); App.correctExpenseAndResubmit && App.correctExpenseAndResubmit('${id}')">Corrigir</button>`;
+    const expenseStatus = normalize(exp && exp.status);
+    if ((expenseStatus.includes('correc') || expenseStatus.includes('reprov')) && canCorrectExpense(exp, user)) {
+      const correctionLabel = expenseStatus.includes('reprov') ? 'Refazer Despesa' : 'Corrigir';
+      correction = `<button class="btn btn-warning btn-sm cc-btn-corrigir-despesa" onclick="event.stopPropagation(); App.correctExpenseAndResubmit && App.correctExpenseAndResubmit('${id}')">${correctionLabel}</button>`;
     }
     if (pending(exp && exp.status) && user && String(exp && exp.userId) === String(user.id)) {
       edit = `<button class="btn btn-warning btn-sm cc-btn-editar-despesa" onclick="event.stopPropagation(); App.editPendingExpense && App.editPendingExpense('${id}')">Editar</button>`;

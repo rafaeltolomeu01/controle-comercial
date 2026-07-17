@@ -4399,6 +4399,27 @@ const App = {
   /**
    * Load dashboard metrics and list
    */
+  getEffectiveApprovedRequestTotal(req) {
+    const items = Array.isArray(req?.itens) ? req.itens : (Array.isArray(req?.items) ? req.items : []);
+    if (items.length) {
+      return items.reduce((sum, item) => {
+        const status = String(item?.status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if (status.includes('reprov') || status.includes('correc')) return sum;
+        const raw = item?.valor_aprovado ?? item?.valorAprovado ?? 0;
+        const value = window.CC_num ? window.CC_num(raw) : Number(raw);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+    }
+    const approvedRaw = req?.total_exibicao ?? req?.total_liberado ?? req?.totalAprovado ?? req?.total_aprovado;
+    if (approvedRaw !== undefined && approvedRaw !== null && approvedRaw !== '') {
+      const value = window.CC_num ? window.CC_num(approvedRaw) : Number(approvedRaw);
+      return Number.isFinite(value) ? value : 0;
+    }
+    const fallback = req?.totalGeral ?? req?.total_geral ?? 0;
+    const value = window.CC_num ? window.CC_num(fallback) : Number(fallback);
+    return Number.isFinite(value) ? value : 0;
+  },
+
   async loadDespesasDashboard() {
     try {
       const fmt = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -4426,12 +4447,7 @@ const App = {
 
       // Os cards do dashboard devem refletir exatamente o filtro aplicado na lista.
       const getTotalGeral = (req) => Number(req.totalGeral ?? req.total_geral ?? 0) || 0;
-      const getTotalAprovado = (req) => {
-        const approvedRaw = req.total_liberado ?? req.totalAprovado ?? req.total_aprovado;
-        return approvedRaw !== undefined && approvedRaw !== null && approvedRaw !== ''
-          ? (Number(approvedRaw) || 0)
-          : getTotalGeral(req);
-      };
+      const getTotalAprovado = (req) => this.getEffectiveApprovedRequestTotal(req);
       const isAprovada = (req) => String(req.status || '').toLowerCase().includes('aprovad');
       const isRejeitada = (req) => String(req.status || '').toLowerCase().includes('rejeitad') || String(req.status || '').toLowerCase().includes('reprovad');
       const isPendente = (req) => String(req.status || '').toLowerCase() === 'pendente';
@@ -4528,7 +4544,7 @@ const App = {
       const valorHotelExibicao = foiAvaliada ? Number(req.valor_hotel_alim_aprovado || 0) : Number(req.valor_hotel_alim || 0);
       const valorAbastecimentoExibicao = foiAvaliada ? Number(req.valor_abastecimento_aprovado || 0) : Number(req.valor_abastecimento || 0);
       const totalGeralExibicao = foiAvaliada
-        ? Number(req.total_exibicao ?? req.total_liberado ?? req.totalAprovado ?? req.total_aprovado ?? 0)
+        ? this.getEffectiveApprovedRequestTotal(req)
         : Number(req.totalGeral || 0);
 
       return `
