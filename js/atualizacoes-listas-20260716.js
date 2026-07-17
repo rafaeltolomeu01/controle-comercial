@@ -398,10 +398,14 @@
     const user = currentUser();
     const permissions = Array.isArray(user.permissions) ? user.permissions : [];
     const profile = normalize(user.profile);
-    return profile === 'administrador' || profile === 'financeiro' || profile === 'responsavel financeiro'
-      || permissions.some(permission => [
-        'financeiro', 'aprovacao de saldo', 'aprovacao de despesas', 'administrador'
-      ].includes(normalize(permission)));
+    const normalizedPermissions = permissions.map(normalize);
+    return profile.includes('admin')
+      || profile === 'financeiro'
+      || profile === 'responsavel financeiro'
+      || normalizedPermissions.some(permission => permission.includes('admin'))
+      || normalizedPermissions.some(permission => [
+        'financeiro', 'aprovacao de saldo', 'aprovacao de despesas'
+      ].includes(permission));
   }
 
   let directBalanceRecipients = [];
@@ -624,22 +628,30 @@
 
   function installDirectBalanceCredit() {
     const ensureButton = () => {
-      const existingButton = document.getElementById('cc-btn-direct-balance');
+      let existingButton = document.getElementById('cc-btn-direct-balance');
       if (!canLaunchDirectBalance()) {
         existingButton?.remove();
         return;
       }
-      if (window.location.hash !== '#despesas-dashboard' || existingButton) return;
+      if (window.location.hash !== '#despesas-dashboard') return;
       const tabs = document.querySelector('#tab-balance-approvals-dashboard')?.closest('.view-tabs');
       if (!tabs) return;
-      const button = document.createElement('button');
-      button.id = 'cc-btn-direct-balance';
-      button.type = 'button';
-      button.className = 'btn btn-primary';
-      button.style.marginLeft = 'auto';
-      button.textContent = '+ Adicionar / remover saldo';
-      button.addEventListener('click', openDirectBalanceModal);
-      tabs.appendChild(button);
+      if (!existingButton) {
+        existingButton = document.createElement('button');
+        existingButton.id = 'cc-btn-direct-balance';
+        existingButton.type = 'button';
+        existingButton.className = 'btn btn-primary';
+        existingButton.textContent = '+ Adicionar / remover saldo';
+      }
+      existingButton.style.display = 'inline-flex';
+      existingButton.style.marginLeft = 'auto';
+      existingButton.style.flex = '0 0 auto';
+      if (existingButton.dataset.directBalanceBound !== '1') {
+        existingButton.dataset.directBalanceBound = '1';
+        existingButton.addEventListener('click', openDirectBalanceModal);
+      }
+      // Se as guias foram reconstruídas, move o botão antigo para a guia atualmente visível.
+      if (existingButton.parentElement !== tabs) tabs.appendChild(existingButton);
     };
     ensureButton();
     const syncDirectBalanceRoute = () => {
@@ -656,7 +668,11 @@
     };
     window.addEventListener('hashchange', syncDirectBalanceRoute);
     window.addEventListener('popstate', syncDirectBalanceRoute);
+    window.addEventListener('storage', ensureButton);
+    document.addEventListener('click', () => setTimeout(ensureButton, 0), true);
     new MutationObserver(ensureButton).observe(document.body, { childList: true, subtree: true });
+    setTimeout(ensureButton, 250);
+    setTimeout(ensureButton, 1000);
   }
 
   const sortState = {};
@@ -929,7 +945,11 @@
   }
 
   function expenseValue(expense) {
-    return numericValue(pick(expense, ['value', 'valor', 'amount', 'total']));
+    if (isApproved(expense)) {
+      const approved = pick(expense, ['total_liberado', 'totalAprovado', 'total_aprovado', 'approved_total', 'valor_aprovado']);
+      if (approved !== undefined && approved !== null && approved !== '') return numericValue(approved);
+    }
+    return numericValue(pick(expense, ['value', 'valor', 'amount', 'total', 'totalGeral', 'total_geral']));
   }
 
   function isApproved(record) {

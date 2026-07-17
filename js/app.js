@@ -3288,7 +3288,7 @@ const App = {
                 const clientNameInput = document.getElementById('mov-client-name');
                 const clientPrefix = (clientNameInput?.value || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 15) || 'mov';
                 
-                const savedUrl = await App.uploadBase64ToDatabase(base64, `mov-${clientPrefix}-${inputId}-${file.name || 'arquivo'}`, 'geral');
+                const savedUrl = await App.uploadBase64ToDatabase(base64, `mov-${clientPrefix}-${inputId}-${file.name || 'arquivo'}`, 'movimentacoes');
                 if (savedUrl) {
                   input.dataset.uploadedUrl = savedUrl;
                   input.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
@@ -4079,8 +4079,9 @@ const App = {
         return el.dataset.uploadedUrl;
       }
     }
-    // Em Render Free o disco pode reiniciar e sumir arquivos. Por isso o padrão
-    // agora é salvar o arquivo no PostgreSQL e devolver uma URL /api/uploads/:id.
+    // O servidor envia para o armazenamento externo e devolve somente o link.
+    // O fallback legado no banco existe apenas para não interromper o cadastro
+    // caso o provedor externo esteja temporariamente indisponível.
     try {
       const base64 = await Store.fileToBase64(file);
       return await this.uploadBase64ToDatabase(base64, file.name, 'geral');
@@ -4426,8 +4427,10 @@ const App = {
       // Os cards do dashboard devem refletir exatamente o filtro aplicado na lista.
       const getTotalGeral = (req) => Number(req.totalGeral ?? req.total_geral ?? 0) || 0;
       const getTotalAprovado = (req) => {
-        const aprovado = Number(req.totalAprovado ?? req.total_aprovado ?? 0) || 0;
-        return aprovado > 0 ? aprovado : getTotalGeral(req);
+        const approvedRaw = req.total_liberado ?? req.totalAprovado ?? req.total_aprovado;
+        return approvedRaw !== undefined && approvedRaw !== null && approvedRaw !== ''
+          ? (Number(approvedRaw) || 0)
+          : getTotalGeral(req);
       };
       const isAprovada = (req) => String(req.status || '').toLowerCase().includes('aprovad');
       const isRejeitada = (req) => String(req.status || '').toLowerCase().includes('rejeitad') || String(req.status || '').toLowerCase().includes('reprovad');
@@ -4524,7 +4527,9 @@ const App = {
       const foiAvaliada = statusLower.includes('aprovada') || statusLower.includes('rejeitada');
       const valorHotelExibicao = foiAvaliada ? Number(req.valor_hotel_alim_aprovado || 0) : Number(req.valor_hotel_alim || 0);
       const valorAbastecimentoExibicao = foiAvaliada ? Number(req.valor_abastecimento_aprovado || 0) : Number(req.valor_abastecimento || 0);
-      const totalGeralExibicao = foiAvaliada ? Number(req.total_liberado ?? req.totalAprovado ?? 0) : Number(req.totalGeral || 0);
+      const totalGeralExibicao = foiAvaliada
+        ? Number(req.total_exibicao ?? req.total_liberado ?? req.totalAprovado ?? req.total_aprovado ?? 0)
+        : Number(req.totalGeral || 0);
 
       return `
         <tr data-id="${req.id}">

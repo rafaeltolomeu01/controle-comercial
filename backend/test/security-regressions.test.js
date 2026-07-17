@@ -101,6 +101,26 @@ test('envio de movimentacao aguarda upload e nao falha por erro de notificacao',
   const route = server.slice(routeStart, routeEnd);
   assert.match(route, /Movimentação salva, mas a notificação não foi enviada/);
   assert.match(route, /res\.json\(\{ success: true, id: newId \}\)/);
+  assert.match(compatibility, /if \(id === 'movement-form'\) return/);
+  assert.match(appClient, /'movimentacoes'/);
+});
+
+test('aprovacao parcial usa valor efetivamente aprovado em listas e somatorios', () => {
+  const appClient = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(server, /total_exibicao: isLiberado \? totalAprovado : totalGeral/);
+  assert.match(appClient, /req\.total_exibicao \?\? req\.total_liberado/);
+  assert.match(compatibility, /e\.total_liberado \?\? e\.totalAprovado/);
+  assert.match(listUpdates, /'total_liberado', 'totalAprovado', 'total_aprovado'/);
+});
+
+test('dono pode refazer despesa reprovada mantendo dados e fotos existentes', () => {
+  const routeStart = server.indexOf("app.put('/api/despesas-reembolsos/:id/correct'");
+  const routeEnd = server.indexOf("app.put('/api/despesas-reembolsos/:id/approval'", routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /correctionStatus\.includes\('reprov'\)/);
+  assert.match(route, /foto_odometro: b\.foto_odometro !== undefined \? b\.foto_odometro : record\.foto_odometro/);
+  assert.match(route, /foto_comprovante: b\.foto_comprovante !== undefined \? b\.foto_comprovante : record\.foto_comprovante/);
+  assert.match(compatibility, /expenseStatus\.includes\('reprov'\) \? 'Refazer Despesa'/);
 });
 
 test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça', () => {
@@ -239,9 +259,12 @@ test('filtro da aprovacao de saldo e reativado quando a guia e recriada', () => 
 });
 
 test('botao de adicionar ou remover saldo reaparece depois do login', () => {
-  assert.match(listUpdates, /const existingButton = document\.getElementById\('cc-btn-direct-balance'\)/);
+  assert.match(listUpdates, /existingButton = document\.getElementById\('cc-btn-direct-balance'\)/);
   assert.match(listUpdates, /if \(!canLaunchDirectBalance\(\)\)/);
   assert.match(listUpdates, /existingButton\?\.remove\(\)/);
+  assert.match(listUpdates, /profile\.includes\('admin'\)/);
+  assert.match(listUpdates, /existingButton\.parentElement !== tabs/);
+  assert.match(listUpdates, /directBalanceBound/);
   assert.equal(listUpdates.includes('function installDirectBalanceCredit() {\n    if (!canLaunchDirectBalance()) return;'), false);
 });
 

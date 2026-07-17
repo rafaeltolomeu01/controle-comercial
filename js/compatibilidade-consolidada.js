@@ -78,6 +78,9 @@
   }
   document.addEventListener('submit', (e) => {
     const id = (e.target && e.target.id || '').toLowerCase();
+    // Fotos podem estar sendo enviadas: o fluxo da movimentação limpa o
+    // formulário somente depois da confirmação de gravação do servidor.
+    if (id === 'movement-form') return;
     if (/prospect|client|cliente|mov|ticket|despesa|saldo|simulador|exchange/.test(id) && !/user|usuario|unit|config|login/.test(id)) {
       setTimeout(() => {
         if (!document.body.contains(e.target)) return;
@@ -740,7 +743,14 @@
     if (!isApproved(b.status)) return 0;
     return num(b.totalGeral ?? b.total_geral ?? b.valor ?? b.value ?? b.valor_total);
   }
-  function getExpenseValue(e){ return num(e.value ?? e.valor ?? e.total ?? e.totalGeral ?? e.total_geral); }
+  function getExpenseValue(e){
+    const status = statusText(e.status);
+    if (status.includes('aprov')) {
+      const approved = e.total_liberado ?? e.totalAprovado ?? e.total_aprovado ?? e.approved_total ?? e.valor_aprovado;
+      if (approved !== undefined && approved !== null && approved !== '') return num(approved);
+    }
+    return num(e.value ?? e.valor ?? e.total ?? e.totalGeral ?? e.total_geral);
+  }
 
   // Permissões: manter padrão existente, mas impedir Aprovação de Despesas para quem não tem permissão explícita/perfil financeiro/admin.
   const oldAllowed = Store.getUserAllowedRoutes?.bind(Store);
@@ -2369,7 +2379,8 @@
       if (!id) return alert('Não foi possível identificar a despesa.');
       try {
         const current = await api(`/api/despesas-reembolsos/${encodeURIComponent(id)}`);
-        if (String(current.status || '') !== 'Correção Solicitada') return alert('Esta despesa não está aguardando correção.');
+        const currentStatus = norm(current.status);
+        if (!currentStatus.includes('correc') && !currentStatus.includes('reprov')) return alert('Esta despesa não está aguardando correção ou refazimento.');
         const correctionUser = currentUser();
         const correctionProfile = norm(correctionUser.profile);
         const correctionPermissions = Array.isArray(correctionUser.permissions) ? correctionUser.permissions.map(norm) : [];
@@ -2477,13 +2488,14 @@
         if (!exp) return;
         const cell = tr.querySelector('td:last-child');
         if (!cell) return;
-        if (String(exp.status || '') === 'Correção Solicitada'
+        const expenseStatus = norm(exp.status);
+        if ((expenseStatus.includes('correc') || expenseStatus.includes('reprov'))
           && (String(exp.userId) === String(user.id) || isAdmin())) {
           if (!cell.querySelector('.cc-btn-corrigir-despesa')) {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-warning btn-sm cc-btn-corrigir-despesa';
-            btn.textContent = 'Corrigir Despesa';
+            btn.textContent = expenseStatus.includes('reprov') ? 'Refazer Despesa' : 'Corrigir Despesa';
             btn.style.marginLeft = '6px';
             btn.onclick = (e) => { e.stopPropagation(); App.correctExpenseAndResubmit(exp.id); };
             cell.appendChild(btn);

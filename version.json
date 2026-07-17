@@ -1,7 +1,7 @@
 {
-  "version": "20260717.6",
-  "updatedAt": "2026-07-17T09:55:00-03:00",
-  "description": "Administrador corrige despesas e movimentações aguardam o envio seguro dos arquivos",
-  "build": "20260717-6-admin-despesas-envio-movimentacoes",
-  "buildDate": "2026-07-17T09:55:00-03:00"
+  "version": "20260717.8",
+  "updatedAt": "2026-07-17T10:45:00-03:00",
+  "description": "Restaura saldo direto, usa o valor efetivamente aprovado e protege o envio de movimentações com fotos",
+  "build": "20260717-8-saldos-aprovados-e-movimentacoes",
+  "buildDate": "2026-07-17T10:45:00-03:00"
 }

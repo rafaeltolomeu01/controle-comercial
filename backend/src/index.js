@@ -3311,10 +3311,10 @@ app.get('/api/despesas', async (req, res) => {
       const totalExtras = extras.reduce((sum, e) => sum + Number(e.valor || 0), 0);
       const totalGeral = Number(reqRow.valor_hotel_alim || 0) + Number(reqRow.valor_abastecimento || 0) + totalExtras;
 
-      const isLiberado = reqRow.status === 'Aprovada' || reqRow.status === 'Aprovada (não valor total)';
+      const isLiberado = normalizeRole(reqRow.status || '').includes('aprovada');
       const itemApprovedValue = (item) => {
-        const status = String(item.status || '').toLowerCase();
-        if (status === 'reprovado' || status === 'correcao' || status === 'correção') return 0;
+        const status = normalizeRole(item.status || '');
+        if (status.includes('reprov') || status.includes('correc')) return 0;
         return Number(item.valor_aprovado || 0);
       };
       const totalAprovado = items.length
@@ -3334,6 +3334,7 @@ app.get('/api/despesas', async (req, res) => {
         itens: items,
         totalGeral,
         totalAprovado,
+        total_exibicao: isLiberado ? totalAprovado : totalGeral,
         valor_hotel_alim_aprovado: valorHotelAlimAprovado,
         valor_abastecimento_aprovado: valorAbastecimentoAprovado,
         total_liberado: totalAprovado
@@ -5532,7 +5533,10 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
     if (!adminCorrection && String(record.userId) !== String(req.user.id)) {
       return res.status(403).json({ error: 'Você só pode corrigir despesas lançadas por você.' });
     }
-    if (record.status !== 'Correção Solicitada') return res.status(400).json({ error: 'Esta despesa não está aguardando correção.' });
+    const correctionStatus = normalizeRole(record.status || '');
+    if (!correctionStatus.includes('correc') && !correctionStatus.includes('reprov')) {
+      return res.status(400).json({ error: 'Esta despesa não está aguardando correção ou refazimento.' });
+    }
     const b = req.body || {};
     const updates = {
       unitId: b.unitId !== undefined && b.unitId !== '' ? String(b.unitId) : record.unitId,

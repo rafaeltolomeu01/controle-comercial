@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260717-6-admin-despesas-envio-movimentacoes';
+const CACHE_VERSION = '20260717-8-saldos-aprovados-e-movimentacoes';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
