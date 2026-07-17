@@ -146,7 +146,12 @@ const App = {
   async bootstrapAuthentication() {
     const appContainer = document.getElementById('app-container');
     const loginWrapper = document.getElementById('login-wrapper-container');
-    if (appContainer) appContainer.style.display = 'none';
+    if (appContainer) {
+      appContainer.style.display = 'none';
+      appContainer.hidden = true;
+      appContainer.setAttribute('inert', '');
+      appContainer.setAttribute('aria-hidden', 'true');
+    }
     if (loginWrapper) loginWrapper.style.display = 'flex';
 
     const token = Store.getToken();
@@ -263,7 +268,12 @@ const App = {
       const loginWrapper = document.getElementById('login-wrapper-container');
 
       if (hash === '#login') {
-        if (appContainer) appContainer.style.display = 'none';
+        if (appContainer) {
+          appContainer.style.display = 'none';
+          appContainer.hidden = true;
+          appContainer.setAttribute('inert', '');
+          appContainer.setAttribute('aria-hidden', 'true');
+        }
         if (loginWrapper) loginWrapper.style.display = 'flex';
         
         const loginPanel = document.getElementById('view-login');
@@ -271,7 +281,12 @@ const App = {
         return;
       }
 
-      if (appContainer) appContainer.style.display = 'flex';
+      if (appContainer) {
+        appContainer.hidden = false;
+        appContainer.removeAttribute('inert');
+        appContainer.setAttribute('aria-hidden', 'false');
+        appContainer.style.display = 'flex';
+      }
       if (loginWrapper) loginWrapper.style.display = 'none';
 
       // Activate corresponding view panel

@@ -896,7 +896,7 @@
   }
 
   function recordOwnerName(record) {
-    return normalize(pick(record, ['vendedor', 'vendedor_nome', 'vendedor_solicitante', 'seller_name', 'usuario_nome', 'responsavel', 'solicitante_nome', 'solicitante']));
+    return normalize(pick(record, ['vendedor', 'vendedor_nome', 'vendedor_solicitante', 'seller_name', 'userName', 'usuario_nome', 'name', 'nome', 'responsavel', 'solicitante_nome', 'solicitante']));
   }
 
   function belongsToUser(record, user) {
@@ -1123,7 +1123,9 @@
     const expenses = own(scopeByGlobalUnit(window.AppExpensesCache || Store.getExpenses?.() || [], 'despesas'));
     const balances = own(scopeByGlobalUnit(window.AppBalancesCache || Store.getBalanceRequests?.() || [], 'solicitacao-despesas'));
     const approved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
-    const spent = expenses.filter(isExpenseConsidered).reduce((sum, item) => sum + expenseValue(item), 0);
+    // Saldo disponivel considera somente despesas ja aprovadas. Pendentes ficam
+    // destacadas separadamente e nao reduzem o saldo antes da aprovacao.
+    const spent = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
     const pendingExpenses = expenses.filter(item => normalize(item.status) === 'pendente').reduce((sum, item) => sum + expenseValue(item), 0);
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
     set('dash-pending-approvals', String(clients.filter(item => normalize(item.status) === 'pendente').length));

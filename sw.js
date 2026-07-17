@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260716-11-escopo-global-unidade';
+const CACHE_VERSION = '20260717-1-unidade-movimentacoes-painel-login';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

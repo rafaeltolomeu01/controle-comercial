@@ -261,11 +261,39 @@ test('consultas operacionais enviam e aplicam a unidade global sem ampliar permi
   const movementEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", movementStart);
   const movementRoute = server.slice(movementStart, movementEnd);
   assert.match(movementRoute, /requestedUnitId/);
-  assert.match(movementRoute, /movement_seller\.unitId/);
+  assert.match(movementRoute, /unitsByKey\.get\(normalizeRole\(row\.empresa\)\)/);
+  assert.match(movementRoute, /unitId: inferredId/);
+  assert.match(movementRoute, /enriched\.filter\(row => String\(row\.unitId/);
   const expenseStart = server.indexOf("app.get('/api/despesas-reembolsos'");
   const expenseEnd = server.indexOf("app.get('/api/despesas-reembolsos/:id'", expenseStart);
   const expenseRoute = server.slice(expenseStart, expenseEnd);
   assert.match(expenseRoute, /requestedUnitId/);
   assert.match(expenseRoute, /dr\.unitId/);
   assert.match(expenseRoute, /getPermittedSellerIds/);
+});
+
+test('movimentacoes antigas sao separadas pela empresa base sem regravar o banco', () => {
+  const movementStart = server.indexOf("app.get('/api/equipamentos/movimentacoes'");
+  const movementEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", movementStart);
+  const route = server.slice(movementStart, movementEnd);
+  assert.match(route, /db\('unidades'\).*select\('id', 'name'\)/s);
+  assert.match(route, /const baseUnit = unitsByKey\.get\(normalizeRole\(row\.empresa\)\)/);
+  assert.match(route, /responsibleUser\?\.unitId/);
+  assert.equal(route.includes("update('equipamentos_movimentacoes'"), false);
+});
+
+test('painel pessoal usa somente usuario logado e nao desconta despesa pendente', () => {
+  assert.match(listUpdates, /const own = list => .*belongsToUser/s);
+  assert.match(listUpdates, /'userName', 'usuario_nome', 'name', 'nome'/);
+  assert.match(listUpdates, /const spent = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const pendingExpenses = expenses\.filter/);
+});
+
+test('html operacional permanece inerte e oculto ate a autenticacao', () => {
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
+  const appJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(indexHtml, /id="app-container"[^>]*hidden inert aria-hidden="true"/);
+  assert.match(appJs, /appContainer\.setAttribute\('inert', ''\)/);
+  assert.match(appJs, /appContainer\.removeAttribute\('inert'\)/);
+  assert.match(appJs, /appContainer\.hidden = false/);
 });

@@ -4020,14 +4020,8 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
       ? req.query.unitId
       : null;
-    if (!isActorAdmin && !['supervisor', 'gerente'].includes(profileNorm) && req.user.unitId && req.user.unitId !== 'all') {
-      // Perfis de unidade fixa nunca podem ampliar o proprio escopo pela URL.
-      query = query.where('movement_seller.unitId', req.user.unitId);
-    } else if (requestedUnitId) {
-      // Administradores e gestores ainda ficam limitados pela empresa e pela
-      // cadeia hierarquica, mas a unidade global selecionada passa a ser respeitada.
-      query = query.where('movement_seller.unitId', requestedUnitId);
-    }
+    // Movimentacoes antigas nao possuem uma coluna propria de unidade. A unidade
+    // sera inferida abaixo pela Empresa Base gravada no registro, sem alterar dados.
 
     // Aplica cadeia hierárquica também nas movimentações
     if (!isActorAdmin) {
@@ -4066,7 +4060,34 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     }
 
     const list = await query.orderBy('em.id', 'desc');
-    res.json(list);
+    const [companyUnits, companyUsers] = await Promise.all([
+      db('unidades').where({ empresa_id: req.user.empresa_id }).select('id', 'name'),
+      db('usuarios').where({ empresa_id: req.user.empresa_id }).select('id', 'name', 'unitId')
+    ]);
+    const unitsByKey = new Map();
+    companyUnits.forEach(unit => {
+      unitsByKey.set(normalizeRole(unit.id), unit);
+      unitsByKey.set(normalizeRole(unit.name), unit);
+    });
+    const usersById = new Map(companyUsers.map(user => [String(user.id), user]));
+    const usersByName = new Map(companyUsers.map(user => [normalizeRole(user.name), user]));
+    const enriched = list.map(row => {
+      // Empresa Base e a fonte principal porque ja representa Minas/Espirito Santo
+      // no cadastro e continua correta mesmo quando o lancador atende todas unidades.
+      const baseUnit = unitsByKey.get(normalizeRole(row.empresa));
+      const responsibleUser = usersByName.get(normalizeRole(row.vendedor_solicitante));
+      const authorUser = usersById.get(String(row.vendedor_id || ''));
+      const inferredId = baseUnit?.id
+        || (responsibleUser?.unitId !== 'all' ? responsibleUser?.unitId : null)
+        || (authorUser?.unitId !== 'all' ? authorUser?.unitId : null)
+        || null;
+      const inferredUnit = companyUnits.find(unit => String(unit.id) === String(inferredId));
+      return { ...row, unitId: inferredId, unitName: baseUnit?.name || inferredUnit?.name || null };
+    });
+    const scoped = requestedUnitId
+      ? enriched.filter(row => String(row.unitId || '') === String(requestedUnitId))
+      : enriched;
+    res.json(scoped);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao listar movimentações' });
