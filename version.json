@@ -1,7 +1,7 @@
 {
-  "version": "20260717.4",
-  "updatedAt": "2026-07-17T10:05:00.000Z",
-  "description": "Exibir com autenticação as fotos antigas armazenadas no PostgreSQL",
-  "build": "20260717-4-fotos-banco-autenticadas",
-  "buildDate": "2026-07-17T10:05:00.000Z"
+  "version": "20260717.6",
+  "updatedAt": "2026-07-17T09:55:00-03:00",
+  "description": "Administrador corrige despesas e movimentações aguardam o envio seguro dos arquivos",
+  "build": "20260717-6-admin-despesas-envio-movimentacoes",
+  "buildDate": "2026-07-17T09:55:00-03:00"
 }

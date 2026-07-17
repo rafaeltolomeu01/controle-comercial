@@ -3275,7 +3275,7 @@ const App = {
             if (container) container.style.display = 'block';
             
             statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Compactando arquivo...</span>';
-            (async () => {
+            input._ccUploadPromise = (async () => {
               try {
                 let base64;
                 if (file.type.startsWith('image/')) {
@@ -3293,6 +3293,7 @@ const App = {
                   input.dataset.uploadedUrl = savedUrl;
                   input.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
                   statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo enviado e validado!</span>';
+                  return savedUrl;
                 } else {
                   throw new Error('Servidor retornou link vazio.');
                 }
@@ -3302,6 +3303,7 @@ const App = {
                 input.removeAttribute('data-uploaded-url');
                 input.removeAttribute('data-upload-id');
                 input.value = '';
+                return '';
               }
             })();
           } else {
@@ -3325,7 +3327,13 @@ const App = {
     const movementForm = document.getElementById('movement-form');
     if (movementForm && movementForm.dataset.submitBound !== '1') {
       movementForm.dataset.submitBound = '1';
-      movementForm.addEventListener('submit', (e) => this.submitMovementForm(e));
+      movementForm.addEventListener('submit', (e) => this.submitMovementForm(e).catch(err => {
+        console.error('Erro antes de concluir o envio da movimentação:', err);
+        alert('Erro ao registrar movimentação: ' + (err.message || 'Falha ao preparar os arquivos.'));
+        this._movementSubmitting = false;
+        const button = e.target.querySelector('button[type="submit"]');
+        if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Registrar Movimentação de Equipamento'; }
+      }));
     }
   },
 
@@ -4066,6 +4074,7 @@ const App = {
     if (!file) return '';
     if (inputIdOrElement) {
       const el = typeof inputIdOrElement === 'string' ? document.getElementById(inputIdOrElement) : inputIdOrElement;
+      if (el && el._ccUploadPromise) await el._ccUploadPromise;
       if (el && el.dataset.uploadedUrl) {
         return el.dataset.uploadedUrl;
       }

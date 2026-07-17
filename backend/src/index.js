@@ -3962,13 +3962,18 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     }
 
     const companyId = req.user.empresa_id || '001';
-    const targets = await obterDestinatarios('NOVA_MOVIMENTACAO_EQUIPAMENTO', req.user, companyId);
-    await notifyUsers(targets, {
-      empresa_id: companyId,
-      module: 'movimentacao', record_id: String(newId), target_hash: '#movimentacao',
-      title: 'Nova movimentação de equipamento',
-      body: `${req.user.name || vendedor_solicitante} registrou ${tipo_solicitacao} para o cliente ${cliente_nome}.`
-    });
+    try {
+      const targets = await obterDestinatarios('NOVA_MOVIMENTACAO_EQUIPAMENTO', req.user, companyId);
+      await notifyUsers(targets, {
+        empresa_id: companyId,
+        module: 'movimentacao', record_id: String(newId), target_hash: '#movimentacao',
+        title: 'Nova movimentação de equipamento',
+        body: `${req.user.name || vendedor_solicitante} registrou ${tipo_solicitacao} para o cliente ${cliente_nome}.`
+      });
+    } catch (notifyErr) {
+      // A movimentação já foi salva. Falha de push não pode informar ao usuário que o cadastro falhou.
+      console.warn('Movimentação salva, mas a notificação não foi enviada:', notifyErr.message || notifyErr);
+    }
 
     res.json({ success: true, id: newId });
   } catch (err) {
@@ -5523,7 +5528,10 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
       .where({ id, empresa_id: req.user.empresa_id })
       .first();
     if (!record) return res.status(404).json({ error: 'Despesa não encontrada.' });
-    if (String(record.userId) !== String(req.user.id)) return res.status(403).json({ error: 'Você só pode corrigir despesas lançadas por você.' });
+    const adminCorrection = isAdminUser(req.user);
+    if (!adminCorrection && String(record.userId) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Você só pode corrigir despesas lançadas por você.' });
+    }
     if (record.status !== 'Correção Solicitada') return res.status(400).json({ error: 'Esta despesa não está aguardando correção.' });
     const b = req.body || {};
     const updates = {
@@ -5542,16 +5550,28 @@ app.put('/api/despesas-reembolsos/:id/correct', async (req, res) => {
       status: 'Pendente',
       updated_at: new Date().toISOString()
     };
-    const updated = await db('despesas_reembolsos')
-      .where({ id, empresa_id: req.user.empresa_id, userId: req.user.id, status: record.status })
-      .update(updates);
+    const correctionQuery = db('despesas_reembolsos')
+      .where({ id, empresa_id: req.user.empresa_id, status: record.status });
+    if (!adminCorrection) correctionQuery.andWhere({ userId: req.user.id });
+    const updated = await correctionQuery.update(updates);
     if (!updated) return res.status(409).json({ error: 'A despesa mudou de status e nao pode mais ser corrigida.' });
-    await db('auditoria_logs').insert({ usuario_id: req.user.id, acao: 'CORRIGIU_DESPESA', detalhes: `Despesa #${id} corrigida e reenviada para aprovação.`, empresa_id: req.user.empresa_id }).catch(()=>{});
-    const targets = await obterDestinatarios('DESPESA_CORRIGIDA', record.userId, record.empresa_id || req.user.empresa_id);
-    await notifyUsers(targets, {
-      empresa_id: record.empresa_id || req.user.empresa_id,
-      module: 'despesas', record_id: id, target_hash: '#despesas', title: 'Despesa corrigida', body: `${req.user.name || 'Usuário'} corrigiu e reenviou a despesa #${id}.`
-    });
+    await db('auditoria_logs').insert({
+      usuario_id: req.user.id,
+      acao: adminCorrection ? 'ADMIN_CORRIGIU_DESPESA' : 'CORRIGIU_DESPESA',
+      detalhes: adminCorrection
+        ? `Despesa #${id}, pertencente ao usuário ${record.userId}, corrigida pelo administrador ${req.user.id} e reenviada para aprovação.`
+        : `Despesa #${id} corrigida e reenviada para aprovação.`,
+      empresa_id: req.user.empresa_id
+    }).catch(()=>{});
+    try {
+      const targets = await obterDestinatarios('DESPESA_CORRIGIDA', record.userId, record.empresa_id || req.user.empresa_id);
+      await notifyUsers(targets, {
+        empresa_id: record.empresa_id || req.user.empresa_id,
+        module: 'despesas', record_id: id, target_hash: '#despesas', title: 'Despesa corrigida', body: `${req.user.name || 'Usuário'} corrigiu e reenviou a despesa #${id}.`
+      });
+    } catch (notifyErr) {
+      console.warn('Despesa corrigida, mas a notificação não foi enviada:', notifyErr.message || notifyErr);
+    }
     res.json({ success: true, id, status: 'Pendente' });
   } catch (err) {
     console.error('Erro ao corrigir despesa:', err);

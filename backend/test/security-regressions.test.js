@@ -78,6 +78,31 @@ test('acoes de despesa nao duplicam corrigir e oferecem editar ao dono enquanto 
   assert.match(compatibility, /App\.editPendingExpense/);
 });
 
+test('administrador pode corrigir despesa alheia mantendo empresa, status e auditoria', () => {
+  const routeStart = server.indexOf("app.put('/api/despesas-reembolsos/:id/correct'");
+  const routeEnd = server.indexOf("app.put('/api/despesas-reembolsos/:id/approval'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /adminCorrection = isAdminUser\(req\.user\)/);
+  assert.match(route, /empresa_id: req\.user\.empresa_id/);
+  assert.match(route, /status: record\.status/);
+  assert.match(route, /if \(!adminCorrection\) correctionQuery\.andWhere\(\{ userId: req\.user\.id \}\)/);
+  assert.match(route, /ADMIN_CORRIGIU_DESPESA/);
+  assert.match(compatibility, /canCorrectExpense/);
+});
+
+test('envio de movimentacao aguarda upload e nao falha por erro de notificacao', () => {
+  const appClient = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  assert.match(appClient, /_ccUploadPromise/);
+  assert.match(appClient, /await el\._ccUploadPromise/);
+  const routeStart = server.indexOf("app.post('/api/equipamentos/movimentacoes'");
+  const routeEnd = server.indexOf("app.get('/api/equipamentos/movimentacoes'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /Movimentação salva, mas a notificação não foi enviada/);
+  assert.match(route, /res\.json\(\{ success: true, id: newId \}\)/);
+});
+
 test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça', () => {
   assert.match(listUpdates, /cc-image-original/);
   assert.match(listUpdates, /data-action="plus"/);

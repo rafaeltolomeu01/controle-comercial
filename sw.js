@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260717-4-fotos-banco-autenticadas';
+const CACHE_VERSION = '20260717-6-admin-despesas-envio-movimentacoes';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

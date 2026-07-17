@@ -2370,7 +2370,12 @@
       try {
         const current = await api(`/api/despesas-reembolsos/${encodeURIComponent(id)}`);
         if (String(current.status || '') !== 'Correção Solicitada') return alert('Esta despesa não está aguardando correção.');
-        if (String(current.userId) !== String(currentUser().id) && !hasPerm('Administrador')) return alert('Você só pode corrigir despesas lançadas por você.');
+        const correctionUser = currentUser();
+        const correctionProfile = norm(correctionUser.profile);
+        const correctionPermissions = Array.isArray(correctionUser.permissions) ? correctionUser.permissions.map(norm) : [];
+        const correctionAdmin = correctionProfile.includes('admin')
+          || correctionPermissions.some(permission => permission.includes('admin'));
+        if (String(current.userId) !== String(correctionUser.id) && !correctionAdmin) return alert('Você só pode corrigir despesas lançadas por você.');
         window.location.hash = '#despesas';
         setTimeout(() => {
           const form = document.getElementById('expense-form');
@@ -2472,7 +2477,8 @@
         if (!exp) return;
         const cell = tr.querySelector('td:last-child');
         if (!cell) return;
-        if (String(exp.status || '') === 'Correção Solicitada' && String(exp.userId) === String(user.id)) {
+        if (String(exp.status || '') === 'Correção Solicitada'
+          && (String(exp.userId) === String(user.id) || isAdmin())) {
           if (!cell.querySelector('.cc-btn-corrigir-despesa')) {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -8104,6 +8110,12 @@
   function getUser(){
     try { return window.Store && Store.getLoggedUser ? Store.getLoggedUser() : null; } catch(_) { return null; }
   }
+  function canCorrectExpense(exp, user){
+    const profile = normalize(user && user.profile);
+    const permissions = Array.isArray(user && user.permissions) ? user.permissions.map(normalize) : [];
+    const admin = profile.includes('admin') || permissions.some(permission => permission.includes('admin'));
+    return !!user && (admin || String(exp && exp.userId) === String(user.id));
+  }
   function getActiveUnitId(){
     try { return window.Store && Store.getActiveUnitId ? Store.getActiveUnitId() : 'all'; } catch(_) { return 'all'; }
   }
@@ -8177,7 +8189,7 @@
     let correction = '';
     let edit = '';
     const user = getUser();
-    if (normalize(exp && exp.status).includes('correc') && user && String(exp && exp.userId) === String(user.id)) {
+    if (normalize(exp && exp.status).includes('correc') && canCorrectExpense(exp, user)) {
       correction = `<button class="btn btn-warning btn-sm cc-btn-corrigir-despesa" onclick="event.stopPropagation(); App.correctExpenseAndResubmit && App.correctExpenseAndResubmit('${id}')">Corrigir</button>`;
     }
     if (pending(exp && exp.status) && user && String(exp && exp.userId) === String(user.id)) {
