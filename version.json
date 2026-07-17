@@ -1,7 +1,7 @@
 {
-  "version": "20260717.1",
-  "updatedAt": "2026-07-17T08:20:00.000Z",
+  "version": "20260717.2",
+  "updatedAt": "2026-07-17T08:35:00.000Z",
   "description": "Adicionar ou remover saldo com auditoria e alertas de correções no Painel Geral",
-  "build": "20260717-1-unidade-movimentacoes-painel-login",
-  "buildDate": "2026-07-17T08:20:00.000Z"
+  "build": "20260717-2-despesas-aprovadas-painel-pessoal",
+  "buildDate": "2026-07-17T08:35:00.000Z"
 }

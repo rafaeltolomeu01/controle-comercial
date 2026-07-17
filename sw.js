@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260717-1-unidade-movimentacoes-painel-login';
+const CACHE_VERSION = '20260717-2-despesas-aprovadas-painel-pessoal';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

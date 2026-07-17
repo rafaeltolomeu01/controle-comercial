@@ -285,7 +285,9 @@ test('movimentacoes antigas sao separadas pela empresa base sem regravar o banco
 test('painel pessoal usa somente usuario logado e nao desconta despesa pendente', () => {
   assert.match(listUpdates, /const own = list => .*belongsToUser/s);
   assert.match(listUpdates, /'userName', 'usuario_nome', 'name', 'nome'/);
-  assert.match(listUpdates, /const spent = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const approvedExpenses = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const spent = approvedExpenses/);
+  assert.match(listUpdates, /set\('dash-pending-expenses', formatMoney\(approvedExpenses\)\)/);
   assert.match(listUpdates, /const pendingExpenses = expenses\.filter/);
 });
 

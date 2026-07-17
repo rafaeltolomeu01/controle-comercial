@@ -1123,14 +1123,17 @@
     const expenses = own(scopeByGlobalUnit(window.AppExpensesCache || Store.getExpenses?.() || [], 'despesas'));
     const balances = own(scopeByGlobalUnit(window.AppBalancesCache || Store.getBalanceRequests?.() || [], 'solicitacao-despesas'));
     const approved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
+    // Valores pessoais permanecem separados por usuario. O supervisor e os
+    // demais vendedores nunca entram nos cartoes do usuario logado.
+    const approvedExpenses = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
     // Saldo disponivel considera somente despesas ja aprovadas. Pendentes ficam
     // destacadas separadamente e nao reduzem o saldo antes da aprovacao.
-    const spent = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
+    const spent = approvedExpenses;
     const pendingExpenses = expenses.filter(item => normalize(item.status) === 'pendente').reduce((sum, item) => sum + expenseValue(item), 0);
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
     set('dash-pending-approvals', String(clients.filter(item => normalize(item.status) === 'pendente').length));
     set('dash-open-tickets', String(tickets.filter(item => ['aberto', 'em atendimento'].includes(normalize(item.status))).length));
-    set('dash-pending-expenses', formatMoney(pendingExpenses));
+    set('dash-pending-expenses', formatMoney(approvedExpenses));
     set('dash-pending-balances', formatMoney(approved - spent));
     const correctionExpenses = expenses.filter(item => normalize(item.status).includes('correc')).length;
     const correctionClients = clients.filter(item => {
@@ -1153,7 +1156,7 @@
     }
     renderDashboardBars('dash-expense-bars', [
       { label: 'Pendentes', value: pendingExpenses },
-      { label: 'Aprovadas', value: expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0) },
+      { label: 'Aprovadas', value: approvedExpenses },
       { label: 'Reprovadas', value: expenses.filter(item => normalize(item.status).includes('reprov')).reduce((sum, item) => sum + expenseValue(item), 0) }
     ], formatMoney);
     renderDashboardBars('dash-balance-bars', [
