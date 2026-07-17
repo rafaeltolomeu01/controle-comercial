@@ -138,6 +138,9 @@ test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça
 
 test('listas possuem filtros encadeados e ordenacao antes da paginacao', () => {
   assert.match(listUpdates, /rebuildCascadingFilters/);
+  assert.match(listUpdates, /refreshSortHeadersEverywhere/);
+  assert.match(listUpdates, /key === 'date' \? 'desc' : 'asc'/);
+  assert.match(listUpdates, /window\.addEventListener\('hashchange'.*refreshSortHeadersEverywhere/);
   assert.match(listUpdates, /FiltersManager\.filterData = function/);
   assert.match(listUpdates, /applySort\(baseFilterData/);
   assert.match(listUpdates, /aria-sort/);

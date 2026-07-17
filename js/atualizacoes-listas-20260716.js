@@ -831,7 +831,10 @@
       header.dataset.ccSortInstalled = '1';
       const activate = () => {
         const previous = sortState[moduleKey];
-        sortState[moduleKey] = { key, direction: previous?.key === key && previous.direction === 'asc' ? 'desc' : 'asc' };
+        const direction = previous?.key === key
+          ? (previous.direction === 'asc' ? 'desc' : 'asc')
+          : (key === 'date' ? 'desc' : 'asc');
+        sortState[moduleKey] = { key, direction };
         updateSortHeaders(moduleKey);
         FiltersManager.triggerFiltering(moduleKey);
       };
@@ -842,8 +845,22 @@
     });
   }
 
+  function refreshSortHeadersEverywhere() {
+    if (!window.FiltersManager?.configs) return;
+    Object.keys(FiltersManager.configs).forEach(moduleKey => {
+      try {
+        FiltersManager.ensureFilterPanel(moduleKey);
+        updateSortHeaders(moduleKey);
+      } catch (_) {}
+    });
+  }
+
   function installFiltersAndSorting() {
-    if (!window.FiltersManager || FiltersManager.__ccDynamicSort20260716) return false;
+    if (!window.FiltersManager) return false;
+    if (FiltersManager.__ccDynamicSort20260716) {
+      refreshSortHeadersEverywhere();
+      return true;
+    }
     FiltersManager.__ccDynamicSort20260716 = true;
     baseFilterData = FiltersManager.filterData.bind(FiltersManager);
     const originalEnsure = FiltersManager.ensureFilterPanel.bind(FiltersManager);
@@ -914,14 +931,21 @@
       scheduled = true;
       requestAnimationFrame(() => {
         scheduled = false;
-        Object.keys(FiltersManager.configs).forEach(moduleKey => updateSortHeaders(moduleKey));
+        refreshSortHeadersEverywhere();
       });
     };
     new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true });
-    Object.keys(FiltersManager.configs).forEach(moduleKey => {
-      try { FiltersManager.ensureFilterPanel(moduleKey); } catch (_) {}
-      updateSortHeaders(moduleKey);
-    });
+    window.addEventListener('hashchange', () => setTimeout(refreshSortHeadersEverywhere, 180));
+    window.addEventListener('pageshow', () => setTimeout(refreshSortHeadersEverywhere, 180));
+    document.addEventListener('click', event => {
+      if (event.target.closest?.('button, a, .view-tab, .nav-item')) {
+        setTimeout(refreshSortHeadersEverywhere, 100);
+        setTimeout(refreshSortHeadersEverywhere, 400);
+      }
+    }, true);
+    refreshSortHeadersEverywhere();
+    setTimeout(refreshSortHeadersEverywhere, 300);
+    setTimeout(refreshSortHeadersEverywhere, 1000);
     return true;
   }
 

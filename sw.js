@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260717-9-aprovado-efetivo-e-refazer-despesa';
+const CACHE_VERSION = '20260717-10-restaura-ordenacao-colunas';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

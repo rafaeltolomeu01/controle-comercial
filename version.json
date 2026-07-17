@@ -1,7 +1,7 @@
 {
-  "version": "20260717.9",
+  "version": "20260717.10",
   "updatedAt": "2026-07-17T10:45:00-03:00",
   "description": "Restaura saldo direto, usa o valor efetivamente aprovado e protege o envio de movimentações com fotos",
-  "build": "20260717-9-aprovado-efetivo-e-refazer-despesa",
+  "build": "20260717-10-restaura-ordenacao-colunas",
   "buildDate": "2026-07-17T10:45:00-03:00"
 }
