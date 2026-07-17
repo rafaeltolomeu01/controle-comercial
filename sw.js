@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260717-2-despesas-aprovadas-painel-pessoal';
+const CACHE_VERSION = '20260717-4-fotos-banco-autenticadas';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

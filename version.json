@@ -1,7 +1,7 @@
 {
-  "version": "20260717.2",
-  "updatedAt": "2026-07-17T08:35:00.000Z",
-  "description": "Adicionar ou remover saldo com auditoria e alertas de correções no Painel Geral",
-  "build": "20260717-2-despesas-aprovadas-painel-pessoal",
-  "buildDate": "2026-07-17T08:35:00.000Z"
+  "version": "20260717.4",
+  "updatedAt": "2026-07-17T10:05:00.000Z",
+  "description": "Exibir com autenticação as fotos antigas armazenadas no PostgreSQL",
+  "build": "20260717-4-fotos-banco-autenticadas",
+  "buildDate": "2026-07-17T10:05:00.000Z"
 }

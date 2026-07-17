@@ -649,7 +649,8 @@
   }
   App.generateExpenseComprovantePdf = async function(id){
     try {
-      const exp = await this.fetchFromApi(`/api/despesas-reembolsos/${id}`);
+      let exp = await this.fetchFromApi(`/api/despesas-reembolsos/${id}`);
+      if (window.CCMediaPreserver) exp = CCMediaPreserver.hydrateExpense(exp);
       if (!exp) return this.showToast?.('Despesa não encontrada!', 'danger');
       const { jsPDF } = window.jspdf; const doc = new jsPDF('p','mm','a4');
       doc.setDrawColor(37,99,235); doc.setLineWidth(1); doc.rect(5,5,200,287);
@@ -848,7 +849,7 @@
       if (!modal) {
         modal = document.createElement('div'); modal.id='modal-registered-expense-details'; modal.className='login-wrapper'; modal.style.cssText='display:none; position:fixed; inset:0; z-index:2600; background:rgba(0,0,0,.62); align-items:center; justify-content:center; padding:20px 10px; overflow:auto;'; document.body.appendChild(modal);
       }
-      const imgs = [ ['Comprovante', exp.foto_comprovante], ['Odômetro/KM', exp.foto_odometro] ].filter(x=>x[1]).map(([l,src])=>`<div><strong>${l}</strong><br><img src="${escapeHtml(src)}" style="max-width:100%; max-height:220px; border-radius:8px; border:1px solid var(--border-color); margin-top:6px; cursor:pointer;" onclick="App.showFacadeImage && App.showFacadeImage('${String(src).replace(/'/g,"\\'")}')"></div>`).join('') || '<p style="color:var(--text-muted);">Sem fotos anexadas.</p>';
+      const imgs = [ ['Comprovante', exp.foto_comprovante], ['Odômetro/KM', exp.foto_odometro] ].filter(x=>x[1]).map(([l,src])=>`<div><strong>${l}</strong><br><img src="${escapeHtml(src)}" style="max-width:100%; max-height:220px; border-radius:8px; border:1px solid var(--border-color); margin-top:6px; cursor:pointer;" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" onclick="App.showFacadeImage && App.showFacadeImage('${String(src).replace(/'/g,"\\'")}')"><div style="display:none;margin-top:8px;padding:10px;border:1px dashed var(--warning);border-radius:7px;color:var(--warning);font-size:.78rem;">O registro possui uma referência antiga, mas o arquivo não está disponível neste endereço. Se a foto ainda estiver no backup ou no Cloudinary, ela poderá ser restaurada sem alterar a despesa.</div></div>`).join('') || '<p style="color:var(--text-muted);">Sem fotos anexadas.</p>';
       const actions = canApproveExpense() && statusText(exp.status)==='pendente' ? `<button class="btn btn-success" onclick="App.approveRegisteredExpense('${id}')">Aprovar</button><button class="btn btn-danger" onclick="App.rejectRegisteredExpense('${id}')">Reprovar</button><button class="btn btn-warning" onclick="App.correctRegisteredExpense('${id}')">Enviar para Correção</button>` : '';
       modal.innerHTML = `<div class="login-card" style="max-width:820px; width:100%; max-height:92vh; overflow:auto; text-align:left; padding:24px;"><div style="display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--border-color); padding-bottom:12px; margin-bottom:14px;"><h3 style="margin:0; color:var(--primary-color);">Detalhes da Despesa #${escapeHtml(exp.id)}</h3><span onclick="document.getElementById('modal-registered-expense-details').style.display='none'" style="cursor:pointer; font-size:1.5rem;">✕</span></div><div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; font-size:.9rem;"><div><strong>Vendedor:</strong> ${escapeHtml(UI.getExpenseUserName?.(exp)||'Usuário não localizado')}</div><div><strong>Unidade:</strong> ${escapeHtml(UI.getUnitName?.(exp.unitId)||exp.unitId||'-')}</div><div><strong>Data/Hora:</strong> ${escapeHtml(exp.date||'-')} ${escapeHtml(exp.time||'')}</div><div><strong>Status:</strong> ${escapeHtml(exp.status||'-')}</div><div><strong>Finalidade:</strong> ${escapeHtml(exp.finalidade||'-')}</div><div><strong>Operação:</strong> ${escapeHtml(exp.operacao||'-')}</div><div><strong>Valor:</strong> ${money(exp.value)}</div><div><strong>Veículo/KM:</strong> ${escapeHtml(exp.veiculo||'-')} ${escapeHtml(exp.km||'')}</div><div style="grid-column:1/-1;"><strong>Observações:</strong><p style="padding:8px; background:rgba(255,255,255,.03); border:1px solid var(--border-color); border-radius:6px;">${escapeHtml(exp.observation||exp.observacao||'-')}</p></div></div><h4>Fotos e comprovantes</h4><div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;">${imgs}</div><h4>Histórico</h4><p style="color:var(--text-muted);">Status atual: ${escapeHtml(exp.status||'-')}${exp.observacao ? ' — '+escapeHtml(exp.observacao) : ''}</p><div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; border-top:1px solid var(--border-color); margin-top:18px; padding-top:14px;">${actions}<button class="btn btn-secondary" onclick="App.generateExpenseComprovantePdf('${id}')">PDF</button><button class="btn btn-secondary" onclick="document.getElementById('modal-registered-expense-details').style.display='none'">Fechar</button></div></div>`;
       modal.style.display='flex';
@@ -7192,15 +7193,15 @@
 
   async function uploadOptionalPhotos(existingClient){
     const suffixes = ['fachada','interna01','interna02','interna03','rua01','rua02','cnpj'];
-    const result = {
-      fachada: existingClient.photoFachada || '',
-      interna01: existingClient.photoInterna01 || '',
-      interna02: existingClient.photoInterna02 || '',
-      interna03: existingClient.photoInterna03 || '',
-      rua01: existingClient.photoRua01 || '',
-      rua02: existingClient.photoRua02 || '',
-      cnpj: existingClient.photoCnpj || ''
-    };
+    const fieldMap = { fachada:'photoFachada', interna01:'photoInterna01', interna02:'photoInterna02', interna03:'photoInterna03', rua01:'photoRua01', rua02:'photoRua02', cnpj:'photoCnpj' };
+    const result = {};
+    suffixes.forEach(suffix => {
+      const input = document.getElementById(`client-photo-${suffix}`);
+      const field = fieldMap[suffix];
+      result[suffix] = window.CCMediaPreserver
+        ? CCMediaPreserver.clientValue(existingClient, field, input)
+        : (existingClient[field] || '');
+    });
     if (!window.App || !App.compressImageAndGetBase64 || !App.uploadBase64ToDatabase) return result;
     const cnpjVal = digits(document.getElementById('client-cnpj')?.value) || digits(existingClient.cnpj) || '00000000000000';
     for (const suffix of suffixes) {
@@ -7215,6 +7216,7 @@
         }
         if (url) {
           result[suffix] = url;
+          fileInput.dataset.removeExisting = '0';
           fileInput.dataset.uploadedUrl = url; // cache back
         }
       } catch (err) {
@@ -7772,14 +7774,16 @@
     const form = document.getElementById('client-form');
     if (!form || !client) return;
     document.getElementById('client-correction-photo-preview')?.remove();
+    if (window.CCMediaPreserver) CCMediaPreserver.renderClientPhotos(client);
+    const safeClient = window.CCMediaPreserver ? CCMediaPreserver.hydrateClient(client) : client;
     const photos = [
-      ['Fachada', client.photoFachada],
-      ['Interna 1', client.photoInterna01],
-      ['Interna 2', client.photoInterna02],
-      ['Interna 3', client.photoInterna03],
-      ['Rua 1', client.photoRua01],
-      ['Rua 2', client.photoRua02],
-      ['CNPJ', client.photoCnpj]
+      ['Fachada', safeClient.photoFachada],
+      ['Interna 1', safeClient.photoInterna01],
+      ['Interna 2', safeClient.photoInterna02],
+      ['Interna 3', safeClient.photoInterna03],
+      ['Rua 1', safeClient.photoRua01],
+      ['Rua 2', safeClient.photoRua02],
+      ['CNPJ', safeClient.photoCnpj]
     ].filter(([,src]) => !!src);
     const box = document.createElement('div');
     box.id = 'client-correction-photo-preview';
@@ -9342,7 +9346,9 @@
     for (var suffix in map) {
       var input = document.getElementById('client-photo-' + suffix);
       if (!input || !input.files || !input.files[0]) {
-        next[map[suffix]] = old[map[suffix]] || '';
+        next[map[suffix]] = window.CCMediaPreserver
+          ? CCMediaPreserver.clientValue(old, map[suffix], input)
+          : (old[map[suffix]] || '');
         continue;
       }
       var file = input.files[0];
@@ -9350,6 +9356,7 @@
       var cnpj = String(next.cnpj || old.cnpj || '00000000000000').replace(/\D/g,'') || '00000000000000';
       next[map[suffix]] = await App.uploadBase64ToDatabase(base64, 'cliente-' + cnpj + '-' + suffix + '-' + (file.name || 'foto'), 'clientes');
       if (!next[map[suffix]]) throw new Error('Foto ' + suffix + ' nao foi salva.');
+      input.dataset.removeExisting = '0';
     }
   }
 

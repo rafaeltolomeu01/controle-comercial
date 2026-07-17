@@ -92,6 +92,12 @@
     image.onclick = finalSource ? () => App.showFacadeImage(finalSource) : null;
   }
 
+  function expenseMedia(record, field, inputId) {
+    const input = document.getElementById(inputId);
+    if (window.CCMediaPreserver) return CCMediaPreserver.expenseValue(record || {}, field, input);
+    return record && record[field] || '';
+  }
+
   async function uploadSelectedFile(inputId, fallback) {
     const input = document.getElementById(inputId);
     const file = input && input.files && input.files[0];
@@ -121,6 +127,13 @@
     form.reset();
     const receipt = document.getElementById('exp-comprovante-img');
     if (receipt) receipt.required = true;
+    ['exp-comprovante-img', 'exp-odometro-img'].forEach(id => {
+      const input = document.getElementById(id);
+      if (!input) return;
+      delete input.dataset.existingSource;
+      delete input.dataset.removeExisting;
+      input.parentElement?.querySelector(`.cc-existing-media[data-for="${id}"]`)?.remove();
+    });
     document.getElementById('preview-comprovante')?.style.setProperty('display', 'none');
     document.getElementById('preview-odometro')?.style.setProperty('display', 'none');
     document.getElementById('expense-form-container')?.classList.add('hidden');
@@ -157,11 +170,16 @@
     setValue('exp-obs', record.observation || '');
     const receipt = document.getElementById('exp-comprovante-img');
     const odometer = document.getElementById('exp-odometro-img');
-    if (receipt) { receipt.value = ''; receipt.required = !record.foto_comprovante; }
+    const existingReceipt = expenseMedia(record, 'foto_comprovante', 'exp-comprovante-img');
+    const existingOdometer = expenseMedia(record, 'foto_odometro', 'exp-odometro-img');
+    record.foto_comprovante = existingReceipt;
+    record.foto_odometro = existingOdometer;
+    if (receipt) { receipt.value = ''; receipt.required = !existingReceipt; receipt.dataset.removeExisting = '0'; }
     if (odometer) { odometer.value = ''; odometer.required = false; }
     updateExpenseConditionalFields();
-    showExistingPreview('receipt', record.foto_comprovante);
-    showExistingPreview('odometer', record.foto_odometro);
+    showExistingPreview('receipt', existingReceipt);
+    showExistingPreview('odometer', existingOdometer);
+    if (window.CCMediaPreserver) CCMediaPreserver.renderExpensePhotos(record);
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -204,8 +222,8 @@
           date: document.getElementById('exp-date')?.value || original.date || '',
           time: original.time || '',
           observation: document.getElementById('exp-obs')?.value || '',
-          foto_odometro: await uploadSelectedFile('exp-odometro-img', original.foto_odometro),
-          foto_comprovante: await uploadSelectedFile('exp-comprovante-img', original.foto_comprovante)
+          foto_odometro: await uploadSelectedFile('exp-odometro-img', expenseMedia(original, 'foto_odometro', 'exp-odometro-img')),
+          foto_comprovante: await uploadSelectedFile('exp-comprovante-img', expenseMedia(original, 'foto_comprovante', 'exp-comprovante-img'))
         };
         await api(`/api/despesas-reembolsos/${encodeURIComponent(form.dataset.pendingEditId)}`, {
           method: 'PUT', body: JSON.stringify(payload)

@@ -3204,7 +3204,8 @@ const App = {
           document.getElementById('mov-modelo-antigo').setAttribute('required', '');
           document.getElementById('mov-voltagem-antiga').setAttribute('required', '');
           document.getElementById('mov-detalhe-troca').setAttribute('required', '');
-          document.getElementById('mov-foto-troca').setAttribute('required', '');
+          // A foto da troca e opcional; quando enviada, continua sendo salva normalmente.
+          document.getElementById('mov-foto-troca').removeAttribute('required');
           // New equipment block: always hidden — vendor does NOT fill this
           const newEqBlock = document.getElementById('mov-novo-eq-block');
           if (newEqBlock) newEqBlock.style.display = 'none';

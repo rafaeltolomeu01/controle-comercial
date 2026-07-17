@@ -17,6 +17,10 @@ const compatibility = fs.readFileSync(
   path.join(__dirname, '..', '..', 'js', 'compatibilidade-consolidada.js'),
   'utf8'
 );
+const mediaPreserver = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'js', 'preservacao-fotos-edicao-20260717.js'),
+  'utf8'
+);
 const balanceUnitMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '20260716_add_expense_request_unit_scope.js'),
   'utf8'
@@ -298,4 +302,48 @@ test('html operacional permanece inerte e oculto ate a autenticacao', () => {
   assert.match(appJs, /appContainer\.setAttribute\('inert', ''\)/);
   assert.match(appJs, /appContainer\.removeAttribute\('inert'\)/);
   assert.match(appJs, /appContainer\.hidden = false/);
+});
+
+test('edicao de cliente preserva fotos antigas salvo remocao explicita', () => {
+  assert.match(mediaPreserver, /removeExisting === '1'/);
+  assert.match(mediaPreserver, /Foto atual — será mantida se nenhuma nova for escolhida/);
+  assert.match(mediaPreserver, /Remover foto atual/);
+  assert.match(compatibility, /CCMediaPreserver\.clientValue\(old, map\[suffix\], input\)/);
+  assert.match(compatibility, /CCMediaPreserver\.clientValue\(existingClient, field, input\)/);
+});
+
+test('edicao de despesa preserva comprovante e odometro antigos', () => {
+  assert.match(mediaPreserver, /foto_comprovante/);
+  assert.match(mediaPreserver, /foto_odometro/);
+  assert.match(listUpdates, /expenseMedia\(original, 'foto_comprovante'/);
+  assert.match(listUpdates, /expenseMedia\(original, 'foto_odometro'/);
+  assert.match(listUpdates, /CCMediaPreserver\.renderExpensePhotos\(record\)/);
+});
+
+test('camada de midia reconhece nomes legados sem alterar o banco', () => {
+  assert.match(mediaPreserver, /photoComprovante/);
+  assert.match(mediaPreserver, /receiptPhoto/);
+  assert.match(mediaPreserver, /photo_interna_01/);
+  assert.match(mediaPreserver, /foto_rua_02/);
+  assert.equal(mediaPreserver.includes("method: 'DELETE'"), false);
+});
+
+test('foto da troca de equipamento e opcional e continua sendo enviada quando escolhida', () => {
+  const appJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
+  const movementPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'movimentacao.html'), 'utf8');
+  assert.match(appJs, /mov-foto-troca'\)\.removeAttribute\('required'\)/);
+  assert.equal(appJs.includes("mov-foto-troca').setAttribute('required'"), false);
+  assert.match(appJs, /if \(fTroca\)[\s\S]*uploadFile\(fTroca, 'mov-foto-troca'\)/);
+  assert.match(movementPage, /Foto da Troca \(opcional\)/);
+});
+
+test('fotos antigas do banco sao carregadas com token e sem regravar dados', () => {
+  assert.match(mediaPreserver, /\/api\\\/uploads\\\/UP-/);
+  assert.match(mediaPreserver, /headers:authenticatedHeaders\(\)/);
+  assert.match(mediaPreserver, /headers\.Authorization = `Bearer \$\{token\}`/);
+  assert.match(mediaPreserver, /response\.blob\(\)/);
+  assert.match(mediaPreserver, /URL\.createObjectURL\(blob\)/);
+  assert.match(mediaPreserver, /MutationObserver/);
+  assert.equal(mediaPreserver.includes("method:'POST'"), false);
+  assert.equal(mediaPreserver.includes("method:'DELETE'"), false);
 });
