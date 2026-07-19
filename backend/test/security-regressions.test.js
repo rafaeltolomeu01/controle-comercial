@@ -139,6 +139,10 @@ test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça
 test('listas possuem filtros encadeados e ordenacao antes da paginacao', () => {
   assert.match(listUpdates, /rebuildCascadingFilters/);
   assert.match(listUpdates, /approvalSupervisorName/);
+  assert.match(listUpdates, /approvalFilterSource/);
+  assert.match(listUpdates, /approvalPendingRecords/);
+  assert.match(listUpdates, /manager\.caches\[moduleKey\] = data/);
+  assert.match(listUpdates, /dynamicCompanyName/);
   assert.match(listUpdates, /supervisor_id/);
   assert.match(listUpdates, /linkedUserIds/);
   assert.match(listUpdates, /selectedName && normalize\(value\) === selectedName/);

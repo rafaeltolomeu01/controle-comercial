@@ -1,7 +1,7 @@
 {
-  "version": "20260719.11",
-  "updatedAt": "2026-07-19T11:05:00-03:00",
-  "description": "Corrige filtros dinamicos da fila de aprovacao, incluindo unidade global e supervisor do vendedor",
-  "build": "20260719-11-filtros-aprovacao-dinamicos",
-  "buildDate": "2026-07-19T11:05:00-03:00"
+  "version": "20260719.12",
+  "updatedAt": "2026-07-19T11:25:00-03:00",
+  "description": "Restaura as opcoes dinamicas dos filtros da fila de aprovacao usando os cadastros pendentes completos",
+  "build": "20260719-12-fonte-filtros-fila-aprovacao",
+  "buildDate": "2026-07-19T11:25:00-03:00"
 }

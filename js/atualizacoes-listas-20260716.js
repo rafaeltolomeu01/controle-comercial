@@ -832,12 +832,53 @@
     return String(byName?.name || byName?.nome || raw).trim();
   }
 
+  function dynamicCompanyName(record) {
+    const direct = String(pick(record, [
+      'empresa_nome', 'company_name', 'companyName', 'empresa', 'base', 'empresaBase'
+    ]) || '').trim();
+    if (direct) return direct;
+    const rawUnit = String(pick(record, ['unitId', 'unit_id', 'unidadeId', 'unidade_id', 'unidade']) || '').trim();
+    if (!rawUnit) return '';
+    const units = Store.getUnits?.() || [];
+    const unit = units.find(item => String(item.id) === rawUnit)
+      || units.find(item => normalize(item.name || item.nome) === normalize(rawUnit));
+    return String(pick(unit, ['empresa_nome', 'company_name', 'empresa', 'company', 'name', 'nome']) || '').trim();
+  }
+
+  function approvalPendingRecords() {
+    let records = [];
+    try { records = Store.getClients?.() || []; } catch (_) {}
+    return (Array.isArray(records) ? records : []).filter(record => {
+      const status = normalize(record?.status);
+      return !status || status.includes('pendente') || status.includes('aguardando') || status.includes('correc');
+    });
+  }
+
+  function approvalFilterSource(cached) {
+    const merged = [];
+    const seen = new Set();
+    [...(Array.isArray(cached) ? cached : []), ...approvalPendingRecords()].forEach((record, index) => {
+      if (!record) return;
+      const key = String(record.id ?? record.clientId ?? record.cliente_id ?? `approval-${index}`);
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(record);
+    });
+    return merged;
+  }
+
   function rebuildCascadingFilters(moduleKey, preserveField) {
     const manager = window.FiltersManager;
     const config = manager?.configs?.[moduleKey];
     const panel = filterPanel(moduleKey);
     if (!config || !panel || !baseFilterData) return;
-    const data = Array.isArray(manager.caches[moduleKey]) ? manager.caches[moduleKey] : [];
+    let data = Array.isArray(manager.caches[moduleKey]) ? manager.caches[moduleKey] : [];
+    // A fila pode ser desenhada antes do interceptador geral guardar o cache.
+    // Nesse caso a tabela tem linhas, mas os selects recebem uma lista vazia.
+    if (moduleKey === 'aprovacao') {
+      data = approvalFilterSource(data);
+      manager.caches[moduleKey] = data;
+    }
     const selects = [...panel.querySelectorAll('select.select-ctrl[data-field]')];
     const readFilters = () => manager.getFilterValues(moduleKey);
     const valuesFor = (field, filters) => {
@@ -935,6 +976,10 @@
     const originalTrigger = FiltersManager.triggerFiltering.bind(FiltersManager);
 
     FiltersManager.getFilterValue = function (item, field) {
+      if (field === 'empresa') {
+        const company = dynamicCompanyName(item);
+        if (company) return company;
+      }
       if (field === 'supervisor') {
         const supervisor = approvalSupervisorName(item);
         if (supervisor) return supervisor;

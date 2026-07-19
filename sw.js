@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260719-11-filtros-aprovacao-dinamicos';
+const CACHE_VERSION = '20260719-12-fonte-filtros-fila-aprovacao';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
