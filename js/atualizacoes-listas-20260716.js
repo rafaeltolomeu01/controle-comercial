@@ -63,13 +63,14 @@
 
   function recordMatchesGlobalUnit(record, moduleKey, unitId) {
     if (!record || !unitId || unitId === 'all' || !UNIT_SCOPED_MODULES.has(moduleKey)) return true;
+    const selectedName = activeGlobalUnitName(unitId);
     const directIds = ['unitId', 'unit_id', 'unidadeId', 'unidade_id']
       .map(key => record[key]).filter(value => value !== undefined && value !== null && String(value).trim() !== '');
     if (directIds.length) {
       return directIds.some(value => String(value) === String(unitId)
+        || (selectedName && normalize(value) === selectedName)
         || (moduleKey === 'usuarios' && String(value).toLowerCase() === 'all'));
     }
-    const selectedName = activeGlobalUnitName(unitId);
     const recordNames = ['unitName', 'unit_name', 'unidade_nome', 'unidade', 'empresa_nome', 'empresa']
       .map(key => normalize(record[key])).filter(Boolean);
     return Boolean(selectedName && recordNames.includes(selectedName));
@@ -765,6 +766,72 @@
     return body?.closest('.card')?.querySelector('.general-filter-bar') || null;
   }
 
+  function filterUsers() {
+    try { return Array.isArray(Store.getUsers?.()) ? Store.getUsers() : []; }
+    catch (_) { return []; }
+  }
+
+  function filterUserName(user) {
+    return String(pick(user, ['name', 'nome', 'username', 'email']) || '').trim();
+  }
+
+  function filterUserId(user) {
+    return String(pick(user, ['id', 'userId', 'user_id']) || '').trim();
+  }
+
+  function recordSellerId(record) {
+    return String(pick(record, [
+      'userId', 'user_id', 'usuario_id', 'usuarioId', 'vendedor_id', 'vendedorId',
+      'seller_id', 'sellerId', 'createdBy', 'created_by', 'created_by_id', 'ownerId'
+    ]) || '').trim();
+  }
+
+  function linkedUserIds(user) {
+    const raw = user?.linked_users ?? user?.linkedUsers ?? [];
+    if (Array.isArray(raw)) return raw.map(value => String(value));
+    if (typeof raw !== 'string' || !raw.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(value => String(value));
+    } catch (_) {}
+    return raw.split(',').map(value => value.trim()).filter(Boolean);
+  }
+
+  function approvalSupervisorName(record) {
+    const direct = String(pick(record, ['supervisor_nome', 'supervisor_name', 'supervisor']) || '').trim();
+    if (direct) return direct;
+
+    const users = filterUsers();
+    let sellerId = recordSellerId(record);
+    const sellerName = normalize(pick(record, [
+      'vendedor_nome', 'vendedor_solicitante', 'seller_name', 'vendedor', 'seller', 'cliente_vendedor'
+    ]));
+    let seller = sellerId ? users.find(user => filterUserId(user) === sellerId) : null;
+    if (!seller && sellerName) seller = users.find(user => normalize(filterUserName(user)) === sellerName);
+    if (!sellerId && seller) sellerId = filterUserId(seller);
+    if (!sellerId) return '';
+    const supervisorId = String(pick(seller, ['supervisor_id', 'supervisorId']) || '').trim();
+    let supervisor = supervisorId ? users.find(user => filterUserId(user) === supervisorId) : null;
+    if (!supervisor) {
+      supervisor = users.find(user => {
+        const profile = normalize(pick(user, ['profile', 'perfil']));
+        return (profile.includes('supervisor') || profile.includes('gerente'))
+          && linkedUserIds(user).includes(sellerId);
+      });
+    }
+    return filterUserName(supervisor);
+  }
+
+  function dynamicUnitName(record) {
+    const raw = String(pick(record, ['unitId', 'unit_id', 'unidadeId', 'unidade_id', 'unidade']) || '').trim();
+    if (!raw) return '';
+    const units = Store.getUnits?.() || [];
+    const byId = units.find(unit => String(unit.id) === raw);
+    if (byId) return String(byId.name || byId.nome || raw).trim();
+    const byName = units.find(unit => normalize(unit.name || unit.nome) === normalize(raw));
+    return String(byName?.name || byName?.nome || raw).trim();
+  }
+
   function rebuildCascadingFilters(moduleKey, preserveField) {
     const manager = window.FiltersManager;
     const config = manager?.configs?.[moduleKey];
@@ -863,8 +930,21 @@
     }
     FiltersManager.__ccDynamicSort20260716 = true;
     baseFilterData = FiltersManager.filterData.bind(FiltersManager);
+    const originalGetFilterValue = FiltersManager.getFilterValue.bind(FiltersManager);
     const originalEnsure = FiltersManager.ensureFilterPanel.bind(FiltersManager);
     const originalTrigger = FiltersManager.triggerFiltering.bind(FiltersManager);
+
+    FiltersManager.getFilterValue = function (item, field) {
+      if (field === 'supervisor') {
+        const supervisor = approvalSupervisorName(item);
+        if (supervisor) return supervisor;
+      }
+      if (field === 'unitId') {
+        const unit = dynamicUnitName(item);
+        if (unit) return unit;
+      }
+      return originalGetFilterValue(item, field);
+    };
 
     FiltersManager.filterData = function (data, filters, moduleKey) {
       const unitScopedData = scopeByGlobalUnit(data, moduleKey);

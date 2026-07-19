@@ -138,12 +138,21 @@ test('visualizador usa imagem original e oferece zoom, arraste e gesto de pinça
 
 test('listas possuem filtros encadeados e ordenacao antes da paginacao', () => {
   assert.match(listUpdates, /rebuildCascadingFilters/);
+  assert.match(listUpdates, /approvalSupervisorName/);
+  assert.match(listUpdates, /supervisor_id/);
+  assert.match(listUpdates, /linkedUserIds/);
+  assert.match(listUpdates, /selectedName && normalize\(value\) === selectedName/);
   assert.match(listUpdates, /refreshSortHeadersEverywhere/);
   assert.match(listUpdates, /key === 'date' \? 'desc' : 'asc'/);
   assert.match(listUpdates, /window\.addEventListener\('hashchange'.*refreshSortHeadersEverywhere/);
   assert.match(listUpdates, /FiltersManager\.filterData = function/);
   assert.match(listUpdates, /applySort\(baseFilterData/);
   assert.match(listUpdates, /aria-sort/);
+});
+
+test('rotina legada nao sobrescreve filtros dinamicos da fila de aprovacao', () => {
+  const finalTextLists = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'correcao-final-textos-listas.js'), 'utf8');
+  assert.match(finalTextLists, /FiltersManager\.__ccDynamicSort20260716\) return/);
 });
 
 test('movimentacoes antigas usam escopo seguro por empresa sem depender de nome opcional', () => {

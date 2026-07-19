@@ -288,6 +288,9 @@
 
   function fillApprovalFilters(){
     if (!location.hash.includes('aprovacao')) return;
+    // A versao atual possui filtros encadeados. Nao sobrescrever suas opcoes
+    // com a rotina legada (que nao conhecia supervisor nem unidade global).
+    if (window.FiltersManager && FiltersManager.__ccDynamicSort20260716) return;
     var body = document.getElementById('approvals-table-body');
     if (!body) return;
     var bar = body.closest('.card') && body.closest('.card').querySelector('.general-filter-bar');
