@@ -845,19 +845,16 @@
     return String(pick(unit, ['empresa_nome', 'company_name', 'empresa', 'company', 'name', 'nome']) || '').trim();
   }
 
-  function approvalPendingRecords() {
+  function approvalAllRecords() {
     let records = [];
     try { records = Store.getClients?.() || []; } catch (_) {}
-    return (Array.isArray(records) ? records : []).filter(record => {
-      const status = normalize(record?.status);
-      return !status || status.includes('pendente') || status.includes('aguardando') || status.includes('correc');
-    });
+    return (Array.isArray(records) ? records : []).filter(record => record && !record.deleted && !record.excluido && record.active !== false);
   }
 
   function approvalFilterSource(cached) {
     const merged = [];
     const seen = new Set();
-    [...(Array.isArray(cached) ? cached : []), ...approvalPendingRecords()].forEach((record, index) => {
+    [...(Array.isArray(cached) ? cached : []), ...approvalAllRecords()].forEach((record, index) => {
       if (!record) return;
       const key = String(record.id ?? record.clientId ?? record.cliente_id ?? `approval-${index}`);
       if (seen.has(key)) return;
@@ -865,6 +862,99 @@
       merged.push(record);
     });
     return merged;
+  }
+
+  function approvalDate(record) {
+    const raw = pick(record, ['created_at', 'createdAt', 'date', 'data', 'data_cadastro', 'updated_at']);
+    if (!raw) return '-';
+    const value = String(raw).trim();
+    let match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (match) return `${match[1]}/${match[2]}/${match[3]}`;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('pt-BR');
+  }
+
+  function approvalStatusBadge(record) {
+    const status = String(record?.status || 'Pendente');
+    const normalized = normalize(status);
+    let badgeClass = 'badge-warning';
+    if (normalized.includes('aprov')) badgeClass = 'badge-success';
+    else if (normalized.includes('reprov')) badgeClass = 'badge-danger';
+    else if (normalized.includes('correc') || normalized.includes('ajuste')) badgeClass = 'badge-primary';
+    return `<span class="badge-status ${badgeClass}" style="font-size:.72rem;">${escapeHtml(status)}</span>`;
+  }
+
+  function approvalIsAwaitingDecision(record) {
+    const status = normalize(record?.status);
+    return !status || status.includes('pendente') || status.includes('aguardando') || status.includes('analise') || status.includes('correc') || status.includes('ajuste');
+  }
+
+  function ensureApprovalDateHeader() {
+    const body = document.getElementById('approvals-table-body');
+    const row = body?.closest('table')?.querySelector('thead tr');
+    if (!row) return;
+    const headers = [...row.querySelectorAll('th')];
+    if (headers.some(header => normalize(header.dataset.ccSortLabel || header.textContent) === 'data')) return;
+    const sellerIndex = headers.findIndex(header => normalize(header.dataset.ccSortLabel || header.textContent).includes('vendedor'));
+    const dateHeader = document.createElement('th');
+    dateHeader.textContent = 'Data';
+    if (sellerIndex >= 0 && headers[sellerIndex].nextSibling) row.insertBefore(dateHeader, headers[sellerIndex].nextSibling);
+    else row.appendChild(dateHeader);
+  }
+
+  function renderApprovalHistory(records) {
+    const body = document.getElementById('approvals-table-body');
+    if (!body) return;
+    ensureApprovalDateHeader();
+    const list = scopeByGlobalUnit(Array.isArray(records) ? records : [], 'aprovacao');
+    if (!list.length) {
+      body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:14px;">Nenhum cadastro encontrado para os filtros selecionados.</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(record => {
+      const id = escapeHtml(record.id || record.clientId || record.cliente_id || '');
+      const sellerId = recordSellerId(record);
+      const sellerName = (() => {
+        try { return UI.getUserName?.(sellerId) || pick(record, ['vendedor_nome', 'seller_name', 'vendedor']) || sellerId || '-'; }
+        catch (_) { return pick(record, ['vendedor_nome', 'seller_name', 'vendedor']) || sellerId || '-'; }
+      })();
+      const score = (() => {
+        try { return UI.formatClientScore?.(record) || record.score || '-'; }
+        catch (_) { return record.score || '-'; }
+      })();
+      const viewButton = `<button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-right:4px;" onclick="event.stopPropagation(); App.showClientDetails('${id}')">Ver Ficha</button>`;
+      const decisionButtons = approvalIsAwaitingDecision(record)
+        ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveClient('${id}','Aprovado')">Aprovar</button><button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveClient('${id}','Reprovado')">Reprovar</button>`
+        : '';
+      return `<tr class="mobile-summary-row" onclick="App.showClientDetails('${id}')">
+        <td data-label="Cliente" style="font-weight:600;">${escapeHtml(record.name || record.nomeFantasia || record.companyName || '-')}</td>
+        <td data-label="CNPJ">${escapeHtml(record.cnpj || '-')}</td>
+        <td data-label="Telefone">${escapeHtml(record.phone || record.telefone || '-')}</td>
+        <td data-label="E-mail">${escapeHtml(record.email || '-')}</td>
+        <td data-label="Unidade"><span class="badge-status badge-primary" style="font-size:.7rem;font-weight:500;">${escapeHtml(dynamicUnitName(record) || record.unitId || '-')}</span></td>
+        <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${escapeHtml(sellerName)}</span></td>
+        <td data-label="Data">${escapeHtml(approvalDate(record))}</td>
+        <td data-label="Score">${escapeHtml(score)}</td>
+        <td data-label="Status">${approvalStatusBadge(record)}</td>
+        <td data-label="A&ccedil;&otilde;es">${viewButton}${decisionButtons}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function installApprovalHistoryView() {
+    if (!window.UI || !window.FiltersManager || UI.__ccApprovalHistory20260719) return false;
+    UI.__ccApprovalHistory20260719 = true;
+    UI._original_renderApprovals = renderApprovalHistory;
+    UI.renderApprovals = function (records) {
+      const source = approvalFilterSource(Array.isArray(records) ? records : []);
+      FiltersManager.caches.aprovacao = source;
+      FiltersManager.ensureFilterPanel('aprovacao');
+      const filtered = FiltersManager.filterData(source, FiltersManager.getFilterValues('aprovacao'), 'aprovacao');
+      return renderApprovalHistory(filtered);
+    };
+    return true;
   }
 
   function rebuildCascadingFilters(moduleKey, preserveField) {
@@ -1388,6 +1478,7 @@
     installImageViewer();
     installDirectBalanceCredit();
     if (!installFiltersAndSorting()) setTimeout(installFiltersAndSorting, 250);
+    if (!installApprovalHistoryView()) setTimeout(installApprovalHistoryView, 250);
     if (!installDashboardAndExpenseScopes()) setTimeout(installDashboardAndExpenseScopes, 250);
     installApprovalDashboardFilters();
 
