@@ -28,10 +28,57 @@ const balanceUnitMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '20260716_add_expense_request_unit_scope.js'),
   'utf8'
 );
+const approvalPage = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'pages', 'aprovacao.html'),
+  'utf8'
+);
+const mainCss = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'css', 'main.css'),
+  'utf8'
+);
 
 test('nao contem credencial administrativa padrao', () => {
   assert.equal(server.includes("password: '123456'"), false);
   assert.equal(server.includes("|| 'secret-key-controle-comercial'"), false);
+});
+
+test('aprovacao de clientes usa permissao central, exige motivo e impede decisao duplicada', () => {
+  const routeStart = server.indexOf("app.post('/api/clientes-aprovacao/:id/status'");
+  const routeEnd = server.indexOf("app.get('/api/store'", routeStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /if \(!canApproveClientsUser\(req\.user\)\)/);
+  assert.equal(route.includes('&& !isSupervisorLikeUser(req.user)'), false);
+  assert.match(route, /finalStatus !== 'Aprovado' && !reason/);
+  assert.match(route, /!isClientPendingApproval\(before\.status\)/);
+  assert.match(route, /res\.status\(409\)/);
+  assert.match(route, /reviewedBy: req\.user\.id/);
+  assert.match(route, /reviewedAt: nowText/);
+});
+
+test('frontend confirma aprovacao no servidor antes de alterar cache local', () => {
+  const start = compatibility.indexOf('async function updateClientApprovalOnServer');
+  const end = compatibility.indexOf('function setApprovalBusy', start);
+  assert.ok(start >= 0 && end > start);
+  const block = compatibility.slice(start, end);
+  assert.equal(block.includes('updateLocalClientStatus('), false);
+  assert.equal(block.includes('fallback: true'), false);
+  assert.match(block, /backendRequest\(`\/api\/clientes-aprovacao/);
+  assert.match(compatibility, /isPendingDecision\(client\)/);
+  assert.match(compatibility, /submit\.disabled = true/);
+});
+
+test('layout da fila de aprovacao e isolado e responsivo sem ocultar conteudo', () => {
+  assert.match(approvalPage, /client-approval-table-wrap/);
+  assert.match(approvalPage, /client-approval-table/);
+  const start = mainCss.indexOf('Fila de aprovacao de clientes');
+  assert.ok(start >= 0);
+  const block = mainCss.slice(start, mainCss.indexOf('\n* {', start));
+  assert.match(block, /#view-aprovacao/);
+  assert.match(block, /table-layout: fixed/);
+  assert.match(block, /overflow-wrap: anywhere/);
+  assert.match(block, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.equal(block.includes('overflow-x: hidden'), false);
 });
 
 test('login usa bcrypt e migracao gradual da senha', () => {

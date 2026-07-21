@@ -6921,11 +6921,11 @@
           <td data-label="Vendedor"><span style="font-size:0.75rem;color:var(--text-muted);">${esc(UI.getUserName ? UI.getUserName(c.userId) : c.userId || '-')}</span></td>
           <td data-label="Score">${esc(UI.formatClientScore ? UI.formatClientScore(c) : (c.score || '-'))}</td>
           <td data-label="Status">${badge}</td>
-          <td data-label="Ações">
+          <td data-label="Ações"><div class="client-approval-actions">
             <button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:0.75rem;margin-right:4px;" onclick="event.stopPropagation(); App.showClientDetails('${esc(c.id)}')">Ver Ficha</button>
             <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveClient('${esc(c.id)}', 'Aprovado')">Aprovar</button>
             <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveClient('${esc(c.id)}', 'Reprovado')">Reprovar</button>
-          </td>
+          </div></td>
         </tr>`;
       }).join('');
     };
@@ -7030,6 +7030,11 @@
   function isPendingLike(client){
     const s = norm(client && client.status);
     return !s || s.includes('pendent') || s.includes('aguard') || s.includes('ajuste') || s.includes('correc') || s.includes('reprov');
+  }
+
+  function isPendingDecision(client){
+    const s = norm(client && client.status);
+    return !s || s.includes('pendent') || s.includes('analise');
   }
 
   function visibleInClientsList(client, user){
@@ -7166,7 +7171,7 @@
         <td data-label="Vendedor"><span style="font-size:.75rem;color:var(--text-muted);">${esc(sellerName(ownerId(c), c))}</span></td>
         <td data-label="Score">${esc(scoreText(c))}</td>
         <td data-label="Status">${statusBadge(c)}</td>
-        <td data-label="Ações">${actions}</td>
+        <td data-label="Ações"><div class="client-approval-actions">${actions}</div></td>
       </tr>`;
     }).join('');
   }
@@ -7398,30 +7403,33 @@
   }
 
   async function updateClientApprovalOnServer(id, status, reason, sendToCorrection){
-    const local = updateLocalClientStatus(id, status, reason, { correctionRequested: !!sendToCorrection });
     const payload = { status, reason: reason || '', sendToCorrection: !!sendToCorrection };
     if (window.Store && Store.backendRequest && Store.getToken && Store.getToken()) {
-      try {
-        const resp = await Store.backendRequest(`/api/clientes-aprovacao/${encodeURIComponent(id)}/status`, {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-        if (resp && Array.isArray(resp.clients) && window.Store && Store.saveClients) {
-          // Atualiza o cache local com o retorno autorizado do banco.
-          Store.saveClients(resp.clients);
-        }
-        return resp;
-      } catch (err) {
-        // Compatibilidade com Render ainda não atualizado: usa a rota antiga /api/store/clients.
-        if (local && local.clients) {
-          await saveClientsRemote(local.clients);
-          return { success: true, fallback: true, client: local.updated };
-        }
-        throw err;
+      const resp = await Store.backendRequest(`/api/clientes-aprovacao/${encodeURIComponent(id)}/status`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (resp && resp.client && window.Store && Store.saveClients) {
+        const current = getAllClients();
+        const sid = String(id || '');
+        const idx = current.findIndex((client, index) => clientKey(client, index) === sid || String(client.id || '') === sid);
+        if (idx >= 0) current[idx] = { ...current[idx], ...resp.client };
+        else current.push(resp.client);
+        Store.saveClients(current);
       }
+      return resp;
     }
-    if (local && local.clients) await saveClientsRemote(local.clients);
-    return { success: true, localOnly: true, client: local && local.updated };
+    throw new Error('Sessão autenticada não encontrada. Entre novamente antes de analisar o cadastro.');
+  }
+
+  function setApprovalBusy(id, busy, label){
+    const safeId = String(id || '').replace(/'/g, "\\'");
+    document.querySelectorAll(`button[onclick*="approveClient('${safeId}'"]`).forEach(btn => {
+      if (!btn.dataset.ccOriginalLabel) btn.dataset.ccOriginalLabel = btn.textContent;
+      btn.disabled = !!busy;
+      btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+      btn.textContent = busy ? (label || 'Processando...') : btn.dataset.ccOriginalLabel;
+    });
   }
 
   function patchApp(){
@@ -7431,6 +7439,9 @@
     App.approveClient = async function(id, newStatus){
       const user = currentUser();
       if (!canApproveClients(user)) return alert('Somente administrador ou usuário autorizado para liberação/movimentação de equipamentos pode aprovar ou reprovar clientes.');
+      const client = getAllClients().find((item, index) => clientKey(item, index) === String(id) || String(item.id || '') === String(id));
+      if (!client) return alert('Cadastro não encontrado. Atualize a tela e tente novamente.');
+      if (!isPendingDecision(client)) return alert(`Este cadastro já foi analisado e está com status ${client.status || 'indefinido'}.`);
       if (newStatus === 'Reprovado') {
         const modal = document.getElementById('modal-rejection-reason');
         const form = document.getElementById('modal-rejection-form');
@@ -7446,11 +7457,16 @@
         return;
       }
       try {
+        setApprovalBusy(id, true, 'Aprovando...');
         await updateClientApprovalOnServer(id, 'Aprovado', '', false);
         if (window.App && App.refreshAllLists) App.refreshAllLists();
+        const details = document.getElementById('modal-client-details');
+        if (details) details.style.display = 'none';
         showToast('Cadastro aprovado e salvo no banco!');
       } catch (err) {
         alert('Não foi possível salvar a aprovação no banco: ' + (err.message || err));
+      } finally {
+        setApprovalBusy(id, false);
       }
     };
 
@@ -7543,12 +7559,20 @@
       const user = currentUser();
       if (!canApproveClients(user)) return alert('Sem permissão para aprovar/reprovar clientes.');
       const id = form.dataset.targetId;
-      const reason = document.getElementById('modal-rejection-select')?.value || 'Correção necessária';
+      const reason = document.getElementById('modal-rejection-select')?.value || '';
       const notes = document.getElementById('modal-rejection-notes')?.value.trim() || '';
       const sendToCorrection = !!document.getElementById('modal-rejection-send-to-correction')?.checked;
       const finalStatus = sendToCorrection ? 'Aguardando Ajuste' : 'Reprovado';
       const fullReason = reason + (notes ? ' — ' + notes : '');
+      if (!fullReason.trim()) return alert('Informe o motivo da reprovação ou da devolução para correção.');
+      const submit = form.querySelector('button[type="submit"]');
       try {
+        if (submit) {
+          submit.disabled = true;
+          submit.dataset.ccOriginalLabel = submit.dataset.ccOriginalLabel || submit.textContent;
+          submit.textContent = 'Salvando análise...';
+        }
+        setApprovalBusy(id, true, 'Processando...');
         await updateClientApprovalOnServer(id, finalStatus, fullReason, sendToCorrection);
         const modal = document.getElementById('modal-rejection-reason');
         if (modal) modal.style.display = 'none';
@@ -7557,6 +7581,12 @@
         showToast(sendToCorrection ? 'Cadastro enviado para correção do vendedor e salvo no banco!' : 'Cadastro reprovado e salvo no banco!');
       } catch (err) {
         alert('Não foi possível salvar a reprovação/correção no banco: ' + (err.message || err));
+      } finally {
+        setApprovalBusy(id, false);
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = submit.dataset.ccOriginalLabel || 'Confirmar';
+        }
       }
     }, true);
   }
@@ -7573,6 +7603,31 @@
         const user = currentUser();
         if (!modal || !content || !client || modal.style.display === 'none') return;
         const canCorrect = isOwner(client, user) && (norm(client.status).includes('ajuste') || norm(client.status).includes('correc') || norm(client.status).includes('reprov'));
+        const pendingDecision = isPendingDecision(client);
+        const canReview = canApproveClients(user);
+        const reviewerId = client.reviewedBy || client.approvedBy || client.rejectedBy || '';
+        let reviewerName = reviewerId || '-';
+        try { if (reviewerId && window.UI && UI.getUserName) reviewerName = UI.getUserName(reviewerId) || reviewerName; } catch (_) {}
+        const reviewedAt = client.reviewedAt || client.approvedAt || client.rejectedAt || client.approved_at || client.rejected_at || '';
+        let formattedAt = '-';
+        if (reviewedAt) {
+          const parsed = new Date(reviewedAt);
+          formattedAt = Number.isNaN(parsed.getTime()) ? String(reviewedAt) : parsed.toLocaleString('pt-BR');
+        }
+        if (!document.getElementById('client-review-decision-panel')) {
+          const panel = document.createElement('div');
+          panel.id = 'client-review-decision-panel';
+          panel.style.cssText = 'border:1px solid var(--border-color);background:rgba(37,99,235,.08);border-radius:10px;padding:12px;margin:0 0 14px;';
+          const buttons = canReview && pendingDecision
+            ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"><button class="btn btn-success" type="button" onclick="App.approveClient('${esc(client.id)}','Aprovado')">Aprovar cadastro</button><button class="btn btn-danger" type="button" onclick="App.approveClient('${esc(client.id)}','Reprovado')">Reprovar cadastro</button></div>`
+            : '';
+          const result = !pendingDecision
+            ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:6px;">Responsável pela análise: <strong style="color:var(--text-main);">${esc(reviewerName)}</strong><br>Data e horário: <strong style="color:var(--text-main);">${esc(formattedAt)}</strong>${client.rejectionReason ? `<br>Motivo: <strong style="color:var(--danger);">${esc(client.rejectionReason)}</strong>` : ''}</div>`
+            : '';
+          const statusClass = pendingDecision ? 'badge-warning' : (norm(client.status).includes('aprov') ? 'badge-success' : 'badge-danger');
+          panel.innerHTML = `<strong style="display:block;color:var(--primary-light);">Análise do cadastro</strong><div style="font-size:.82rem;margin-top:5px;">Status atual: <span class="badge-status ${statusClass}">${esc(client.status || 'Pendente')}</span></div>${result}${buttons}`;
+          content.prepend(panel);
+        }
         if (canCorrect && !document.getElementById('btn-client-correction-from-details')) {
           const btn = document.createElement('button');
           btn.id = 'btn-client-correction-from-details';

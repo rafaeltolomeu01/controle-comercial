@@ -31,6 +31,27 @@
     catch (_) { return {}; }
   }
 
+  function canReviewClientApprovals(user = currentUser()) {
+    try {
+      if (window.Store && typeof Store.canApproveClients === 'function') return !!Store.canApproveClients(user);
+    } catch (_) {}
+    const profile = normalize(user?.profile || user?.role || user?.perfil);
+    let permissions = [];
+    if (Array.isArray(user?.permissions)) permissions = user.permissions.map(normalize);
+    else {
+      try { permissions = JSON.parse(user?.permissions || '[]').map(normalize); } catch (_) { permissions = []; }
+    }
+    const joined = [profile, ...permissions].join(' | ');
+    if (profile.includes('admin') || profile.includes('administrador')) return true;
+    if (profile.includes('responsavel') && profile.includes('equip')) return true;
+    return [
+      'aprovacao de clientes', 'aprovar clientes', 'liberacao de cadastro de clientes',
+      'liberacao cadastro clientes', 'liberacao de clientes', 'movimentacao de equipamentos',
+      'movimentacao equipamento', 'liberacao de equipamento', 'liberacao de equipamentos',
+      'confirmacao de movimentacao', 'avaliacao de movimentacao'
+    ].some(permission => joined.includes(permission));
+  }
+
   function setValue(id, value) {
     const element = document.getElementById(id);
     if (!element) return;
@@ -888,7 +909,7 @@
 
   function approvalIsAwaitingDecision(record) {
     const status = normalize(record?.status);
-    return !status || status.includes('pendente') || status.includes('aguardando') || status.includes('analise') || status.includes('correc') || status.includes('ajuste');
+    return !status || status.includes('pendente') || status.includes('analise');
   }
 
   function ensureApprovalDateHeader() {
@@ -925,7 +946,7 @@
         catch (_) { return record.score || '-'; }
       })();
       const viewButton = `<button class="btn btn-primary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-right:4px;" onclick="event.stopPropagation(); App.showClientDetails('${id}')">Ver Ficha</button>`;
-      const decisionButtons = approvalIsAwaitingDecision(record)
+      const decisionButtons = canReviewClientApprovals() && approvalIsAwaitingDecision(record)
         ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); App.approveClient('${id}','Aprovado')">Aprovar</button><button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); App.approveClient('${id}','Reprovado')">Reprovar</button>`
         : '';
       return `<tr class="mobile-summary-row" onclick="App.showClientDetails('${id}')">
@@ -938,7 +959,7 @@
         <td data-label="Data">${escapeHtml(approvalDate(record))}</td>
         <td data-label="Score">${escapeHtml(score)}</td>
         <td data-label="Status">${approvalStatusBadge(record)}</td>
-        <td data-label="A&ccedil;&otilde;es">${viewButton}${decisionButtons}</td>
+        <td data-label="A&ccedil;&otilde;es"><div class="client-approval-actions">${viewButton}${decisionButtons}</div></td>
       </tr>`;
     }).join('');
   }

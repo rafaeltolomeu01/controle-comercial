@@ -2481,7 +2481,7 @@ async function updateClientInEveryStore(companyId, id, updated, actingUserId) {
 // Evita perder dados ao salvar listas grandes e garante notificação ao vendedor dono do cadastro.
 app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
   try {
-    if (!canApproveClientsUser(req.user) && !isSupervisorLikeUser(req.user)) {
+    if (!canApproveClientsUser(req.user)) {
       return res.status(403).json({ error: 'Sem permissão para aprovar ou reprovar cadastro de cliente.' });
     }
     const companyId = getStoreCompanyId(req);
@@ -2490,9 +2490,19 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
     const reason = String((req.body && req.body.reason) || '').trim();
     const sendToCorrection = !!(req.body && req.body.sendToCorrection);
     const stNorm = normalizeRole(bodyStatus);
+    const isApproval = stNorm.includes('aprov');
+    const isRejection = stNorm.includes('reprov');
+    const isCorrection = sendToCorrection || stNorm.includes('ajuste') || stNorm.includes('correc');
+    if (!isApproval && !isRejection && !isCorrection) {
+      return res.status(400).json({ error: 'Status de analise invalido.' });
+    }
     const finalStatus = stNorm.includes('aprov')
       ? 'Aprovado'
       : (sendToCorrection || stNorm.includes('ajuste') || stNorm.includes('correc') ? 'Aguardando Ajuste' : 'Reprovado');
+
+    if (finalStatus !== 'Aprovado' && !reason) {
+      return res.status(400).json({ error: 'Informe o motivo da reprovacao ou da devolucao para correcao.' });
+    }
 
     const previousData = await getMergedClientsStore(companyId);
     const idx = previousData.findIndex((item, index) => clientRecordMatches(item, id, index));
@@ -2502,6 +2512,12 @@ app.post('/api/clientes-aprovacao/:id/status', async (req, res) => {
     const visibleForReviewer = await filterClientsForUserAsync([before], req.user);
     if (!visibleForReviewer.length) {
       return res.status(403).json({ error: 'Cadastro fora da sua hierarquia de aprovação.' });
+    }
+
+    if (!isClientPendingApproval(before.status)) {
+      return res.status(409).json({
+        error: `Este cadastro ja foi analisado e esta com status ${before.status || 'indefinido'}. Atualize a tela.`
+      });
     }
 
     const nowText = new Date().toISOString();
