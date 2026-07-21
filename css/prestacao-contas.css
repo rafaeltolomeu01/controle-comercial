@@ -1,0 +1,51 @@
+#view-prestacao-contas { min-width: 0; }
+.accountability-page { width: 100%; max-width: 1500px; margin: 0 auto; display: grid; gap: 18px; }
+.accountability-heading, .accountability-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.accountability-heading h2, .accountability-card h3 { margin: 0; font-family: var(--font-title); }
+.accountability-heading p, .accountability-close p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; }
+.accountability-card { min-width: 0; padding: 18px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); }
+.accountability-filters { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(210px, 1.4fr) minmax(145px, .8fr) minmax(145px, .8fr) auto; gap: 12px; align-items: end; }
+.accountability-field { min-width: 0; display: grid; gap: 6px; }
+.accountability-field label { font-size: .74rem; color: var(--text-muted); }
+.accountability-field small { color: var(--primary-color); min-height: 1em; font-size: .68rem; }
+.accountability-field input, .accountability-field select, .accountability-field textarea { width: 100%; min-width: 0; }
+.accountability-message, .accountability-warning { padding: 13px 15px; border-radius: 9px; font-size: .83rem; }
+.accountability-message { background: rgba(37,99,235,.12); border: 1px solid rgba(37,99,235,.35); }
+.accountability-message.is-error { color: #fecaca; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.35); }
+.accountability-warning { color: #fde68a; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35); }
+.accountability-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.accountability-summary article { min-width: 0; display: grid; gap: 8px; padding: 17px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); }
+.accountability-summary span { color: var(--text-muted); font-size: .75rem; }
+.accountability-summary strong { font: 700 1.35rem var(--font-title); overflow-wrap: anywhere; }
+.accountability-pending-card strong { color: #fbbf24; }
+.accountability-columns { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr); gap: 18px; margin-top: 18px; }
+.accountability-timeline, .accountability-expenses, .accountability-history-list { display: grid; gap: 9px; margin-top: 14px; }
+.accountability-event, .accountability-expense, .accountability-history-item { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 12px; border: 1px solid var(--border-color); border-radius: 9px; background: rgba(255,255,255,.018); }
+.accountability-event small, .accountability-expense small, .accountability-history-item small { color: var(--text-muted); overflow-wrap: anywhere; }
+.accountability-event strong, .accountability-expense strong { text-align: right; }
+.accountability-expense { cursor: pointer; }
+.accountability-expense:hover { border-color: var(--primary-color); }
+.accountability-status { display: inline-flex; width: fit-content; padding: 3px 8px; border-radius: 999px; font-size: .68rem; background: rgba(16,185,129,.12); color: #6ee7b7; }
+.accountability-detail { margin-top: 18px; }
+.accountability-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.accountability-detail-grid div { padding: 10px; border-radius: 8px; background: rgba(255,255,255,.025); overflow-wrap: anywhere; }
+.accountability-detail img { display: block; max-width: min(100%, 420px); max-height: 55vh; object-fit: contain; margin: 16px auto 0; border-radius: 8px; }
+.accountability-close { margin-top: 18px; }
+.accountability-close-grid { display: grid; grid-template-columns: minmax(160px,.45fr) minmax(260px,1fr); gap: 12px; margin: 16px 0; }
+.accountability-wide { grid-column: span 1; }
+.accountability-history { margin-top: 2px; }
+.accountability-empty { padding: 22px; text-align: center; color: var(--text-muted); }
+@media (max-width: 1050px) {
+  .accountability-filters { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .accountability-filters .btn { width: 100%; }
+  .accountability-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .accountability-columns { grid-template-columns: 1fr; }
+}
+@media (max-width: 650px) {
+  .accountability-heading { align-items: stretch; flex-direction: column; }
+  .accountability-heading .btn { width: 100%; }
+  .accountability-filters, .accountability-summary, .accountability-close-grid, .accountability-detail-grid { grid-template-columns: 1fr; }
+  .accountability-card { padding: 14px; }
+  .accountability-event, .accountability-expense, .accountability-history-item { grid-template-columns: 1fr; }
+  .accountability-event strong, .accountability-expense strong { text-align: left; }
+}

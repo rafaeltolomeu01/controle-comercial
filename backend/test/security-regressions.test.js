@@ -36,6 +36,53 @@ const mainCss = fs.readFileSync(
   path.join(__dirname, '..', '..', 'css', 'main.css'),
   'utf8'
 );
+const accountabilityServer = fs.readFileSync(path.join(__dirname, '..', 'src', 'prestacoes-contas.js'), 'utf8');
+const accountabilityMigration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260721_create_prestacoes_contas.js'), 'utf8');
+const accountabilityPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'prestacao-contas.html'), 'utf8');
+const accountabilityJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'prestacao-contas.js'), 'utf8');
+const accountabilityCss = fs.readFileSync(path.join(__dirname, '..', '..', 'css', 'prestacao-contas.css'), 'utf8');
+
+test('prestacao de contas cria historico aditivo e rollback nao destrutivo', () => {
+  assert.match(accountabilityMigration, /createTable\('prestacoes_contas'/);
+  assert.match(accountabilityMigration, /createTable\('prestacoes_contas_itens'/);
+  assert.match(accountabilityMigration, /snapshot_json/);
+  assert.match(accountabilityMigration, /prestacoes_contas_periodo_versao_unico/);
+  assert.match(accountabilityMigration, /versao/);
+  const down = accountabilityMigration.slice(accountabilityMigration.indexOf('exports.down'));
+  assert.equal(/dropTable|\.del\(|\.delete\(/.test(down), false);
+});
+
+test('prestacao de contas aplica empresa unidade hierarquia e vendedor fixo', () => {
+  assert.match(accountabilityServer, /getPermittedSellerIds\(actor, db\)/);
+  assert.match(accountabilityServer, /empresa_id: companyId/);
+  assert.match(accountabilityServer, /requireAllowedUnit\(actor, selectedUnit\.id\)/);
+  assert.match(accountabilityServer, /seller_locked: textRole\(req\.user\) === 'vendedor'/);
+  assert.match(accountabilityJs, /select\.disabled = state\.sellerLocked/);
+});
+
+test('apuracao soma somente despesas aprovadas e servidor recalcula antes de salvar', () => {
+  assert.match(accountabilityServer, /normalizeRole\(expense\.status[^\n]+includes\('aprov'\)/);
+  assert.match(accountabilityServer, /const preview = await buildPreview\(req\.user, req\.body/);
+  assert.match(accountabilityServer, /Somente administradores e aprovadores financeiros/);
+  assert.match(accountabilityServer, /APUROU_PRESTACAO_CONTAS/);
+});
+
+test('dossie mostra saldos despesas pendencias e gera PDF textual sem fotos', () => {
+  assert.match(accountabilityPage, /accountability-balance-events/);
+  assert.match(accountabilityPage, /accountability-expenses/);
+  assert.match(accountabilityJs, /DESPESAS APROVADAS CONSIDERADAS/);
+  assert.match(accountabilityJs, /PENDÊNCIAS \/ DESPESAS NÃO CONSIDERADAS/);
+  const pdfStart = accountabilityJs.indexOf('function generatePdf');
+  const pdfEnd = accountabilityJs.indexOf('async function init', pdfStart);
+  assert.equal(accountabilityJs.slice(pdfStart, pdfEnd).includes('addImage'), false);
+});
+
+test('layout da prestacao de contas e isolado e responsivo', () => {
+  assert.match(accountabilityCss, /#view-prestacao-contas/);
+  assert.match(accountabilityCss, /minmax\(0/);
+  assert.match(accountabilityCss, /@media \(max-width: 650px\)/);
+  assert.equal(accountabilityCss.includes('overflow-x: hidden'), false);
+});
 
 test('nao contem credencial administrativa padrao', () => {
   assert.equal(server.includes("password: '123456'"), false);

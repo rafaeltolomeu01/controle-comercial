@@ -604,13 +604,13 @@ window.Store = Store;
     if (!user) return ['#dashboard'];
     const perms = Array.isArray(user.permissions) ? user.permissions : [];
     if (user.profile === 'Administrador' || perms.includes('Administrador')) {
-      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
+      return ['#dashboard','#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#prestacao-contas','#relatorios','#unidades','#usuarios','#empresa','#configuracoes','#pdf','#simulador-troca','#historico-exclusoes'];
     }
     const allowed = ['#dashboard','#pdf'];
     const add = (...arr) => arr.forEach(x => { if (!allowed.includes(x)) allowed.push(x); });
-    if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
-    if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
-    if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios');
+    if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#prestacao-contas','#relatorios','#simulador-troca');
+    if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#prestacao-contas','#relatorios','#usuarios','#simulador-troca');
+    if (user.profile === 'Financeiro' || user.profile === 'Responsável Financeiro' || user.profile === 'Responsavel Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#prestacao-contas','#relatorios');
     if (user.profile === 'Mecânico' || user.profile === 'Mecanico' || user.profile === 'Manutenção' || user.profile === 'Manutencao') add('#chamados');
     if (user.profile === 'Responsável Equipamentos' || user.profile === 'Responsavel Equipamentos' || user.profile === 'Conferente') add('#equipamentos','#movimentacao','#chamados');
     if (user.profile === 'Motorista' || user.profile === 'Ajudante de Motorista') add('#despesas','#solicitacao-despesas');
@@ -618,8 +618,8 @@ window.Store = Store;
     if (perms.includes('Aprovação de Clientes') || perms.includes('Liberação de Cadastro de Clientes') || perms.includes('Movimentação de Equipamentos') || perms.includes('Confirmação de Movimentação') || perms.includes('Avaliação de Movimentação')) add('#aprovacao');
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) add('#equipamentos','#movimentacao');
     if (perms.includes('Chamados') || perms.includes('Chamados Mecânicos')) add('#chamados');
-    if (perms.includes('Solicitação de Saldo') || perms.includes('Despesas') || perms.includes('Despesas de Campo')) add('#despesas','#solicitacao-despesas');
-    if (perms.includes('Aprovação de Saldo') || perms.includes('Aprovação de Despesas')) add('#despesas-dashboard','#despesas');
+    if (perms.includes('Solicitação de Saldo') || perms.includes('Despesas') || perms.includes('Despesas de Campo')) add('#despesas','#solicitacao-despesas','#prestacao-contas');
+    if (perms.includes('Aprovação de Saldo') || perms.includes('Aprovação de Despesas')) add('#despesas-dashboard','#despesas','#prestacao-contas');
     if (perms.includes('Relatórios')) add('#relatorios');
     if (perms.includes('Usuários') || perms.includes('Usuários e Permissões')) add('#usuarios');
     if (perms.includes('Configurações') || perms.includes('Configurações Gerais')) add('#configuracoes','#empresa','#unidades');

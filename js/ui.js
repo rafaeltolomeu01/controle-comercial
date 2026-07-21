@@ -125,6 +125,7 @@ const UI = {
       '#equipamentos': 'menu-equipamentos',
       '#chamados': 'menu-chamados',
       '#despesas': 'menu-despesas',
+      '#prestacao-contas': 'menu-prestacao-contas',
       '#relatorios': 'menu-relatorios',
       '#tutorial': 'menu-tutorial',
       '#configuracoes': 'menu-configuracoes',

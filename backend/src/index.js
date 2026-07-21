@@ -6744,6 +6744,19 @@ app.delete('/api/exchange/simulations/:id', async (req, res) => {
     res.status(500).json({ error: 'Erro ao excluir simulação de troca.' });
   }
 });
+// Modulo isolado de prestacao de contas. Reutiliza as mesmas regras centrais de
+// empresa, unidade e hierarquia sem alterar registros legados de saldo/despesa.
+require('./prestacoes-contas')({
+  app,
+  db,
+  normalizeRole,
+  isAdminUser,
+  getPermittedSellerIds,
+  getUserUnitAccess,
+  requireAllowedUnit,
+  enrichUserWithUnits
+});
+
 // Client ficha route
 const clientesRoutes = require('./routes/clientes');
 app.use(clientesRoutes);

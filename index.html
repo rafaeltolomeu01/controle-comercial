@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="css/main.css?v=20260721-aprovacao-v3">
   <link rel="stylesheet" href="css/components.css?v=20260721-aprovacao-v3">
   <link rel="stylesheet" href="css/mobile.css">
+  <link rel="stylesheet" href="css/prestacao-contas.css?v=20260721-01">
   
   <!-- SheetJS via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -123,6 +124,10 @@
         <a id="menu-despesas-dashboard" class="nav-link" href="#despesas-dashboard" style="display: none !important; padding-left: 28px; font-size: 0.82rem;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
           &nbsp;Dashboard de Despesas
+        </a>
+        <a id="menu-prestacao-contas" class="nav-link" href="#prestacao-contas" style="display: none; padding-left: 28px; font-size: 0.82rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+          &nbsp;Prestação de Contas
         </a>
         <a id="menu-relatorios" class="nav-link" href="#relatorios">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -247,6 +252,9 @@
         <!-- VIEW: DASHBOARD DE DESPESAS -->
         <section id="view-despesas-dashboard" class="view-panel"></section>
 
+        <!-- VIEW: PRESTACAO DE CONTAS -->
+        <section id="view-prestacao-contas" class="view-panel"></section>
+
         <!-- VIEW: MANAGEMENT REPORTS -->
         <section id="view-relatorios" class="view-panel"></section>
 
@@ -305,6 +313,7 @@
   <script src="js/correcao-final-textos-listas.js?v=20260719-v3"></script>
   <script src="js/atualizacoes-listas-20260716.js?v=20260721-aprovacao-v3"></script>
   <script src="js/preservacao-fotos-edicao-20260717.js?v=20260717-v4"></script>
+  <script src="js/prestacao-contas.js?v=20260721-01"></script>
   <script>
     // Initialise Application when scripts are fully loaded
     document.addEventListener('DOMContentLoaded', () => {

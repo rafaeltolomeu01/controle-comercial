@@ -531,6 +531,10 @@ const App = {
         headerTitle.textContent = 'Dashboard de Despesas';
         this.loadDespesasDashboard();
         break;
+      case '#prestacao-contas':
+        headerTitle.textContent = 'Prestação de Contas';
+        if (window.AccountabilityModule) window.AccountabilityModule.init();
+        break;
       case '#notificacoes':
         headerTitle.textContent = 'Notificações';
         if (window.App && App.loadNotificationPage) {

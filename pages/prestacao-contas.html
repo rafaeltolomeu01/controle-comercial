@@ -1,0 +1,83 @@
+<div id="accountability-page" class="accountability-page">
+  <div class="accountability-heading">
+    <div>
+      <h2>Prestação de Contas</h2>
+      <p>Conciliação de saldos e despesas aprovadas por usuário, unidade e período.</p>
+    </div>
+    <button id="accountability-pdf" class="btn btn-secondary" type="button" disabled>Gerar PDF</button>
+  </div>
+
+  <section class="accountability-card accountability-filters">
+    <div class="accountability-field">
+      <label for="accountability-unit">Unidade</label>
+      <select id="accountability-unit"><option value="">Selecione a unidade</option></select>
+    </div>
+    <div class="accountability-field">
+      <label for="accountability-user">Vendedor / usuário</label>
+      <select id="accountability-user"><option value="">Selecione o usuário</option></select>
+      <small id="accountability-user-hint"></small>
+    </div>
+    <div class="accountability-field">
+      <label for="accountability-start">Início do período</label>
+      <input id="accountability-start" type="date">
+    </div>
+    <div class="accountability-field">
+      <label for="accountability-end">Fim do período</label>
+      <input id="accountability-end" type="date">
+    </div>
+    <button id="accountability-calculate" class="btn btn-primary" type="button">Calcular período</button>
+  </section>
+
+  <div id="accountability-message" class="accountability-message" role="status" hidden></div>
+  <div id="accountability-result" hidden>
+    <section class="accountability-summary" aria-label="Resumo financeiro">
+      <article><span>Saldo aprovado no período</span><strong id="accountability-balance">R$ 0,00</strong></article>
+      <article><span>Despesas aprovadas</span><strong id="accountability-approved">R$ 0,00</strong></article>
+      <article><span>Saldo para próximo período</span><strong id="accountability-difference">R$ 0,00</strong></article>
+      <article class="accountability-pending-card"><span>Despesas não aprovadas</span><strong id="accountability-pending">0</strong></article>
+    </section>
+
+    <section id="accountability-warning" class="accountability-warning" hidden></section>
+
+    <div class="accountability-columns">
+      <section class="accountability-card">
+        <h3>Movimentações de saldo</h3>
+        <div id="accountability-balance-events" class="accountability-timeline"></div>
+      </section>
+      <section class="accountability-card">
+        <h3>Despesas aprovadas consideradas</h3>
+        <div id="accountability-expenses" class="accountability-expenses"></div>
+      </section>
+    </div>
+
+    <section id="accountability-expense-detail" class="accountability-card accountability-detail" hidden></section>
+
+    <section id="accountability-close-panel" class="accountability-card accountability-close" hidden>
+      <h3>Salvar período como apurado</h3>
+      <p>O servidor recalcula os valores antes de salvar. A apuração ficará registrada para auditoria e não altera os lançamentos originais.</p>
+      <div class="accountability-close-grid">
+        <div class="accountability-field">
+          <label for="accountability-considered">Saldo considerado</label>
+          <input id="accountability-considered" inputmode="decimal" placeholder="0,00">
+        </div>
+        <div class="accountability-field accountability-wide">
+          <label for="accountability-adjustment-reason">Motivo do ajuste (obrigatório se alterar o saldo)</label>
+          <input id="accountability-adjustment-reason" maxlength="500">
+        </div>
+        <div class="accountability-field accountability-wide">
+          <label for="accountability-note">Observação da apuração</label>
+          <textarea id="accountability-note" rows="3" maxlength="2000"></textarea>
+        </div>
+      </div>
+      <button id="accountability-save" class="btn btn-success" type="button">Salvar como apurada</button>
+    </section>
+  </div>
+
+  <section class="accountability-card accountability-history">
+    <div class="accountability-history-heading">
+      <h3>Períodos já apurados</h3>
+      <button id="accountability-refresh-history" class="btn btn-secondary" type="button">Atualizar</button>
+    </div>
+    <div id="accountability-history-list" class="accountability-history-list"></div>
+  </section>
+</div>
