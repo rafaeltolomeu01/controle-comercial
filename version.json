@@ -1,7 +1,7 @@
 {
-  "version": "20260721.04",
+  "version": "20260721.05",
   "updatedAt": "2026-07-21T18:00:00-03:00",
-  "description": "Adiciona prestacao de contas persistente, dossie e PDF textual por periodo",
-  "build": "20260721-04-prestacao-contas",
+  "description": "Exibe prestacao de contas no menu, desativa prospeccao e preserva paginacao de clientes",
+  "build": "20260721-05-menu-prestacao",
   "buildDate": "2026-07-21T18:00:00-03:00"
 }

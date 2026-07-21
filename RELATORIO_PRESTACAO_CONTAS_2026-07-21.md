@@ -83,7 +83,16 @@ O rollback da migração é deliberadamente não destrutivo. Não há `DROP TABL
 - snapshot e auditoria no servidor;
 - PDF sem imagens;
 - layout isolado e responsivo, sem ocultar barra horizontal como paliativo;
-- suíte completa: 56 testes aprovados, 0 falhas.
+- suíte completa: 59 testes aprovados, 0 falhas.
+
+## Ajustes finais de navegação
+
+- `Prestação de Contas` passou a ser um módulo principal no menu lateral, sem recuo de submenu;
+- a visibilidade é reaplicada depois das camadas antigas de compatibilidade, conforme o perfil autorizado;
+- a página `Prospecção (Leads)` foi desativada e sua rota redireciona ao Painel Geral;
+- os dados históricos de prospecção não foram apagados nem alterados;
+- atalhos, tutorial e relatórios antigos de prospecção ficam ocultos para não deixar caminhos soltos;
+- a lista principal de clientes permanece limitada a 5 registros por página, com botões Anterior e Próxima.
 
 ## Implantação
 

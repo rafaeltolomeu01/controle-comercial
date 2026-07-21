@@ -607,3 +607,27 @@ test('chamados antigos gravados como todas as unidades reaparecem somente pela u
   assert.match(server, /joined\.includes\('mecanico'\)/);
   assert.match(server, /joined\.includes\('manutencao'\)/);
 });
+
+test('prestacao de contas aparece como modulo principal no menu permitido', () => {
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
+  const menuPolicy = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'modulos-menu-20260721.js'), 'utf8');
+  assert.match(indexHtml, /id="menu-prestacao-contas" class="nav-link" href="#prestacao-contas"/);
+  assert.match(indexHtml, /modulos-menu-20260721\.js/);
+  assert.match(menuPolicy, /ACCOUNTABILITY_ROUTE = '#prestacao-contas'/);
+  assert.match(menuPolicy, /style\.setProperty\('display', routes\.includes\(ACCOUNTABILITY_ROUTE\) \? 'flex' : 'none', 'important'\)/);
+});
+
+test('prospeccao fica desativada sem excluir seus dados historicos', () => {
+  const menuPolicy = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'modulos-menu-20260721.js'), 'utf8');
+  assert.match(menuPolicy, /filter\(route => route !== RETIRED_ROUTE\)/);
+  assert.match(menuPolicy, /#menu-prospeccao/);
+  assert.match(menuPolicy, /window\.location\.replace\('#dashboard'\)/);
+  assert.equal(menuPolicy.includes("method: 'DELETE'"), false);
+});
+
+test('lista principal de clientes permanece paginada em cinco registros', () => {
+  const textFixes = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'correcao-final-textos-listas.js'), 'utf8');
+  assert.match(textFixes, /function renderClientsStable\(input\)[\s\S]*?var pageSize = 5;/);
+  assert.match(textFixes, /data\.slice\(start, start \+ pageSize\)/);
+  assert.match(textFixes, /window\.__ccStableClientsGo/);
+});
