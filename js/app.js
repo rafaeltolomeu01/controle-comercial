@@ -2907,7 +2907,14 @@ const App = {
         const username = document.getElementById('user-username').value.trim();
         const pass = document.getElementById('user-pass').value;
         const profile = document.getElementById('user-profile').value;
-        const unitId = document.getElementById('user-unit').value;
+        const unitSelect = document.getElementById('user-unit');
+        const selectedUnitIds = Array.from(unitSelect?.selectedOptions || []).map(option => option.value).filter(Boolean);
+        const unitIds = selectedUnitIds.includes('all') ? ['all'] : selectedUnitIds;
+        const unitId = unitIds[0] || '';
+        if (!unitId) {
+          alert('Selecione pelo menos uma unidade para o usuário.');
+          return;
+        }
 
         // Coletar vendedores vinculados se for Supervisor
         const linked_users = [];
@@ -2934,6 +2941,7 @@ const App = {
               password: pass,
               profile,
               unitId,
+              unitIds,
               linked_users,
               supervisor_id
             })
@@ -5055,7 +5063,13 @@ const App = {
       document.getElementById('perm-user-profile').value = user.profile;
       document.getElementById('perm-user-status').value = user.status;
       document.getElementById('perm-user-empresa').value = user.empresa_id || '';
-      document.getElementById('perm-user-unit').value = user.unitId || 'all';
+      const permissionUnitSelect = document.getElementById('perm-user-unit');
+      const userUnitIds = Array.isArray(user.unitIds) && user.unitIds.length ? user.unitIds.map(String) : [String(user.unitId || 'all')];
+      if (permissionUnitSelect) {
+        Array.from(permissionUnitSelect.options).forEach(option => {
+          option.selected = userUnitIds.includes(String(option.value));
+        });
+      }
 
       // Photo preview setup
       const preview = document.getElementById('perm-user-photo-preview');
@@ -5168,13 +5182,20 @@ const App = {
 
       const rebuildHierarchyLists = () => {
         const currentCompany = document.getElementById('perm-user-empresa').value.trim();
-        const currentUnit = document.getElementById('perm-user-unit').value;
+        const currentUnits = Array.from(document.getElementById('perm-user-unit')?.selectedOptions || []).map(option => String(option.value));
+        const matchesCurrentUnits = candidate => {
+          if (!currentUnits.length || currentUnits.includes('all')) return true;
+          const candidateUnits = Array.isArray(candidate.unitIds) && candidate.unitIds.length
+            ? candidate.unitIds.map(String)
+            : [String(candidate.unitId || candidate.unit_id || '')];
+          return candidateUnits.includes('all') || candidateUnits.some(unit => currentUnits.includes(unit));
+        };
         
         const sellers = usersList.filter(u => 
           (u.profile === 'Vendedor' || u.role === 'Vendedor' || u.tipo === 'Vendedor' || u.user_type === 'Vendedor') && 
           u.status === 'LIBERADO' &&
           (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
-          (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
+          matchesCurrentUnits(u) &&
           u.id !== user.id
         );
         
@@ -5182,7 +5203,7 @@ const App = {
           (u.profile === 'Supervisor' || u.role === 'Supervisor' || u.tipo === 'Supervisor' || u.user_type === 'Supervisor') && 
           u.status === 'LIBERADO' &&
           (u.empresa_id === currentCompany || u.company_id === currentCompany) && 
-          (String(u.unitId) === String(currentUnit) || String(u.unit_id) === String(currentUnit) || !currentUnit || String(currentUnit) === 'all' || String(u.unitId) === 'all' || String(u.unit_id) === 'all') &&
+          matchesCurrentUnits(u) &&
           u.id !== user.id
         );
         
@@ -5282,7 +5303,10 @@ const App = {
     const phone = document.getElementById('perm-user-phone').value.trim();
     const password = document.getElementById('perm-user-password').value;
     const empresa_id = document.getElementById('perm-user-empresa').value.trim();
-    const unitId = document.getElementById('perm-user-unit').value;
+    const permissionUnitSelect = document.getElementById('perm-user-unit');
+    const selectedUnitIds = Array.from(permissionUnitSelect?.selectedOptions || []).map(option => option.value).filter(Boolean);
+    const unitIds = selectedUnitIds.includes('all') ? ['all'] : selectedUnitIds;
+    const unitId = unitIds[0] || '';
     const photo = window.CurrentUserModalPhotoBase64 || '';
 
     if (!name) {
@@ -5305,7 +5329,14 @@ const App = {
     const safeStatus = (isSelfSave && !isAdminSave) ? loggedUserBeforeSave.status : status;
     const safeProfile = (isSelfSave && !isAdminSave) ? loggedUserBeforeSave.profile : profile;
     const safeEmpresa = (isSelfSave && !isAdminSave) ? loggedUserBeforeSave.empresa_id : empresa_id;
-    const safeUnit = (isSelfSave && !isAdminSave) ? loggedUserBeforeSave.unitId : unitId;
+    const safeUnitIds = (isSelfSave && !isAdminSave)
+      ? (Array.isArray(loggedUserBeforeSave.unitIds) && loggedUserBeforeSave.unitIds.length ? loggedUserBeforeSave.unitIds : [loggedUserBeforeSave.unitId])
+      : unitIds;
+    const safeUnit = safeUnitIds[0] || loggedUserBeforeSave.unitId || '';
+    if (!safeUnit) {
+      alert('Selecione pelo menos uma unidade para o usuário.');
+      return;
+    }
     if (isSelfSave && !isAdminSave) permissions = loggedUserBeforeSave.permissions || permissions;
 
     let linked_users = [];
@@ -5346,6 +5377,7 @@ const App = {
           ...(password ? { password } : {}),
           empresa_id: safeEmpresa,
           unitId: safeUnit,
+          unitIds: safeUnitIds,
           photo,
           linked_users,
           supervisor_id
@@ -6282,7 +6314,8 @@ const App = {
     const cliente_endereco = document.getElementById('mov-client-address').value.trim();
     const cliente_vendedor = document.getElementById('mov-client-seller').value.trim();
     const movEmpresaSelect = document.getElementById('mov-empresa');
-    const empresa = movEmpresaSelect ? (movEmpresaSelect.options[movEmpresaSelect.selectedIndex]?.text || movEmpresaSelect.value) : '';
+    const unitId = movEmpresaSelect ? movEmpresaSelect.value : '';
+    const empresa = movEmpresaSelect ? (movEmpresaSelect.options[movEmpresaSelect.selectedIndex]?.text || unitId) : '';
     const vendedor_solicitante = document.getElementById('mov-vendedor-solicitante').value;
 
     if (!cliente_nome || !cliente_cidade) {
@@ -6362,6 +6395,7 @@ const App = {
 
     const payload = {
       empresa,
+      unitId,
       tipo_solicitacao,
       vendedor_solicitante,
       cliente_codigo,

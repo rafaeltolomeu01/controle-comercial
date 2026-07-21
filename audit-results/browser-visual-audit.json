@@ -1,0 +1,62 @@
+[
+  {
+    "viewport": {
+      "name": "celular",
+      "width": 390,
+      "height": 844
+    },
+    "login": {
+      "loginVisible": true,
+      "appHidden": true,
+      "horizontalOverflow": false
+    },
+    "authenticatedShell": {
+      "loginHidden": true,
+      "appVisible": true,
+      "horizontalOverflow": false,
+      "documentWidth": 390,
+      "viewportWidth": 390,
+      "route": "#dashboard"
+    }
+  },
+  {
+    "viewport": {
+      "name": "tablet",
+      "width": 768,
+      "height": 1024
+    },
+    "login": {
+      "loginVisible": true,
+      "appHidden": true,
+      "horizontalOverflow": false
+    },
+    "authenticatedShell": {
+      "loginHidden": true,
+      "appVisible": true,
+      "horizontalOverflow": false,
+      "documentWidth": 768,
+      "viewportWidth": 768,
+      "route": "#dashboard"
+    }
+  },
+  {
+    "viewport": {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    "login": {
+      "loginVisible": true,
+      "appHidden": true,
+      "horizontalOverflow": false
+    },
+    "authenticatedShell": {
+      "loginHidden": true,
+      "appVisible": true,
+      "horizontalOverflow": false,
+      "documentWidth": 1440,
+      "viewportWidth": 1440,
+      "route": "#dashboard"
+    }
+  }
+]

@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const serverPath = path.join(__dirname, '..', 'src', 'index.js');
 const server = fs.readFileSync(serverPath, 'utf8');
+const store = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'store.js'), 'utf8');
 const moneyMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '20260703_fix_expense_values_cents_to_decimal.js'),
   'utf8'
@@ -161,15 +162,42 @@ test('rotina legada nao sobrescreve filtros dinamicos da fila de aprovacao', () 
   assert.match(finalTextLists, /FiltersManager\.__ccDynamicSort20260716\) return/);
 });
 
-test('movimentacoes antigas usam escopo seguro por empresa sem depender de nome opcional', () => {
+test('movimentacoes antigas usam helper central de escopo seguro por empresa', () => {
   const routeStart = server.indexOf("app.get('/api/equipamentos/movimentacoes'");
   const routeEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", routeStart);
   assert.ok(routeStart >= 0 && routeEnd > routeStart);
   const route = server.slice(routeStart, routeEnd);
   assert.match(route, /companyCandidates/);
-  assert.match(route, /leftJoin\('usuarios as movement_seller'/);
-  assert.match(route, /orWhere\('movement_seller\.empresa_id', req\.user\.empresa_id\)/);
+  assert.match(server, /function scopeMovementCompany\([\s\S]*?where\(`\$\{prefix\}empresa_id`, companyId\)/);
+  assert.match(route, /scopeMovementCompany\(query, req\.user, companyCandidates, 'em'\)/);
   assert.equal(route.includes("where('equipamentos_movimentacoes.empresa', req.user.empresa_name)"), false);
+});
+
+test('usuarios possuem relacao aditiva de varias unidades sem remover unitId legado', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'migrations', '20260720_add_user_units_and_movement_scope.js'), 'utf8');
+  assert.match(migration, /createTable\('usuario_unidades'/);
+  assert.match(migration, /usuario_id/);
+  assert.match(migration, /unidade_id/);
+  const upMigration = migration.split('exports.down')[0];
+  assert.doesNotMatch(upMigration, /dropColumn/);
+  assert.doesNotMatch(upMigration, /dropTable/);
+  assert.match(server, /async function requireAllowedUnit/);
+  assert.match(server, /async function syncUserUnits/);
+});
+
+test('movimentacao nova exige unidade permitida e grava escopo explicito', () => {
+  const routeStart = server.indexOf("app.post('/api/equipamentos/movimentacoes'");
+  const routeEnd = server.indexOf("app.get('/api/equipamentos/movimentacoes'", routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /requireAllowedUnit\(req\.user, unit_id \|\| unitId/);
+  assert.match(route, /empresa_id:/);
+  assert.match(route, /unit_id:/);
+});
+
+test('catalogos operacionais sao globais da empresa e gravacao exige administrador', () => {
+  assert.match(store, /STORE_GLOBAL_KEYS[\s\S]{0,500}equipment_types/);
+  assert.match(server, /ADMIN_STORE_KEYS[\s\S]{0,500}equipment_types/);
+  assert.match(server, /ADMIN_STORE_KEYS\.has\(key\)[\s\S]{0,300}isAdminUser/);
 });
 
 test('lancamento direto de saldo exige aprovador, usuario da mesma empresa e transacao auditada', () => {

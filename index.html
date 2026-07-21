@@ -523,10 +523,11 @@
             <input type="text" id="perm-user-empresa" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
           </div>
           <div class="form-group">
-            <label for="perm-user-unit" style="font-weight: bold; margin-bottom: 6px; display: block;">Unidade vinculada</label>
-            <select id="perm-user-unit" style="width: 100%; min-height: 46px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
+            <label for="perm-user-unit" style="font-weight: bold; margin-bottom: 6px; display: block;">Unidades vinculadas</label>
+            <select id="perm-user-unit" multiple size="4" style="width: 100%; min-height: 116px; padding: 12px 16px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-main);">
               <!-- Will be populated dynamically -->
             </select>
+            <small style="display:block;margin-top:6px;color:var(--text-muted);">É possível selecionar mais de uma unidade.</small>
           </div>
           <!-- Seção Vendedores Vinculados (apenas para Supervisor) -->
           <div class="form-group hidden" id="perm-user-links-vendedores-container" style="grid-column: span 2;">

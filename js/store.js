@@ -1,7 +1,11 @@
 const IDENTITY_KEY = 'controle_campo_company_identity';
 const DATA_KEY_PREFIX = 'controle_campo_db_';
 const DATA_GLOBAL_SCOPE = 'global';
-const STORE_GLOBAL_KEYS = ['company_identity', 'units', 'clientes_importador_sistema'];
+const STORE_GLOBAL_KEYS = [
+  'company_identity', 'units', 'clientes_importador_sistema', 'clients',
+  'client_categories', 'equipment_types', 'rejection_reasons',
+  'prospect_loss_reasons', 'expense_categories', 'notification_emails'
+];
 const STORE_SYNC_KEYS = ['company_identity', 'prospects', 'clients', 'clientes_importador_sistema', 'equipments', 'movements', 'tickets', 'expenses', 'balances', 'units', 'client_categories', 'equipment_types', 'rejection_reasons', 'prospect_loss_reasons', 'expense_categories', 'notification_emails'];
 
 const DEFAULT_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a' stroke='%231e293b' stroke-width='2'/><path d='M50,15 L80,30 C80,60 50,80 50,80 C50,80 20,60 20,30 Z' fill='none' stroke='%233b82f6' stroke-width='6'/><path d='M38,46 L46,54 L62,34' fill='none' stroke='%2310b981' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/></svg>";
@@ -573,6 +577,9 @@ window.Store = Store;
     const clean = Object.assign({}, user || {});
     clean.permissions = Array.isArray(clean.permissions) ? clean.permissions : [];
     if (!clean.unitId) clean.unitId = clean.profile === 'Administrador' ? 'all' : '1';
+    clean.unitIds = Array.isArray(clean.unitIds) && clean.unitIds.length
+      ? clean.unitIds.map(String)
+      : (clean.unitId === 'all' ? [] : [String(clean.unitId)]);
     oldSetLoggedUser(clean, token);
     if (clean.companyIdentity) localStorage.setItem('controle_campo_company_identity', JSON.stringify(clean.companyIdentity));
   };
@@ -604,6 +611,9 @@ window.Store = Store;
     if (user.profile === 'Vendedor') add('#prospeccao','#clientes','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#relatorios','#simulador-troca');
     if (user.profile === 'Supervisor' || user.profile === 'Gerente') add('#prospeccao','#clientes','#aprovacao','#equipamentos','#movimentacao','#chamados','#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios','#usuarios','#simulador-troca');
     if (user.profile === 'Financeiro' || perms.includes('Financeiro')) add('#despesas','#solicitacao-despesas','#despesas-dashboard','#relatorios');
+    if (user.profile === 'Mecânico' || user.profile === 'Mecanico' || user.profile === 'Manutenção' || user.profile === 'Manutencao') add('#chamados');
+    if (user.profile === 'Responsável Equipamentos' || user.profile === 'Responsavel Equipamentos' || user.profile === 'Conferente') add('#equipamentos','#movimentacao','#chamados');
+    if (user.profile === 'Motorista' || user.profile === 'Ajudante de Motorista') add('#despesas','#solicitacao-despesas');
     if (perms.includes('Clientes')) add('#clientes','#prospeccao');
     if (perms.includes('Aprovação de Clientes') || perms.includes('Liberação de Cadastro de Clientes') || perms.includes('Movimentação de Equipamentos') || perms.includes('Confirmação de Movimentação') || perms.includes('Avaliação de Movimentação')) add('#aprovacao');
     if (perms.includes('Produtos') || perms.includes('Equipamentos')) add('#equipamentos','#movimentacao');

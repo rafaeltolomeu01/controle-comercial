@@ -36,10 +36,11 @@
                   </select>
                 </div>
                 <div class="form-group">
-                  <label for="user-unit">Unidade Vinculada</label>
-                  <select id="user-unit" required>
+                  <label for="user-unit">Unidades Vinculadas</label>
+                  <select id="user-unit" required multiple size="4" aria-describedby="user-unit-help">
                     <!-- Injected dynamically -->
                   </select>
+                  <small id="user-unit-help" style="display:block;margin-top:6px;color:var(--text-muted);">Selecione uma ou mais unidades. Use “Todas as Unidades” somente para acesso geral autorizado.</small>
                 </div>
               </div>
               <div id="new-user-supervisor-section" class="form-group" style="display:none; margin-top:16px;">

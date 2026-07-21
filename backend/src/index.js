@@ -41,6 +41,127 @@ const configFilePath = path.join(__dirname, 'emails_config.json');
 
 const db = knex(process.env.NODE_ENV === 'production' ? config.production : config.development);
 
+function normalizeUnitIds(value) {
+  const values = Array.isArray(value) ? value : (value == null ? [] : [value]);
+  return [...new Set(values.map(item => String(item || '').trim()).filter(Boolean))];
+}
+
+async function getUserUnitAccess(user, dbInstance = db) {
+  const companyId = String((user && user.empresa_id) || '001');
+  const userId = String((user && user.id) || '');
+  let linked = [];
+  if (userId && await dbInstance.schema.hasTable('usuario_unidades')) {
+    linked = await dbInstance('usuario_unidades')
+      .where({ usuario_id: userId, empresa_id: companyId })
+      .pluck('unidade_id');
+  }
+  linked = normalizeUnitIds(linked);
+  if (linked.length) return { ids: linked, allowAll: false, source: 'relation' };
+
+  const legacy = String((user && user.unitId) || '').trim();
+  if (legacy && legacy.toLowerCase() !== 'all') {
+    return { ids: [legacy], allowAll: false, source: 'legacy' };
+  }
+
+  const companyUnits = await dbInstance('unidades').where({ empresa_id: companyId }).pluck('id');
+  return { ids: normalizeUnitIds(companyUnits), allowAll: true, source: 'legacy-all' };
+}
+
+async function enrichUserWithUnits(user, dbInstance = db) {
+  if (!user) return user;
+  const access = await getUserUnitAccess(user, dbInstance);
+  return { ...user, unitIds: access.ids, allUnits: access.allowAll };
+}
+
+async function requireAllowedUnit(user, requestedUnitId, options = {}) {
+  const access = await getUserUnitAccess(user, db);
+  const requested = String(requestedUnitId || '').trim();
+  if (requested && requested.toLowerCase() !== 'all') {
+    if (!access.ids.includes(requested)) {
+      const err = new Error('A unidade selecionada nao esta autorizada para este usuario.');
+      err.status = 403;
+      throw err;
+    }
+    return requested;
+  }
+  if (options.allowAll && access.allowAll) return 'all';
+  if (access.ids.length === 1) return access.ids[0];
+  if (options.required) {
+    const err = new Error('Selecione uma unidade autorizada para concluir esta operacao.');
+    err.status = 400;
+    throw err;
+  }
+  return null;
+}
+
+async function syncUserUnits(trx, userId, companyId, unitIds, legacyUnitId) {
+  if (!await trx.schema.hasTable('usuario_unidades')) return;
+  const normalized = normalizeUnitIds(unitIds);
+  const requestedAll = normalized.some(id => id.toLowerCase() === 'all') ||
+    (!normalized.length && String(legacyUnitId || '').toLowerCase() === 'all');
+  const explicit = normalized.filter(id => id.toLowerCase() !== 'all');
+
+  if (explicit.length) {
+    const valid = await trx('unidades').where({ empresa_id: companyId }).whereIn('id', explicit).pluck('id');
+    if (normalizeUnitIds(valid).length !== explicit.length) {
+      const err = new Error('Uma ou mais unidades selecionadas nao pertencem a empresa do usuario.');
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  await trx('usuario_unidades').where({ usuario_id: String(userId), empresa_id: String(companyId) }).delete();
+  if (!requestedAll && explicit.length) {
+    const now = new Date().toISOString();
+    await trx('usuario_unidades').insert(explicit.map(unidadeId => ({
+      usuario_id: String(userId),
+      empresa_id: String(companyId),
+      unidade_id: unidadeId,
+      created_at: now,
+      updated_at: now
+    })));
+  }
+}
+
+async function getMovementCompanyCandidates(user) {
+  const companyId = String((user && user.empresa_id) || '001');
+  const units = await db('unidades').where({ empresa_id: companyId }).select('id', 'name');
+  return [...new Set([
+    companyId,
+    user && user.empresa_name,
+    user && user.companyName,
+    ...units.flatMap(unit => [unit.id, unit.name])
+  ].filter(isFilterValValid).map(String))];
+}
+
+function scopeMovementCompany(query, user, companyCandidates, alias = '') {
+  const prefix = alias ? `${alias}.` : '';
+  const companyId = String((user && user.empresa_id) || '001');
+  return query.andWhere(function() {
+    this.where(`${prefix}empresa_id`, companyId)
+      .orWhere(function() {
+        this.whereNull(`${prefix}empresa_id`).whereIn(`${prefix}empresa`, companyCandidates);
+      });
+  });
+}
+
+async function getCompanyMovementById(id, user, options = {}) {
+  const candidates = await getMovementCompanyCandidates(user);
+  let query = db('equipamentos_movimentacoes').where({ id });
+  query = scopeMovementCompany(query, user, candidates);
+  if (!options.includeDeleted) {
+    query = query.andWhere(function() { this.where('excluido', false).orWhereNull('excluido'); });
+  }
+  return query.first();
+}
+
+async function updateCompanyMovementById(id, user, updates) {
+  const candidates = await getMovementCompanyCandidates(user);
+  let query = db('equipamentos_movimentacoes').where({ id });
+  query = scopeMovementCompany(query, user, candidates);
+  return query.update(updates);
+}
+
 let runtimeVapidKeys = null;
 function getVapidKeys() {
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -887,7 +1008,7 @@ app.use(async (req, res, next) => {
     const company = user.empresa_id
       ? await db('empresas').where({ id: user.empresa_id }).first()
       : null;
-    req.user = {
+    req.user = await enrichUserWithUnits({
       id: user.id,
       name: user.name,
       username: user.username,
@@ -896,7 +1017,7 @@ app.use(async (req, res, next) => {
       empresa_name: (company && company.name) || user.empresa_id || '001',
       unitId: user.unitId || 'all',
       permissions: JSON.parse(user.permissions || '[]')
-    };
+    });
     next();
   } catch (err) {
     console.error('JWT Auth verification failed:', err.message);
@@ -1901,8 +2022,13 @@ app.get('/api/equipamentos-importados', async (req, res) => {
     const qText = String(req.query.q || '').trim();
     const requestedUnit = String(req.query.unitId || '').trim();
     let query = db('equipamentos_importados').where({ empresa_id: req.user.empresa_id || '001' });
-    if (req.user.unitId && req.user.unitId !== 'all') query = query.where({ unitId: req.user.unitId });
-    else if (requestedUnit && requestedUnit !== 'all') query = query.where({ unitId: requestedUnit });
+    const unitAccess = await getUserUnitAccess(req.user, db);
+    if (requestedUnit && requestedUnit !== 'all') {
+      const allowedUnit = await requireAllowedUnit(req.user, requestedUnit);
+      query = query.where({ unitId: allowedUnit });
+    } else if (!unitAccess.allowAll) {
+      query = query.whereIn('unitId', [...unitAccess.ids, 'all']);
+    }
     if (qText) {
       query = query.andWhere(function() {
         this.where('codigo_equipamento', 'like', '%' + qText + '%')
@@ -1949,10 +2075,13 @@ app.get('/api/equipamentos-importados/lookup/:codigo', async (req, res) => {
           .orWhereIn('nr_patrimonio', variantArr);
       });
 
-    if (req.user.unitId && req.user.unitId !== 'all') {
-      query = query.where(function() {
-        this.where({ unitId: req.user.unitId }).orWhere({ unitId: 'all' });
-      });
+    const unitAccess = await getUserUnitAccess(req.user, db);
+    const requestedUnit = String(req.query.unitId || '').trim();
+    if (requestedUnit && requestedUnit !== 'all') {
+      const allowedUnit = await requireAllowedUnit(req.user, requestedUnit);
+      query = query.where(function() { this.where({ unitId: allowedUnit }).orWhere({ unitId: 'all' }); });
+    } else if (!unitAccess.allowAll) {
+      query = query.whereIn('unitId', [...unitAccess.ids, 'all']);
     }
     
     const row = await query.orderBy('updated_at', 'desc').first();
@@ -2070,10 +2199,20 @@ const ALLOWED_STORE_KEYS = new Set([
   'notification_emails'
 ]);
 
+const GLOBAL_STORE_KEYS = new Set([
+  'company_identity', 'units', 'clientes_importador_sistema', 'clients',
+  'client_categories', 'equipment_types', 'rejection_reasons',
+  'prospect_loss_reasons', 'expense_categories', 'notification_emails'
+]);
+
+const ADMIN_STORE_KEYS = new Set([
+  'company_identity', 'units', 'clientes_importador_sistema',
+  'client_categories', 'equipment_types', 'rejection_reasons',
+  'prospect_loss_reasons', 'expense_categories', 'notification_emails'
+]);
+
 function getStoreKey(req, key) {
-  if (key === 'company_identity' || key === 'units' || key === 'clientes_importador_sistema' || key === 'clients') {
-    return key;
-  }
+  if (GLOBAL_STORE_KEYS.has(key)) return key;
   const userId = req.user && req.user.id ? String(req.user.id) : 'global';
   return `${userId}_${key}`;
 }
@@ -2104,6 +2243,41 @@ function mergeStoreArrays(...lists) {
     });
   }
   return Array.from(map.values());
+}
+
+function mergeStoreValueArrays(...lists) {
+  const result = [];
+  const seen = new Set();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const identity = item && typeof item === 'object'
+        ? (item.id || item.codigo || item.name || item.nome || item.label || JSON.stringify(item))
+        : item;
+      const key = normalizeRole(identity);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+async function getMergedGlobalStoreValue(companyId, key) {
+  const rows = await db('app_kv_store')
+    .where({ company_id: companyId })
+    .andWhere(function() {
+      this.where('store_key', key).orWhere('store_key', 'like', `%_${key}`);
+    });
+  const legacy = [];
+  const global = [];
+  rows.forEach(row => {
+    const parsed = safeParseStoreJson(row.data_json, null);
+    if (row.store_key === key) global.push(parsed);
+    else legacy.push(parsed);
+  });
+  if ([...legacy, ...global].some(Array.isArray)) return mergeStoreValueArrays(...legacy, ...global);
+  return global.length ? global[global.length - 1] : (legacy.length ? legacy[legacy.length - 1] : null);
 }
 
 function canApproveClientsUser(user) {
@@ -2185,21 +2359,26 @@ function filterClientsForUser(list, user) {
 async function filterClientsForUserAsync(list, user) {
   if (!Array.isArray(list)) return [];
   const activeList = list.filter(item => !normalizeRole(item && item.status).includes('excl'));
-  if (isAdminUser(user)) return activeList;
+  const unitAccess = await getUserUnitAccess(user, db);
+  const unitScopedList = unitAccess.allowAll ? activeList : activeList.filter(item => {
+    const itemUnit = String(item && (item.unitId || item.unit_id || item.unidade_id || '') || '');
+    return !itemUnit || itemUnit === 'all' || unitAccess.ids.includes(itemUnit);
+  });
+  if (isAdminUser(user)) return unitScopedList;
 
   if (isSupervisorLikeUser(user)) {
     const permittedIds = (await getPermittedSellerIds(user, db)).map(String);
     const userName = String((user && (user.name || user.username || user.email)) || '');
-    return activeList.filter(item => {
+    return unitScopedList.filter(item => {
       const owner = getClientOwnerId(item);
       const ownerName = getClientOwnerName(item);
       return (owner && permittedIds.includes(String(owner))) || sameNormalizedText(ownerName, userName);
     });
   }
 
-  if (canApproveClientsUser(user)) return activeList;
+  if (canApproveClientsUser(user)) return unitScopedList;
 
-  return activeList.filter(item => isClientVisibleToUser(item, user));
+  return unitScopedList.filter(item => isClientVisibleToUser(item, user));
 }
 
 async function getClientStoreRows(companyId) {
@@ -2387,10 +2566,7 @@ app.get('/api/store', async (req, res) => {
     const rows = await db('app_kv_store')
       .where({ company_id: companyId })
       .andWhere(function() {
-        this.where('store_key', 'company_identity')
-            .orWhere('store_key', 'units')
-            .orWhere('store_key', 'clientes_importador_sistema')
-            .orWhere('store_key', 'clients')
+        this.whereIn('store_key', Array.from(GLOBAL_STORE_KEYS))
             .orWhere('store_key', 'like', '%_clients')
             .orWhere('store_key', 'like', `${userId}_%`);
       });
@@ -2422,6 +2598,11 @@ app.get('/api/store', async (req, res) => {
     }
     // Listas antigas por usuario entram primeiro; a lista global da empresa vence conflitos.
     payload.clients = await filterClientsForUserAsync(mergeStoreArrays(...scopedClientLists, ...globalClientLists), req.user);
+    for (const key of GLOBAL_STORE_KEYS) {
+      if (key === 'clients') continue;
+      const merged = await getMergedGlobalStoreValue(companyId, key);
+      if (merged !== null) payload[key] = merged;
+    }
     res.json(payload);
   } catch (err) {
     console.error('Erro ao carregar store geral:', err);
@@ -2438,6 +2619,9 @@ app.get('/api/store/:key', async (req, res) => {
     if (key === 'clients') {
       const clients = await getMergedClientsStore(companyId);
       return res.json({ key, data: await filterClientsForUserAsync(clients, req.user) });
+    }
+    if (GLOBAL_STORE_KEYS.has(key)) {
+      return res.json({ key, data: await getMergedGlobalStoreValue(companyId, key) });
     }
     let row = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
     // Compatibilidade: versões anteriores salvaram o importador preso ao usuário.
@@ -2457,8 +2641,8 @@ app.post('/api/store/:key', async (req, res) => {
   try {
     const key = req.params.key;
     if (!ALLOWED_STORE_KEYS.has(key)) return res.status(400).json({ error: 'Chave inválida.' });
-    if (key === 'clientes_importador_sistema' && !isAdminUser(req.user)) {
-      return res.status(403).json({ error: 'Somente administrador pode importar clientes.' });
+    if (ADMIN_STORE_KEYS.has(key) && !isAdminUser(req.user) && !hasAnyPermission(req.user, ['Configurações', 'Configurações Gerais'])) {
+      return res.status(403).json({ error: 'Somente administrador ou responsável por configurações pode alterar este dado corporativo.' });
     }
     const companyId = getStoreCompanyId(req);
     const dbKey = getStoreKey(req, key);
@@ -2856,7 +3040,12 @@ app.post('/api/despesas', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
 
-  const requestUnitId = req.user.unitId && req.user.unitId !== 'all' ? String(req.user.unitId) : String(unitId || '').trim();
+  let requestUnitId;
+  try {
+    requestUnitId = await requireAllowedUnit(req.user, unitId, { required: true });
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
   if (!requestUnitId || requestUnitId === 'all') {
     return res.status(400).json({ error: 'Selecione a unidade da solicitação de saldo.' });
   }
@@ -3008,6 +3197,8 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
 
     const selectedUnit = await db('unidades').where({ id: unitId, empresa_id: req.user.empresa_id }).first();
     if (!selectedUnit) return res.status(400).json({ error: 'Unidade nao encontrada nesta empresa.' });
+    await requireAllowedUnit(req.user, selectedUnit.id);
+    await requireAllowedUnit(await enrichUserWithUnits(recipient), selectedUnit.id);
 
     const bdt = getBrasiliaDateTime();
     const startBR = periodStart.split('-').reverse().join('/');
@@ -3154,7 +3345,7 @@ app.get('/api/despesas/direct-credit/recipients', async (req, res) => {
       .whereNot('status', 'INATIVO')
       .select('id', 'name', 'profile', 'unitId', 'status')
       .orderBy([{ column: 'profile', order: 'asc' }, { column: 'name', order: 'asc' }]);
-    res.json(recipients);
+    res.json(await Promise.all(recipients.map(enrichUserWithUnits)));
   } catch (err) {
     console.error('Erro ao listar destinatários de saldo direto:', err);
     res.status(500).json({ error: 'Erro ao carregar usuários para lançamento de saldo.' });
@@ -3184,6 +3375,8 @@ app.get('/api/despesas/direct-credit/summary', async (req, res) => {
 
     const selectedUnit = await db('unidades').where({ id: unitId, empresa_id: req.user.empresa_id }).first();
     if (!selectedUnit) return res.status(400).json({ error: 'Unidade nao encontrada nesta empresa.' });
+    await requireAllowedUnit(req.user, selectedUnit.id);
+    await requireAllowedUnit(await enrichUserWithUnits(recipient), selectedUnit.id);
 
     const expenses = await db('despesas_reembolsos')
       .where({ empresa_id: req.user.empresa_id, userId: recipientId })
@@ -3231,8 +3424,9 @@ app.get('/api/despesas/direct-credit/summary', async (req, res) => {
     const currentDifference = approvedBalance - expensesConsidered;
     const suggestion = Math.max(0, expensesConsidered - approvedBalance - pendingBalance);
 
+    const enriched = await enrichUserWithUnits(recipient);
     res.json({
-      recipient: { id: recipient.id, name: recipient.name, profile: recipient.profile },
+      recipient: { id: enriched.id, name: enriched.name, profile: enriched.profile, unitIds: enriched.unitIds },
       unit: { id: selectedUnit.id, name: selectedUnit.name },
       period_start: periodStart,
       period_end: periodEnd,
@@ -3261,18 +3455,12 @@ app.get('/api/despesas', async (req, res) => {
       .select('despesas_solicitacoes.*')
       .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
-    if (!isActorAdmin) {
-      // Apply unit isolation
-      if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.user.unitId);
-      } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
-      }
-    } else {
-      if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
-      }
-    }
+    const unitAccess = await getUserUnitAccess(req.user, db);
+    const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
+      ? await requireAllowedUnit(req.user, req.query.unitId)
+      : null;
+    if (requestedUnitId) query = query.where('despesas_solicitacoes.unitId', requestedUnitId);
+    else if (!unitAccess.allowAll) query = query.whereIn('despesas_solicitacoes.unitId', unitAccess.ids);
 
     // Apply hierarchy limitation: vendedor -> só dele; supervisor -> vendedores vinculados; gerente -> supervisores/vendedores da cadeia.
     if (!isActorAdmin) {
@@ -3359,21 +3547,16 @@ app.get('/api/despesas/summary', async (req, res) => {
       .select('despesas_solicitacoes.*')
       .where('despesas_solicitacoes.empresa_id', req.user.empresa_id);
 
-    if (!isActorAdmin) {
-      // Apply unit isolation
-      if (req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.user.unitId);
-      } else if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
-      }
-    } else {
-      if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-        query = query.where('despesas_solicitacoes.unitId', req.query.unitId);
-      }
-    }
+    const unitAccess = await getUserUnitAccess(req.user, db);
+    const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
+      ? await requireAllowedUnit(req.user, req.query.unitId)
+      : null;
+    if (requestedUnitId) query = query.where('despesas_solicitacoes.unitId', requestedUnitId);
+    else if (!unitAccess.allowAll) query = query.whereIn('despesas_solicitacoes.unitId', unitAccess.ids);
 
-    if (req.user.profile === 'Vendedor') {
-      query = query.where('despesas_solicitacoes.usuario_id', req.user.id);
+    if (!isActorAdmin) {
+      const permittedIds = await getPermittedSellerIds(req.user, db);
+      query = query.whereIn('despesas_solicitacoes.usuario_id', permittedIds);
     }
 
     // Apply the same filters used by /api/despesas so dashboard metrics can follow the visible list.
@@ -3820,6 +4003,8 @@ app.get('/api/equipamentos/patrimonio/:patrimonio', async (req, res) => {
 app.post('/api/equipamentos/movimentacoes', async (req, res) => {
   const {
     empresa,
+    unit_id,
+    unitId,
     tipo_solicitacao,
     vendedor_solicitante,
     cliente_codigo,
@@ -3858,10 +4043,13 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     return res.status(400).json({ error: 'Para registrar Troca, preencha patrimônio/modelo antigo e motivo da troca.' });
   }
 
-  const now = new Date().toISOString();
-  const empresaMovimentacao = empresa || req.user.empresa_name || req.user.empresa_id;
-
   try {
+    const now = new Date().toISOString();
+    const selectedUnitId = await requireAllowedUnit(req.user, unit_id || unitId, { required: true });
+    const selectedUnit = await db('unidades').where({ id: selectedUnitId, empresa_id: req.user.empresa_id }).first();
+    if (!selectedUnit) return res.status(400).json({ error: 'Unidade selecionada nao existe na empresa.' });
+    const empresaMovimentacao = selectedUnit.name;
+
     // 1. Cadastra automaticamente o patrimônio antigo/único se não existir
     const pCode = (tipo_solicitacao === 'Troca') ? patrimonio : (patrimonio || patrimonio_novo);
     if (pCode) {
@@ -3899,7 +4087,8 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     const recentLimit = new Date(Date.now() - 15000).toISOString();
     const duplicate = await db('equipamentos_movimentacoes')
       .where({
-        empresa: empresaMovimentacao,
+        empresa_id: req.user.empresa_id || '001',
+        unit_id: selectedUnitId,
         tipo_solicitacao,
         vendedor_id: req.user.id,
         cliente_nome,
@@ -3917,6 +4106,8 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     // 4. Insere a movimentação
     const newId = await insertAndGetId('equipamentos_movimentacoes', {
       empresa: empresaMovimentacao,
+      empresa_id: req.user.empresa_id || '001',
+      unit_id: selectedUnitId,
       tipo_solicitacao,
       vendedor_solicitante,
       vendedor_id: req.user.id,
@@ -3979,7 +4170,7 @@ app.post('/api/equipamentos/movimentacoes', async (req, res) => {
     res.json({ success: true, id: newId });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao gravar movimentação de equipamento' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao gravar movimentação de equipamento' });
   }
 });
 
@@ -3998,11 +4189,7 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
       'Equipamentos', 'Avaliação de Movimentação', 'Confirmação de Movimentação'
     ]);
 
-    const companyCandidates = [
-      req.user && req.user.empresa_id,
-      req.user && req.user.empresa_name,
-      req.user && req.user.companyName
-    ].filter(isFilterValValid);
+    const companyCandidates = await getMovementCompanyCandidates(req.user);
     if (!companyCandidates.length) {
       return res.status(403).json({ error: 'Usuario sem empresa vinculada.' });
     }
@@ -4015,16 +4202,12 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
       .where(function() {
         this.where('em.excluido', false).orWhereNull('em.excluido');
       })
-      .andWhere(function() {
-        this.whereIn('em.empresa', companyCandidates);
-        if (isFilterValValid(req.user && req.user.empresa_id)) {
-          this.orWhere('movement_seller.empresa_id', req.user.empresa_id);
-        }
-      })
       .select('em.*');
+    query = scopeMovementCompany(query, req.user, companyCandidates, 'em');
 
+    const unitAccess = await getUserUnitAccess(req.user, db);
     const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
-      ? req.query.unitId
+      ? await requireAllowedUnit(req.user, req.query.unitId)
       : null;
     // Movimentacoes antigas nao possuem uma coluna propria de unidade. A unidade
     // sera inferida abaixo pela Empresa Base gravada no registro, sem alterar dados.
@@ -4083,7 +4266,7 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
       const baseUnit = unitsByKey.get(normalizeRole(row.empresa));
       const responsibleUser = usersByName.get(normalizeRole(row.vendedor_solicitante));
       const authorUser = usersById.get(String(row.vendedor_id || ''));
-      const inferredId = baseUnit?.id
+      const inferredId = row.unit_id || baseUnit?.id
         || (responsibleUser?.unitId !== 'all' ? responsibleUser?.unitId : null)
         || (authorUser?.unitId !== 'all' ? authorUser?.unitId : null)
         || null;
@@ -4092,18 +4275,18 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     });
     const scoped = requestedUnitId
       ? enriched.filter(row => String(row.unitId || '') === String(requestedUnitId))
-      : enriched;
+      : (unitAccess.allowAll ? enriched : enriched.filter(row => unitAccess.ids.includes(String(row.unitId || ''))));
     res.json(scoped);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao listar movimentações' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao listar movimentações' });
   }
 });
 
 app.put('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   try {
     if (!isAdminUser(req.user)) return res.status(403).json({ error: 'Somente administrador pode editar movimentações.' });
-    const mov = await db('equipamentos_movimentacoes').where({ id: req.params.id }).first();
+    const mov = await getCompanyMovementById(req.params.id, req.user);
     if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada.' });
     const body = req.body || {};
     const allowed = [
@@ -4118,7 +4301,7 @@ app.put('/api/equipamentos/movimentacoes/:id', async (req, res) => {
     for (const field of allowed) {
       if (Object.prototype.hasOwnProperty.call(body, field)) updates[field] = body[field] == null ? '' : body[field];
     }
-    await db('equipamentos_movimentacoes').where({ id: req.params.id }).update(updates);
+    await updateCompanyMovementById(req.params.id, req.user, updates);
     await registrarAuditoriaSistema(req, {
       acao: 'EDITOU_MOVIMENTACAO_EQUIPAMENTO',
       modulo: 'Movimentação de Equipamentos',
@@ -4144,7 +4327,10 @@ app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
   if (!cleanIds.length) return res.status(400).json({ error: 'Nenhuma movimentação selecionada.' });
   const now = new Date().toISOString();
   try {
-    const rows = await db('equipamentos_movimentacoes').whereIn('id', cleanIds);
+    const companyCandidates = await getMovementCompanyCandidates(req.user);
+    let rowsQuery = db('equipamentos_movimentacoes').whereIn('id', cleanIds);
+    rowsQuery = scopeMovementCompany(rowsQuery, req.user, companyCandidates);
+    const rows = await rowsQuery;
     for (const row of rows) {
       await db('historico_exclusoes').insert({
         modulo: 'Movimentação de Equipamento',
@@ -4153,6 +4339,7 @@ app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
         criado_por: row.vendedor_solicitante || row.vendedor_id || '',
         excluido_por: req.user.name || req.user.nome || req.user.id,
         motivo: motivo_exclusao || 'Sem motivo informado',
+        empresa_id: req.user.empresa_id || '001',
         created_at: now
       });
       await registrarAuditoriaSistema(req, {
@@ -4163,7 +4350,12 @@ app.post('/api/equipamentos/movimentacoes/delete', async (req, res) => {
         dados_antes: row
       });
     }
-    await db('equipamentos_movimentacoes').whereIn('id', cleanIds).delete();
+    const scopedIds = rows.map(row => row.id);
+    if (scopedIds.length) {
+      let deleteQuery = db('equipamentos_movimentacoes').whereIn('id', scopedIds);
+      deleteQuery = scopeMovementCompany(deleteQuery, req.user, companyCandidates);
+      await deleteQuery.delete();
+    }
     res.json({ success: true, count: rows.length });
   } catch (err) {
     console.error(err);
@@ -4177,7 +4369,7 @@ app.get('/api/historico-exclusoes', async (req, res) => {
     return res.status(403).json({ error: 'Acesso negado.' });
   }
   try {
-    const rows = await db('historico_exclusoes').orderBy('id', 'desc').limit(500);
+    const rows = await db('historico_exclusoes').where({ empresa_id: req.user.empresa_id || '001' }).orderBy('id', 'desc').limit(500);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -4191,7 +4383,7 @@ app.post('/api/historico-exclusoes/restore/:id', async (req, res) => {
     if (req.user.profile !== 'Administrador') {
       return res.status(403).json({ error: 'Somente administrador pode restaurar exclusões.' });
     }
-    const exclusion = await db('historico_exclusoes').where({ id: req.params.id }).first();
+    const exclusion = await db('historico_exclusoes').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!exclusion) {
       return res.status(404).json({ error: 'Registro de exclusão não encontrado.' });
     }
@@ -4199,7 +4391,7 @@ app.post('/api/historico-exclusoes/restore/:id', async (req, res) => {
     const parsedData = JSON.parse(exclusion.dados_json);
     
     if (exclusion.modulo === 'Movimentação de Equipamento') {
-      const existing = await db('equipamentos_movimentacoes').where({ id: parsedData.id }).first();
+      const existing = await getCompanyMovementById(parsedData.id, req.user, { includeDeleted: true });
       if (existing) {
         return res.status(400).json({ error: 'Esta movimentação já existe no sistema.' });
       }
@@ -4214,7 +4406,7 @@ app.post('/api/historico-exclusoes/restore/:id', async (req, res) => {
         dados_depois: parsedData
       });
       
-      await db('historico_exclusoes').where({ id: exclusion.id }).delete();
+      await db('historico_exclusoes').where({ id: exclusion.id, empresa_id: req.user.empresa_id || '001' }).delete();
       
       return res.json({ success: true, message: 'Movimentação restaurada com sucesso!' });
     } else {
@@ -4230,10 +4422,7 @@ app.post('/api/historico-exclusoes/restore/:id', async (req, res) => {
 app.get('/api/equipamentos/movimentacoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const mov = await db('equipamentos_movimentacoes')
-      .where({ id })
-      .andWhere(function() { this.where('excluido', false).orWhereNull('excluido'); })
-      .first();
+    const mov = await getCompanyMovementById(id, req.user);
 
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
@@ -4290,10 +4479,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
   }
 
   try {
-    const mov = await db('equipamentos_movimentacoes')
-      .where({ id })
-      .andWhere(function() { this.where('excluido', false).orWhereNull('excluido'); })
-      .first();
+    const mov = await getCompanyMovementById(id, req.user);
     if (!mov) {
       return res.status(404).json({ error: 'Movimentação não encontrada' });
     }
@@ -4326,7 +4512,7 @@ app.post('/api/equipamentos/movimentacoes/:id/approval', async (req, res) => {
     }
 
     // 1. Atualizar status da movimentação
-    await db('equipamentos_movimentacoes').where({ id }).update(updateMovement);
+    await updateCompanyMovementById(id, req.user, updateMovement);
     await registrarAuditoriaSistema(req, {
       acao: status === 'Aprovado' ? 'APROVOU_MOVIMENTACAO_EQUIPAMENTO' : (status === 'Reprovado' ? 'REPROVOU_MOVIMENTACAO_EQUIPAMENTO' : 'EDITOU_MOVIMENTACAO_EQUIPAMENTO'),
       modulo: 'Movimentação de Equipamentos',
@@ -4633,6 +4819,8 @@ app.get('/api/me', async (req, res) => {
       username: user.username,
       profile: user.profile,
       unitId: user.unitId,
+      unitIds: enriched.unitIds,
+      allUnits: enriched.allUnits,
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
@@ -4711,12 +4899,14 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
       return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     }
 
+    const enriched = await enrichUserWithUnits(user);
     const token = jwt.sign({
       id: user.id,
       name: user.name,
       username: user.username,
       profile: user.profile,
       unitId: user.unitId,
+      unitIds: enriched.unitIds,
       empresa_id: user.empresa_id,
       permissions: JSON.parse(user.permissions || '[]')
     }, JWT_SECRET, { expiresIn: '24h' });
@@ -4729,6 +4919,8 @@ app.post(['/api/login', '/api/auth/login'], async (req, res) => {
         username: user.username,
         profile: user.profile,
         unitId: user.unitId,
+        unitIds: enriched.unitIds,
+        allUnits: enriched.allUnits,
         status: user.status,
         permissions: JSON.parse(user.permissions || '[]'),
         email: user.email || '',
@@ -4753,6 +4945,7 @@ function getDefaultPermissionsForProfile(profile) {
     'Conferente': ['Dashboard','Chamados','Equipamentos','Movimentação'],
     'Responsável Equipamentos': ['Dashboard','Equipamentos','Movimentação','Chamados','Chamados Mecânicos'],
     'Mecânico': ['Dashboard','Chamados','Chamados Mecânicos'],
+    'Manutenção': ['Dashboard','Chamados','Chamados Mecânicos'],
     'Motorista': ['Dashboard','Despesas','Despesas de Campo','Solicitação de Saldo'],
     'Ajudante de Motorista': ['Dashboard','Despesas','Despesas de Campo','Solicitação de Saldo']
   };
@@ -4761,7 +4954,7 @@ function getDefaultPermissionsForProfile(profile) {
 
 // Register / Create User
 app.post('/api/usuarios', async (req, res) => {
-  const { id, name, username, password, profile, unitId, email, phone, photo, linked_users, supervisor_id } = req.body;
+  const { id, name, username, password, profile, unitId, unitIds, email, phone, photo, linked_users, supervisor_id } = req.body;
   
   const actor = req.user || {};
   const actorPerms = actor.permissions || [];
@@ -4772,7 +4965,8 @@ app.post('/api/usuarios', async (req, res) => {
 
   const companyId = req.user.empresa_id;
 
-  if (!name || !username || !password || !profile || !unitId) {
+  const selectedUnitIds = normalizeUnitIds(unitIds && unitIds.length ? unitIds : unitId);
+  if (!name || !username || !password || !profile || !selectedUnitIds.length) {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
   if (!isPasswordStrong(password)) {
@@ -4790,13 +4984,17 @@ app.post('/api/usuarios', async (req, res) => {
     }
 
     const userId = id || 'usr-' + Date.now();
+    const explicitUnits = selectedUnitIds.filter(value => value.toLowerCase() !== 'all');
+    const legacyUnitId = selectedUnitIds.some(value => value.toLowerCase() === 'all')
+      ? 'all'
+      : (explicitUnits[0] || unitId || 'all');
     const newUser = {
       id: userId,
       name,
       username: username.toLowerCase(),
       password: await bcrypt.hash(String(password), 12),
       profile,
-      unitId,
+      unitId: legacyUnitId,
       email: email || '',
       phone: phone || '',
       photo: photo || '',
@@ -4808,7 +5006,10 @@ app.post('/api/usuarios', async (req, res) => {
       updated_at: new Date().toISOString()
     };
 
-    await db('usuarios').insert(newUser);
+    await db.transaction(async trx => {
+      await trx('usuarios').insert(newUser);
+      await syncUserUnits(trx, userId, companyId, selectedUnitIds, legacyUnitId);
+    });
 
     // Se for Vendedor com supervisor vinculado, criar link hierárquico
     if (profile === 'Vendedor' && supervisor_id) {
@@ -4870,14 +5071,17 @@ app.get('/api/usuarios', async (req, res) => {
     if (!isActorAdmin) {
       // Administrador/Usuário com permissão 'Usuários' enxerga todos os usuários da empresa, mesmo que ele esteja vinculado a uma unidade.
       // Usuário comum sem permissão continua preso somente à própria unidade.
-      if (!canViewUsersList && actor.unitId && actor.unitId !== 'all') {
-        query = query.where({ unitId: actor.unitId });
+      if (!canViewUsersList) {
+        const permittedIds = await getPermittedSellerIds(actor, db);
+        query = query.whereIn('id', permittedIds);
       }
     }
 
     const list = await query.orderBy('name', 'asc');
 
-    const mapped = list.map(u => ({
+    const mapped = await Promise.all(list.map(async u => {
+      const enriched = await enrichUserWithUnits(u);
+      return ({
       id: u.id,
       name: u.name,
       username: u.username,
@@ -4887,6 +5091,8 @@ app.get('/api/usuarios', async (req, res) => {
       user_type: u.profile, // alias
       unitId: u.unitId,
       unit_id: u.unitId, // alias
+      unitIds: enriched.unitIds,
+      allUnits: enriched.allUnits,
       status: u.status,
       permissions: JSON.parse(u.permissions || '[]'),
       email: u.email || '',
@@ -4894,6 +5100,7 @@ app.get('/api/usuarios', async (req, res) => {
       photo: u.photo || '',
       empresa_id: u.empresa_id,
       company_id: u.empresa_id // alias
+      });
     }));
 
     res.json(mapped);
@@ -4910,7 +5117,10 @@ app.get('/api/usuarios/vendedores', async (req, res) => {
       .where({ empresa_id: companyId, profile: 'Vendedor' })
       .whereIn('status', ['LIBERADO', 'AGUARDANDO LIBERAÇÃO'])
       .orderBy('name', 'asc');
-    res.json(list.map(u => ({ id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId })));
+    res.json(await Promise.all(list.map(async u => {
+      const enriched = await enrichUserWithUnits(u);
+      return { id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId, unitIds: enriched.unitIds, allUnits: enriched.allUnits };
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao listar vendedores' });
@@ -4925,7 +5135,10 @@ app.get('/api/usuarios/supervisores', async (req, res) => {
       .where({ empresa_id: companyId, profile: 'Supervisor' })
       .whereIn('status', ['LIBERADO', 'AGUARDANDO LIBERAÇÃO'])
       .orderBy('name', 'asc');
-    res.json(list.map(u => ({ id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId })));
+    res.json(await Promise.all(list.map(async u => {
+      const enriched = await enrichUserWithUnits(u);
+      return { id: u.id, name: u.name, username: u.username, status: u.status, unitId: u.unitId, unitIds: enriched.unitIds, allUnits: enriched.allUnits };
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erro ao listar supervisores' });
@@ -4969,6 +5182,7 @@ app.get('/api/usuarios/:id', async (req, res) => {
       linked_users = links.map(l => l.child_user_id);
     }
 
+    const enriched = await enrichUserWithUnits(user);
     res.json({
       id: user.id,
       name: user.name,
@@ -4979,6 +5193,8 @@ app.get('/api/usuarios/:id', async (req, res) => {
       user_type: user.profile, // alias
       unitId: user.unitId,
       unit_id: user.unitId, // alias
+      unitIds: enriched.unitIds,
+      allUnits: enriched.allUnits,
       status: user.status,
       permissions: JSON.parse(user.permissions || '[]'),
       email: user.email || '',
@@ -4998,7 +5214,7 @@ app.get('/api/usuarios/:id', async (req, res) => {
 // Update permissions & status
 app.put('/api/usuarios/:id/permissions', async (req, res) => {
   const { id } = req.params;
-  let { permissions, status, profile, unitId, name, username, email, phone, password, photo, empresa_id, linked_users, supervisor_id } = req.body;
+  let { permissions, status, profile, unitId, unitIds, name, username, email, phone, password, photo, empresa_id, linked_users, supervisor_id } = req.body;
 
   try {
     let userToEdit = await db('usuarios').where({ id, empresa_id: req.user.empresa_id }).first();
@@ -5021,6 +5237,7 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
       status = undefined;
       profile = undefined;
       unitId = undefined;
+      unitIds = undefined;
       empresa_id = undefined;
       linked_users = undefined;
       supervisor_id = undefined;
@@ -5041,8 +5258,10 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
     if (profile !== undefined) {
       updatedData.profile = profile;
     }
-    if (unitId !== undefined) {
-      updatedData.unitId = (profile === 'Administrador' && !unitId) ? 'all' : unitId;
+    if (unitId !== undefined || unitIds !== undefined) {
+      const selected = normalizeUnitIds(unitIds && unitIds.length ? unitIds : unitId);
+      const explicit = selected.filter(value => value.toLowerCase() !== 'all');
+      updatedData.unitId = selected.some(value => value.toLowerCase() === 'all') ? 'all' : (explicit[0] || userToEdit.unitId);
     }
     if (name !== undefined) {
       updatedData.name = name;
@@ -5090,7 +5309,13 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
       updatedData.supervisor_id = supervisor_id || null;
     }
 
-    await db('usuarios').where({ id }).update(updatedData);
+    await db.transaction(async trx => {
+      await trx('usuarios').where({ id, empresa_id: originalEmpresaId }).update(updatedData);
+      if (unitId !== undefined || unitIds !== undefined || empresa_id !== undefined) {
+        const selected = normalizeUnitIds(unitIds && unitIds.length ? unitIds : (unitId !== undefined ? unitId : userToEdit.unitId));
+        await syncUserUnits(trx, id, targetEmpresa, selected, updatedData.unitId || userToEdit.unitId);
+      }
+    });
 
     // Update supervisor link for Vendedor child
     if (targetProfile !== 'Vendedor') {
@@ -5282,11 +5507,12 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
 
   try {
     const bdt = getBrasiliaDateTime();
+    const selectedUnitId = await requireAllowedUnit(req.user, unitId, { required: true });
     const newRecord = {
       id,
       empresa_id,
       userId: req.user.id,
-      unitId: (req.user.unitId && req.user.unitId !== 'all') ? req.user.unitId : (unitId || 'all'),
+      unitId: selectedUnitId,
       date: date || bdt.date,
       time: time || bdt.time.slice(0, 5),
       finalidade,
@@ -5344,7 +5570,7 @@ app.post('/api/despesas-reembolsos', async (req, res) => {
     res.json({ success: true, id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao registrar despesa de campo' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao registrar despesa de campo' });
   }
 });
 
@@ -5359,23 +5585,26 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
     let query = db('despesas_reembolsos as dr')
       .where('dr.empresa_id', req.user.empresa_id);
 
+    const unitAccess = await getUserUnitAccess(req.user, db);
     const requestedUnitId = isFilterValValid(req.query.unitId) && req.query.unitId !== 'all'
-      ? req.query.unitId
+      ? await requireAllowedUnit(req.user, req.query.unitId)
       : null;
 
     if (!isActorAdmin) {
       // Supervisor/Gerente pode possuir vendedores vinculados em outras unidades.
       // A hierarquia abaixo continua sendo a barreira de acesso nesses casos.
-      if (!['supervisor', 'gerente'].includes(actorProfile) && req.user.unitId && req.user.unitId !== 'all') {
-        query = query.where('dr.unitId', req.user.unitId);
-      } else if (requestedUnitId) {
+      if (requestedUnitId) {
         query = query.where('dr.unitId', requestedUnitId);
+      } else if (!unitAccess.allowAll) {
+        query = query.whereIn('dr.unitId', unitAccess.ids);
       }
 
       const permittedIds = await getPermittedSellerIds(req.user, db);
       query = query.whereIn('dr.userId', permittedIds);
     } else if (requestedUnitId) {
       query = query.where('dr.unitId', requestedUnitId);
+    } else if (!unitAccess.allowAll) {
+      query = query.whereIn('dr.unitId', unitAccess.ids);
     }
 
     const list = await query
@@ -5386,7 +5615,7 @@ app.get('/api/despesas-reembolsos', async (req, res) => {
     res.json(list);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao listar despesas de campo' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao listar despesas de campo' });
   }
 });
 
@@ -5396,8 +5625,7 @@ app.get('/api/despesas-reembolsos/:id', async (req, res) => {
   try {
     const actorPerms = req.user.permissions || [];
     const isActorAdmin = isAdminUser(req.user);
-    let recordQuery = db('despesas_reembolsos').where({ id });
-    if (!isActorAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
+    let recordQuery = db('despesas_reembolsos').where({ id, empresa_id: req.user.empresa_id });
     const record = await recordQuery.first();
 
     if (!record) {
@@ -5424,8 +5652,7 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
   try {
     const actorPerms = req.user.permissions || [];
     const isAdmin = isAdminUser(req.user);
-    let recordQuery = db('despesas_reembolsos').where({ id });
-    if (!isAdmin) recordQuery = recordQuery.where({ empresa_id: req.user.empresa_id });
+    let recordQuery = db('despesas_reembolsos').where({ id, empresa_id: req.user.empresa_id });
     const record = await recordQuery.first();
 
     if (!record) {
@@ -5440,7 +5667,7 @@ app.delete('/api/despesas-reembolsos/:id', async (req, res) => {
       return res.status(403).json({ error: 'Somente administrador pode excluir registros.' });
     }
 
-    await db('despesas_reembolsos').where({ id }).delete();
+    await db('despesas_reembolsos').where({ id, empresa_id: req.user.empresa_id }).delete();
 
     // Auditoria
     await db('auditoria_logs').insert({
@@ -5684,7 +5911,7 @@ app.get('/api/auditoria', async (req, res) => {
 
     let deletionRows = [];
     if (await db.schema.hasTable('historico_exclusoes')) {
-      deletionRows = await db('historico_exclusoes').orderBy('id', 'desc').limit(500);
+      deletionRows = await db('historico_exclusoes').where({ empresa_id: companyId }).orderBy('id', 'desc').limit(500);
     }
 
     const normalizeAudit = auditRows.map(row => ({
@@ -5740,15 +5967,27 @@ function inferAuditModule(acao = '', detalhes = '') {
 async function getPermittedSellerIds(user, dbInstance) {
   const companyId = user.empresa_id || '001';
   const userId = user.id;
-  const profile = user.profile;
+  const profile = normalizeRole(user.profile);
+
+  const usersInAllowedUnits = async () => {
+    const access = await getUserUnitAccess(user, dbInstance);
+    const users = await dbInstance('usuarios').where({ empresa_id: companyId }).select('id', 'unitId');
+    if (access.allowAll) return users.map(row => String(row.id));
+    const result = [];
+    for (const row of users) {
+      const rowAccess = await getUserUnitAccess({ ...row, empresa_id: companyId }, dbInstance);
+      if (rowAccess.allowAll || rowAccess.ids.some(id => access.ids.includes(id))) result.push(String(row.id));
+    }
+    return result;
+  };
 
   // 1. Vendedor sees only themselves
-  if (profile === 'Vendedor') {
+  if (['vendedor', 'motorista', 'ajudante de motorista', 'mecanico', 'manutencao'].includes(profile)) {
     return [String(userId)];
   }
 
   // 2. Supervisor sees sellers linked to them + themselves
-  if (profile === 'Supervisor') {
+  if (profile === 'supervisor') {
     const links = await dbInstance('user_hierarchy_links')
       .where({
         company_id: companyId,
@@ -5760,7 +5999,7 @@ async function getPermittedSellerIds(user, dbInstance) {
   }
 
   // 3. Gerente sees supervisores linked to them, sellers linked directly, and sellers of those supervisores + themselves
-  if (profile === 'Gerente') {
+  if (profile === 'gerente') {
     const supervisorLinks = await dbInstance('user_hierarchy_links')
       .where({
         company_id: companyId,
@@ -5788,11 +6027,19 @@ async function getPermittedSellerIds(user, dbInstance) {
     return [...new Set([String(userId), ...supervisorIds.map(String), ...directSellerIds.map(String), ...subSellerIds.map(String)])];
   }
 
-  // 4. Administrador (or other profiles) sees all users of the company
-  const companyUsers = await dbInstance('usuarios')
-    .where({ empresa_id: companyId })
-    .select('id');
-  return companyUsers.map(u => String(u.id));
+  // 4. Empresa inteira somente para papeis explicitamente administrativos/financeiros.
+  if (isAdminUser(user) || ['financeiro', 'responsavel financeiro'].includes(profile)) {
+    const companyUsers = await dbInstance('usuarios').where({ empresa_id: companyId }).select('id');
+    return companyUsers.map(row => String(row.id));
+  }
+
+  // Equipe de equipamentos/conferencia trabalha apenas nas unidades vinculadas.
+  if (['responsavel equipamentos', 'responsavel por equipamentos', 'conferente'].includes(profile)) {
+    return usersInAllowedUnits();
+  }
+
+  // Negacao por padrao: perfil novo ou desconhecido nao recebe a empresa inteira.
+  return [String(userId)];
 }
 
 
@@ -5819,12 +6066,11 @@ function canSeeAllMechanicalTickets(user) {
   const perms = Array.isArray(user && user.permissions) ? user.permissions.map(normalizeRole) : [];
   const joined = [profile, ...perms].join(' | ');
   return isAdminUser(user)
-    || String(user && user.unitId || '').toLowerCase() === 'all'
     || joined.includes('responsavel equipamentos')
     || joined.includes('responsavel equipamento')
     || joined.includes('gestor equipamentos')
     || joined.includes('gestor de equipamentos')
-    || joined.includes('chamados mecanicos');
+    || joined.includes('administrar chamados');
 }
 
 async function getGlobalEquipmentTypeNames(req) {
@@ -5895,10 +6141,11 @@ app.post('/api/chamados', async (req, res) => {
     if (!resolvedEquipmentType) {
       return res.status(400).json({ error: 'Tipo de equipamento é obrigatório.' });
     }
+    const selectedUnitId = await requireAllowedUnit(req.user, body.unitId || body.unit_id, { required: true });
     const record = {
       id,
       empresa_id: req.user.empresa_id || '001',
-      unitId: body.unitId || req.user.unitId || 'all',
+      unitId: selectedUnitId,
       userId: ownerId,
       equipmentSerial: String(body.equipmentSerial || '').trim(),
       equipmentType: resolvedEquipmentType,
@@ -5943,7 +6190,7 @@ app.post('/api/chamados', async (req, res) => {
     res.json({ success: true, id, chamado: normalizeChamado(record) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao abrir chamado mecânico' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao abrir chamado mecânico' });
   }
 });
 
@@ -5951,14 +6198,19 @@ app.get('/api/chamados', async (req, res) => {
   try {
     let query = db('chamados_tecnicos');
     await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
-    if (!canSeeAllMechanicalTickets(req.user) && isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') query.where('unitId', req.query.unitId);
+    const unitAccess = await getUserUnitAccess(req.user, db);
+    if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
+      query.where('unitId', await requireAllowedUnit(req.user, req.query.unitId));
+    } else if (!unitAccess.allowAll) {
+      query.whereIn('unitId', unitAccess.ids);
+    }
     if (isFilterValValid(req.query.status)) query.where('status', req.query.status);
     if (isFilterValValid(req.query.patrimonio)) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);
     const list = await query.orderBy('created_at', 'desc');
     res.json(list.map(normalizeChamado));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Erro ao listar chamados mecânicos' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao listar chamados mecânicos' });
   }
 });
 
@@ -5986,6 +6238,9 @@ app.put('/api/chamados/:id', async (req, res) => {
       if (!typeCheck.ok) return res.status(400).json({ error: typeCheck.error });
       updates.equipmentType = typeCheck.typeName;
     }
+    if (Object.prototype.hasOwnProperty.call(body, 'unitId')) {
+      updates.unitId = await requireAllowedUnit(req.user, body.unitId, { required: true });
+    }
     if (Object.prototype.hasOwnProperty.call(body, 'parts')) updates.parts = JSON.stringify(Array.isArray(body.parts) ? body.parts : safeJsonArray(body.parts));
     if (Object.prototype.hasOwnProperty.call(body, 'services')) updates.services = JSON.stringify(Array.isArray(body.services) ? body.services : safeJsonArray(body.services));
     await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update(updates);
@@ -6008,9 +6263,9 @@ app.delete('/api/chamados/:id', async (req, res) => {
   try {
     const admin = isAdminUser(req.user);
     if (!admin) return res.status(403).json({ error: 'Somente administrador pode excluir chamados.' });
-    const existing = await db('chamados_tecnicos').where({ id: req.params.id }).first();
+    const existing = await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).first();
     if (!existing) return res.status(404).json({ error: 'Chamado não encontrado.' });
-    await db('chamados_tecnicos').where({ id: req.params.id }).delete();
+    await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).delete();
     await registrarAuditoriaSistema(req, {
       acao: 'EXCLUIU_CHAMADO_MECANICO',
       modulo: 'Chamados Mecânicos',

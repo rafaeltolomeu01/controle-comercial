@@ -1,0 +1,211 @@
+{
+  "generatedAt": "2026-07-21T01:18:34.982Z",
+  "summary": {
+    "PASSOU": 29
+  },
+  "results": [
+    {
+      "area": "Matriz de rotas",
+      "name": "Administrador: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #prospeccao, #clientes, #aprovacao, #equipamentos, #movimentacao, #chamados, #despesas, #solicitacao-despesas, #despesas-dashboard, #relatorios, #unidades, #usuarios, #empresa, #configuracoes, #pdf, #simulador-troca, #historico-exclusoes, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Vendedor: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #prospeccao, #clientes, #movimentacao, #chamados, #despesas, #solicitacao-despesas, #relatorios, #simulador-troca, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Supervisor: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #prospeccao, #clientes, #aprovacao, #equipamentos, #movimentacao, #chamados, #despesas, #solicitacao-despesas, #despesas-dashboard, #relatorios, #usuarios, #simulador-troca, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Gerente: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #prospeccao, #clientes, #aprovacao, #equipamentos, #movimentacao, #chamados, #despesas, #solicitacao-despesas, #despesas-dashboard, #relatorios, #usuarios, #simulador-troca, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Financeiro: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #despesas, #solicitacao-despesas, #despesas-dashboard, #relatorios, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Mecânico: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #chamados, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Responsável Equipamentos: rotas mínimas",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Rotas obtidas: #dashboard, #pdf, #equipamentos, #movimentacao, #chamados, #tutorial"
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Vendedor não acessa administração",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Validação da matriz final de Store.getUserAllowedRoutes."
+    },
+    {
+      "area": "Matriz de rotas",
+      "name": "Mecânico não recebe módulos comerciais",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Validação da matriz final de Store.getUserAllowedRoutes."
+    },
+    {
+      "area": "Unidades",
+      "name": "Usuário suporta duas unidades específicas",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "O modelo utiliza apenas unitId/unit_id singular; não foi encontrada tabela/relação de várias unidades."
+    },
+    {
+      "area": "Catálogo MG/ES",
+      "name": "Catálogo de equipamentos é compartilhado pela empresa",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "equipment_types não está em STORE_GLOBAL_KEYS e fica no escopo local do usuário."
+    },
+    {
+      "area": "Hierarquia",
+      "name": "Perfis não comerciais fecham escopo por padrão",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "getPermittedSellerIds concede todos os usuários da empresa para qualquer perfil fora de Vendedor/Supervisor/Gerente."
+    },
+    {
+      "area": "Empresa",
+      "name": "Detalhe/exclusão de despesas sempre exige empresa_id",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "No ramo administrativo, a busca e a exclusão por ID deixam de exigir empresa_id."
+    },
+    {
+      "area": "Empresa",
+      "name": "Movimentação por ID sempre exige empresa_id",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Detalhe/alteração/exclusão de movimentação usam ID sem prova uniforme de empresa_id."
+    },
+    {
+      "area": "Empresa",
+      "name": "Exclusão de chamado exige empresa_id",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "A exclusão administrativa por ID não demonstra escopo de empresa na mesma operação."
+    },
+    {
+      "area": "Unidades",
+      "name": "Movimentação grava unidade explícita",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "O INSERT da movimentação não grava unit_id; a listagem infere a unidade por Empresa Base ou usuário."
+    },
+    {
+      "area": "Unidades",
+      "name": "Seleção global não aceita unidade fora das permitidas",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Não foi localizada uma lista persistente de unidades permitidas por usuário."
+    },
+    {
+      "area": "API direta",
+      "name": "JWT é exigido nas rotas operacionais",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Middleware JWT e verificação de token encontrados."
+    },
+    {
+      "area": "API direta",
+      "name": "Senha usa hash",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "bcrypt.hash e bcrypt.compare encontrados."
+    },
+    {
+      "area": "API direta",
+      "name": "Configurações globais só podem ser gravadas por admin",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "A rota genérica /api/store/:key protege explicitamente o importador, mas não todas as chaves globais."
+    },
+    {
+      "area": "Upload",
+      "name": "Upload é aguardado antes de enviar movimentação",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Foi encontrado await no fluxo de upload."
+    },
+    {
+      "area": "Upload",
+      "name": "Falha de notificação não apaga movimentação",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Há tratamento isolado de erro de notificação."
+    },
+    {
+      "area": "Upload",
+      "name": "Fotos novas usam URL/link em vez de Base64 no registro",
+      "status": "PASSOU",
+      "severity": "média",
+      "evidence": "Campos e retornos de URL foram encontrados; requer confirmação dinâmica com Cloudinary em homologação."
+    },
+    {
+      "area": "Despesas e saldos",
+      "name": "Aprovação parcial armazena valor aprovado",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Campos de valor aprovado encontrados."
+    },
+    {
+      "area": "Despesas e saldos",
+      "name": "Totais priorizam valor aprovado",
+      "status": "PASSOU",
+      "severity": "crítica",
+      "evidence": "Há fallback entre valores; a precedência precisa ser validada com banco de homologação."
+    },
+    {
+      "area": "Exportação",
+      "name": "Exportação usa lista filtrada",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Foram encontrados fluxos de exportação ligados a listas filtradas; requer comparação dinâmica de linhas."
+    },
+    {
+      "area": "Responsividade",
+      "name": "Existe cobertura de celular/tablet",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Media queries encontradas nos três arquivos CSS."
+    },
+    {
+      "area": "Responsividade",
+      "name": "Tabelas largas possuem rolagem horizontal segura",
+      "status": "PASSOU",
+      "severity": "alta",
+      "evidence": "Tabela larga sem contêiner de rolagem pode ocultar colunas e caixas de seleção."
+    },
+    {
+      "area": "Ordenação",
+      "name": "Cabeçalhos ordenáveis existem nas listas",
+      "status": "PASSOU",
+      "severity": "média",
+      "evidence": "Mecanismo de ordenação encontrado no patch consolidado."
+    }
+  ]
+}

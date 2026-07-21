@@ -191,9 +191,13 @@ const UI = {
     // Enforce unit selection locking for common users
     const globalSelector = document.getElementById('global-unit-selector');
     if (globalSelector) {
-      if (user.profile !== 'Administrador' && user.unitId !== 'all') {
-        Store.setActiveUnitId(user.unitId);
-        globalSelector.value = user.unitId;
+      const permittedUnits = Array.isArray(user.unitIds) && user.unitIds.length ? user.unitIds.map(String) : [String(user.unitId || '')];
+      const hasGeneralAccess = user.profile === 'Administrador' || user.allUnits === true || permittedUnits.includes('all');
+      const hasMultipleUnits = permittedUnits.filter(id => id && id !== 'all').length > 1;
+      if (!hasGeneralAccess && !hasMultipleUnits) {
+        const onlyUnit = permittedUnits.find(id => id && id !== 'all') || user.unitId;
+        Store.setActiveUnitId(onlyUnit);
+        globalSelector.value = onlyUnit;
         globalSelector.disabled = true;
         const container = globalSelector.closest('.header-unit-selector') || globalSelector.parentElement;
         if (container) container.style.display = 'none';
@@ -1350,10 +1354,15 @@ const UI = {
    * Dynamically populate all unit select fields and seller dropdowns in forms
    */
   async populateUnitDropdowns() {
-    const units = Store.getUnits();
+    const allUnits = Store.getUnits();
     const loggedUser = Store.getLoggedUser();
     const activeUnitId = Store.getActiveUnitId();
     const isLoggedAdmin = loggedUser && (loggedUser.profile === 'Administrador' || (loggedUser.permissions || []).includes('Administrador'));
+    const permittedUnitIds = loggedUser && Array.isArray(loggedUser.unitIds) && loggedUser.unitIds.length
+      ? loggedUser.unitIds.map(String)
+      : [String(loggedUser?.unitId || '')];
+    const hasGeneralAccess = isLoggedAdmin || loggedUser?.allUnits === true || permittedUnitIds.includes('all');
+    const units = hasGeneralAccess ? allUnits : allUnits.filter(unit => permittedUnitIds.includes(String(unit.id)));
 
     const dropdownIds = ['prosp-unit', 'client-unit', 'ticket-unit', 'exp-unit', 'bal-unit', 'user-unit', 'ticket-open-unit', 'perm-user-unit'];
 
@@ -1364,8 +1373,8 @@ const UI = {
           units.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
 
         // If common user, restrict and preselect their unit (unless it is a user management field)
-        if (loggedUser && !isLoggedAdmin && loggedUser.unitId !== 'all' && id !== 'perm-user-unit' && id !== 'user-unit') {
-          select.value = loggedUser.unitId;
+        if (loggedUser && !hasGeneralAccess && units.length === 1 && id !== 'perm-user-unit' && id !== 'user-unit') {
+          select.value = units[0].id;
           select.disabled = true;
         } else {
           select.disabled = false;
@@ -1386,9 +1395,12 @@ const UI = {
     // Populate global unit filter in header
     const globalSelector = document.getElementById('global-unit-selector');
     if (globalSelector) {
-      globalSelector.innerHTML = '<option value="all">Todas as Unidades</option>' +
+      globalSelector.innerHTML = (hasGeneralAccess ? '<option value="all">Todas as Unidades</option>' : '') +
         units.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
-      globalSelector.value = activeUnitId;
+      const permittedActiveUnit = hasGeneralAccess || units.some(unit => String(unit.id) === String(activeUnitId));
+      const nextActiveUnit = permittedActiveUnit ? activeUnitId : (units[0]?.id || 'all');
+      Store.setActiveUnitId(nextActiveUnit);
+      globalSelector.value = nextActiveUnit;
     }
 
     // Populate seller/representative dropdowns in forms from API
@@ -1402,7 +1414,8 @@ const UI = {
         if (loggedUser && u.empresa_id !== loggedUser.empresa_id) return false;
 
         // Must belong to correct unit if unit filter is active (or seller has access to all units)
-        if (activeUnitId !== 'all' && u.unitId !== 'all' && u.unitId !== activeUnitId) return false;
+        const userUnits = Array.isArray(u.unitIds) && u.unitIds.length ? u.unitIds.map(String) : [String(u.unitId || '')];
+        if (activeUnitId !== 'all' && !userUnits.includes('all') && !userUnits.includes(String(activeUnitId))) return false;
 
         const isVendedor = u.profile === 'Vendedor';
         const perms = u.permissions || [];
@@ -1455,13 +1468,13 @@ const UI = {
     if (!select) return;
     const user = Store.getLoggedUser() || {};
     let units = Store.getUnits() || [];
-    if (user.profile !== 'Administrador' && user.unitId && user.unitId !== 'all') {
-      units = units.filter(u => String(u.id) === String(user.unitId));
-    }
+    const permittedUnitIds = Array.isArray(user.unitIds) && user.unitIds.length ? user.unitIds.map(String) : [String(user.unitId || '')];
+    const hasGeneralAccess = user.profile === 'Administrador' || user.allUnits === true || permittedUnitIds.includes('all');
+    if (!hasGeneralAccess) units = units.filter(unit => permittedUnitIds.includes(String(unit.id)));
     select.innerHTML = '<option value="" selected disabled>Selecione...</option>' + units.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
     if (units.length === 1) {
       select.value = units[0].id;
-      select.disabled = user.profile !== 'Administrador';
+      select.disabled = !hasGeneralAccess;
     } else {
       select.disabled = false;
     }
