@@ -900,8 +900,14 @@ const App = {
           // O usuário deve guardar apenas o vínculo; nome/logo/CNPJ vêm da identidade salva no banco.
           this.isLoggedIn = true;
           if (Store.syncAllFromBackend) {
-            await Store.syncAllFromBackend({ forceRemote: true });
-            UI.applyCompanyIdentity(Store.getCompanyIdentity());
+            // O servidor já confirmou o login. Falha temporária em uma lista
+            // auxiliar não pode apagar uma sessão válida nem causar loop.
+            try {
+              await Store.syncAllFromBackend({ forceRemote: true });
+              UI.applyCompanyIdentity(Store.getCompanyIdentity());
+            } catch (syncError) {
+              console.warn('Login concluído; sincronização inicial será repetida em segundo plano:', syncError);
+            }
           }
           UI.applyPermissions();
           this.startAutoSync();

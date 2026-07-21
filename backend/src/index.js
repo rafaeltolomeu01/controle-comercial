@@ -4813,6 +4813,7 @@ app.get('/api/me', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
     if (user.status === 'INATIVO') return res.status(403).json({ error: 'Usuário inativo ou excluído.' });
     if (user.status === 'AGUARDANDO LIBERAÇÃO') return res.status(403).json({ error: 'Acesso aguarda aprovação gerencial.' });
+    const enriched = await enrichUserWithUnits(user);
     res.json({
       id: user.id,
       name: user.name,

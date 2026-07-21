@@ -6,6 +6,7 @@ const path = require('node:path');
 const serverPath = path.join(__dirname, '..', 'src', 'index.js');
 const server = fs.readFileSync(serverPath, 'utf8');
 const store = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'store.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'app.js'), 'utf8');
 const moneyMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '20260703_fix_expense_values_cents_to_decimal.js'),
   'utf8'
@@ -445,4 +446,10 @@ test('fotos antigas do banco sao carregadas com token e sem regravar dados', () 
   assert.match(mediaPreserver, /MutationObserver/);
   assert.equal(mediaPreserver.includes("method:'POST'"), false);
   assert.equal(mediaPreserver.includes("method:'DELETE'"), false);
+});
+
+test('sessao recalcula unidades e nao cai por falha de sincronizacao inicial', () => {
+  assert.match(server, /app\.get\('\/api\/me'[\s\S]*?const enriched = await enrichUserWithUnits\(user\);[\s\S]*?unitIds: enriched\.unitIds/);
+  assert.match(appSource, /Login concluído; sincronização inicial será repetida em segundo plano/);
+  assert.match(appSource, /try \{[\s\S]*?await Store\.syncAllFromBackend\(\{ forceRemote: true \}\);[\s\S]*?\} catch \(syncError\)/);
 });

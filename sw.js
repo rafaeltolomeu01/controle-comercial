@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260719-13-aprovados-data-fila-cadastros';
+const CACHE_VERSION = '20260720-01-login-sessao-estavel';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
