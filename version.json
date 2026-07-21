@@ -1,7 +1,7 @@
 {
-  "version": "20260721.01",
-  "updatedAt": "2026-07-21T09:00:00-03:00",
-  "description": "Recupera movimentações antigas pelo vínculo seguro do autor com a empresa",
-  "build": "20260721-01-movimentacoes-legadas",
-  "buildDate": "2026-07-21T09:00:00-03:00"
+  "version": "20260721.02",
+  "updatedAt": "2026-07-21T12:00:00-03:00",
+  "description": "Corrige valores e edicao de clientes pendentes e visibilidade de chamados mecanicos",
+  "build": "20260721-02-clientes-chamados",
+  "buildDate": "2026-07-21T12:00:00-03:00"
 }

@@ -3,6 +3,28 @@ const ccEscapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>
 }[char]));
 const ccEscapeAttr = ccEscapeHtml;
 
+// Converte valores digitados no padrao brasileiro sem transformar milhar em centavos.
+// Exemplos aceitos: 2000, 2.000, 2000,50, 2.000,50 e 2000.50.
+const ccParseBrazilianMoney = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  let raw = String(value == null ? '' : value).trim().replace(/R\$\s*/gi, '').replace(/\s/g, '');
+  if (!raw) return 0;
+  const negative = raw.startsWith('-');
+  raw = raw.replace(/[^0-9.,]/g, '');
+  let normalized = raw;
+  if (raw.includes(',')) {
+    normalized = raw.replace(/\./g, '').replace(',', '.');
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(raw)) {
+    normalized = raw.replace(/\./g, '');
+  } else if ((raw.match(/\./g) || []).length > 1) {
+    normalized = raw.replace(/\./g, '');
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return 0;
+  return negative ? -parsed : parsed;
+};
+window.ccParseBrazilianMoney = ccParseBrazilianMoney;
+
 const App = {
   currentRoute: '',
   isLoggedIn: false,
@@ -1207,13 +1229,13 @@ const App = {
         // Products checkboxes array
         const products = Array.from(document.querySelectorAll('input[name="client-products"]:checked')).map(el => el.value);
         
-        const predictedAverage = parseFloat(document.getElementById('client-predicted-average').value) || 0;
-        const firstOrderValue = parseFloat(document.getElementById('client-first-order-value').value) || 0;
+        const predictedAverage = ccParseBrazilianMoney(document.getElementById('client-predicted-average').value);
+        const firstOrderValue = ccParseBrazilianMoney(document.getElementById('client-first-order-value').value);
         const firstOrderPayment = document.getElementById('client-first-order-payment').value;
         const firstOrderReason = document.getElementById('client-first-order-reason') ? document.getElementById('client-first-order-reason').value.trim() : '';
         const repurchasePayment = document.getElementById('client-repurchase-payment').value;
         const hasBonus = document.getElementById('client-has-bonus').value;
-        const bonusValue = parseFloat(document.getElementById('client-bonus-value')?.value || '0') || 0;
+        const bonusValue = ccParseBrazilianMoney(document.getElementById('client-bonus-value')?.value || '0');
         const sellerAnalysis = document.getElementById('client-seller-analysis').value;
         const route = (document.getElementById('client-route') ? document.getElementById('client-route').value : '');
 

@@ -3965,7 +3965,10 @@
       if (user && user.profile === 'Vendedor') list = list.filter(t => String(t.userId) === String(user.id));
       const body = document.getElementById('tickets-table-body');
       if (!body) return;
-      const isStaff = user && ['Administrador','Responsável Equipamentos','Mecânico'].includes(user.profile);
+      const profile = String(user && user.profile || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      const permissions = Array.isArray(user && user.permissions) ? user.permissions.map(function(p){ return String(p || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }) : [];
+      const staffText = [profile].concat(permissions).join(' | ');
+      const isStaff = !!user && (staffText.includes('admin') || staffText.includes('mecan') || staffText.includes('manutenc') || staffText.includes('responsavel equipamento') || staffText.includes('gestor equipamento') || staffText.includes('administrar chamado'));
       body.innerHTML = list.map(function(ticket){
         const clientName = ticket.fantasyName || ticket.client || 'Cliente não informado';
         const city = ticket.city ? ' • ' + ticket.city : '';
@@ -7330,13 +7333,13 @@
         requestedEqType: document.getElementById('client-requested-eq-type')?.value || '',
         sendableEqType: document.getElementById('client-sendable-eq-type')?.value || '',
         products: Array.from(document.querySelectorAll('input[name="client-products"]:checked')).map(el => el.value),
-        predictedAverage: parseFloat(document.getElementById('client-predicted-average')?.value || '0') || 0,
-        firstOrderValue: parseFloat(document.getElementById('client-first-order-value')?.value || '0') || 0,
+        predictedAverage: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(document.getElementById('client-predicted-average')?.value || '0') : (parseFloat(document.getElementById('client-predicted-average')?.value || '0') || 0),
+        firstOrderValue: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(document.getElementById('client-first-order-value')?.value || '0') : (parseFloat(document.getElementById('client-first-order-value')?.value || '0') || 0),
         firstOrderPayment: document.getElementById('client-first-order-payment')?.value || '',
         firstOrderReason: document.getElementById('client-first-order-reason')?.value || '',
         repurchasePayment: document.getElementById('client-repurchase-payment')?.value || '',
         hasBonus: document.getElementById('client-has-bonus')?.value || '',
-        bonusValue: parseFloat(document.getElementById('client-bonus-value')?.value || '0') || 0,
+        bonusValue: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(document.getElementById('client-bonus-value')?.value || '0') : (parseFloat(document.getElementById('client-bonus-value')?.value || '0') || 0),
         sellerAnalysis: document.getElementById('client-seller-analysis')?.value || '',
         route: document.getElementById('client-route')?.value || '',
         status: 'Pendente',
@@ -9218,7 +9221,12 @@
     }
     body.innerHTML = page.map(function(c){
       var id = esc(c.id || '');
-      var adminBtns = isAdmin() ? '<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.editClientAdmin(\''+id+'\')">Editar</button><button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.deleteClient && App.deleteClient(\''+id+'\', event)">Apagar</button>' : '';
+      var current = user();
+      var approved = norm(c.status).includes('aprov');
+      var canEdit = !approved && (isAdmin(current) || String(clientOwnerId(c) || '') === String(current && current.id || '') || norm(sellerName(c)) === norm(current && current.name));
+      var editBtn = canEdit ? '<button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.editClientPending(\''+id+'\')">Editar</button>' : '';
+      var deleteBtn = isAdmin(current) ? '<button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:.75rem;margin-top:4px;" onclick="event.stopPropagation(); App.deleteClient && App.deleteClient(\''+id+'\', event)">Apagar</button>' : '';
+      var adminBtns = editBtn + deleteBtn;
       return '<tr class="mobile-summary-row" onclick="App.showClientDetails(\''+id+'\')">'
         + '<td data-label="Cliente"><strong>'+esc(c.name || c.nomeFantasia || c.companyName || '-')+'</strong><br><small style="color:var(--text-muted);">'+esc(clientDate(c))+'</small></td>'
         + '<td data-label="CNPJ">'+esc(c.cnpj || '-')+'</td>'
@@ -9339,13 +9347,13 @@
       requestedEqType: val('client-requested-eq-type', old.requestedEqType),
       sendableEqType: val('client-sendable-eq-type', old.sendableEqType),
       products: products,
-      predictedAverage: Number(val('client-predicted-average', old.predictedAverage) || 0),
-      firstOrderValue: Number(val('client-first-order-value', old.firstOrderValue) || 0),
+      predictedAverage: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(val('client-predicted-average', old.predictedAverage)) : Number(val('client-predicted-average', old.predictedAverage) || 0),
+      firstOrderValue: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(val('client-first-order-value', old.firstOrderValue)) : Number(val('client-first-order-value', old.firstOrderValue) || 0),
       firstOrderPayment: val('client-first-order-payment', old.firstOrderPayment),
       firstOrderReason: val('client-first-order-reason', old.firstOrderReason),
       repurchasePayment: val('client-repurchase-payment', old.repurchasePayment),
       hasBonus: val('client-has-bonus', old.hasBonus),
-      bonusValue: Number(val('client-bonus-value', old.bonusValue) || 0),
+      bonusValue: window.ccParseBrazilianMoney ? window.ccParseBrazilianMoney(val('client-bonus-value', old.bonusValue)) : Number(val('client-bonus-value', old.bonusValue) || 0),
       sellerAnalysis: val('client-seller-analysis', old.sellerAnalysis),
       route: val('client-route', old.route),
       data_cadastro: old.data_cadastro || old.date || clientDate(old),
@@ -9390,10 +9398,13 @@
     if (!window.App || App.__ccFinalClientEdit) return;
     App.__ccFinalClientEdit = true;
     window.__ccFinalClientEditActive = true;
-    App.editClientAdmin = function(id){
-      if (!isAdmin()) return alert('Somente administrador pode editar clientes.');
+    App.editClientPending = function(id){
       var c = (Store.getClients ? Store.getClients() : []).find(function(x){ return String(x.id) === String(id); });
       if (!c) return alert('Cliente nao encontrado.');
+      var current = user();
+      var owner = String(clientOwnerId(c) || '') === String(current && current.id || '') || norm(sellerName(c)) === norm(current && current.name);
+      if (!isAdmin(current) && !owner) return alert('Somente o autor do cadastro ou o administrador pode editar este cliente.');
+      if (norm(c.status).includes('aprov')) return alert('Cadastro aprovado nao pode mais ser editado.');
       var box = document.getElementById('client-form-container');
       if (box) { box.classList.remove('hidden'); box.style.display = ''; }
       var form = document.getElementById('client-form');
@@ -9405,17 +9416,21 @@
       fillClientForm(c);
       if (box) box.scrollIntoView({ behavior:'smooth', block:'start' });
     };
+    App.editClientAdmin = App.editClientPending;
     document.addEventListener('submit', async function(ev){
       var form = ev.target;
       if (!form || form.id !== 'client-form' || !form.dataset.editingId) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
-      if (!isAdmin()) return alert('Somente administrador pode editar clientes.');
       var id = form.dataset.editingId;
       var clients = Store.getClients ? Store.getClients() : [];
       var idx = clients.findIndex(function(c){ return String(c.id) === String(id); });
       if (idx < 0) return alert('Cliente nao encontrado.');
       var old = clients[idx];
+      var current = user();
+      var owner = String(clientOwnerId(old) || '') === String(current && current.id || '') || norm(sellerName(old)) === norm(current && current.name);
+      if (!isAdmin(current) && !owner) return alert('Somente o autor do cadastro ou o administrador pode editar este cliente.');
+      if (norm(old.status).includes('aprov')) return alert('Cadastro aprovado nao pode mais ser editado.');
       var next = clientPayloadFromForm(old);
       try {
         await uploadChangedClientPhotos(next, old);
@@ -9482,7 +9497,9 @@
     App.loadTickets = async function(){
       try {
         var u = user();
-        var activeUnit = isAdmin(u) ? 'all' : (Store.getActiveUnitId ? Store.getActiveUnitId() : 'all');
+        // A unidade escolhida no topo deve ser respeitada por todos os perfis,
+        // inclusive administrador, mecânico e responsável por equipamentos.
+        var activeUnit = Store.getActiveUnitId ? Store.getActiveUnitId() : 'all';
         var query = activeUnit && activeUnit !== 'all' ? '?unitId=' + encodeURIComponent(activeUnit) : '';
         var tickets = await App.fetchFromApi('/api/chamados' + query);
         Store.saveTickets(Array.isArray(tickets) ? tickets : []);

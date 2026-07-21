@@ -73,6 +73,43 @@ async function enrichUserWithUnits(user, dbInstance = db) {
   return { ...user, unitIds: access.ids, allUnits: access.allowAll };
 }
 
+// Compatibilidade somente de leitura para chamados antigos que foram gravados
+// com unitId = "all". A unidade e inferida exclusivamente pelo vinculo atual do
+// autor do chamado; usuarios com acesso a todas as unidades nao sao inferidos,
+// evitando que um registro ambiguo apareca em unidades incorretas.
+async function getLegacyOwnerIdsForUnits(companyId, unitIds, dbInstance = db) {
+  const allowedUnits = new Set(normalizeUnitIds(unitIds));
+  if (!allowedUnits.size) return [];
+
+  const users = await dbInstance('usuarios')
+    .where({ empresa_id: String(companyId || '001') })
+    .select('id', 'unitId');
+  if (!users.length) return [];
+
+  let links = [];
+  if (await dbInstance.schema.hasTable('usuario_unidades')) {
+    links = await dbInstance('usuario_unidades')
+      .where({ empresa_id: String(companyId || '001') })
+      .whereIn('usuario_id', users.map(user => String(user.id)))
+      .select('usuario_id', 'unidade_id');
+  }
+
+  const linksByUser = new Map();
+  links.forEach(link => {
+    const userId = String(link.usuario_id || '');
+    if (!linksByUser.has(userId)) linksByUser.set(userId, []);
+    linksByUser.get(userId).push(String(link.unidade_id || ''));
+  });
+
+  return users.filter(user => {
+    const userId = String(user.id || '');
+    const linkedUnits = normalizeUnitIds(linksByUser.get(userId) || []);
+    if (linkedUnits.length) return linkedUnits.some(unitId => allowedUnits.has(unitId));
+    const legacyUnit = String(user.unitId || '').trim();
+    return legacyUnit && legacyUnit.toLowerCase() !== 'all' && allowedUnits.has(legacyUnit);
+  }).map(user => String(user.id));
+}
+
 async function requireAllowedUnit(user, requestedUnitId, options = {}) {
   const access = await getUserUnitAccess(user, db);
   const requested = String(requestedUnitId || '').trim();
@@ -6081,6 +6118,11 @@ function canSeeAllMechanicalTickets(user) {
     || joined.includes('responsavel equipamento')
     || joined.includes('gestor equipamentos')
     || joined.includes('gestor de equipamentos')
+    || joined.includes('mecanico')
+    || joined.includes('mecânica')
+    || joined.includes('mecanica')
+    || joined.includes('manutencao')
+    || joined.includes('manutenção')
     || joined.includes('administrar chamados');
 }
 
@@ -6211,9 +6253,30 @@ app.get('/api/chamados', async (req, res) => {
     await applyHierarchyScope(query, req.user, 'userId', 'empresa_id');
     const unitAccess = await getUserUnitAccess(req.user, db);
     if (isFilterValValid(req.query.unitId) && req.query.unitId !== 'all') {
-      query.where('unitId', await requireAllowedUnit(req.user, req.query.unitId));
+      const selectedUnitId = await requireAllowedUnit(req.user, req.query.unitId);
+      const legacyOwnerIds = await getLegacyOwnerIdsForUnits(req.user.empresa_id, [selectedUnitId], db);
+      query.andWhere(function() {
+        this.where('unitId', selectedUnitId);
+        if (legacyOwnerIds.length) {
+          this.orWhere(function() {
+            this.where(function() {
+              this.whereIn('unitId', ['all', '']).orWhereNull('unitId');
+            }).whereIn('userId', legacyOwnerIds);
+          });
+        }
+      });
     } else if (!unitAccess.allowAll) {
-      query.whereIn('unitId', unitAccess.ids);
+      const legacyOwnerIds = await getLegacyOwnerIdsForUnits(req.user.empresa_id, unitAccess.ids, db);
+      query.andWhere(function() {
+        this.whereIn('unitId', unitAccess.ids);
+        if (legacyOwnerIds.length) {
+          this.orWhere(function() {
+            this.where(function() {
+              this.whereIn('unitId', ['all', '']).orWhereNull('unitId');
+            }).whereIn('userId', legacyOwnerIds);
+          });
+        }
+      });
     }
     if (isFilterValValid(req.query.status)) query.where('status', req.query.status);
     if (isFilterValValid(req.query.patrimonio)) query.where('equipmentSerial', 'like', `%${req.query.patrimonio}%`);

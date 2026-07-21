@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const serverPath = path.join(__dirname, '..', 'src', 'index.js');
 const server = fs.readFileSync(serverPath, 'utf8');
@@ -55,6 +56,38 @@ test('diagnostico fica depois da autenticacao e nao retorna despesas', () => {
 test('nao existe conversao automatica heuristica de valores', () => {
   assert.equal(server.includes('value: val / 100'), false);
   assert.equal(moneyMigration.includes('.update({ value:'), false);
+});
+
+test('cadastro de cliente preserva valores brasileiros sem reduzir milhares', () => {
+  const match = appSource.match(/const ccParseBrazilianMoney = \(value\) => \{[\s\S]*?\n\};/);
+  assert.ok(match, 'conversor monetario do cadastro nao encontrado');
+  const context = { result: null, window: {} };
+  vm.runInNewContext(`${match[0]}; result = [
+    ccParseBrazilianMoney('2000'),
+    ccParseBrazilianMoney('2.000'),
+    ccParseBrazilianMoney('2.000,50'),
+    ccParseBrazilianMoney('2000.50')
+  ];`, context);
+  assert.deepEqual(Array.from(context.result), [2000, 2000, 2000.5, 2000.5]);
+  assert.match(appSource, /firstOrderValue = ccParseBrazilianMoney/);
+  assert.match(compatibility, /firstOrderValue: window\.ccParseBrazilianMoney/);
+});
+
+test('cliente pendente pode ser editado pelo autor ou admin e aprovado perde o botao', () => {
+  assert.match(compatibility, /var canEdit = !approved/);
+  assert.match(compatibility, /App\.editClientPending/);
+  assert.match(compatibility, /Cadastro aprovado nao pode mais ser editado/);
+  assert.match(compatibility, /Somente o autor do cadastro ou o administrador/);
+});
+
+test('mecanica e manutencao recebem chamados das unidades autorizadas', () => {
+  const start = server.indexOf('function canSeeAllMechanicalTickets');
+  const end = server.indexOf('async function getGlobalEquipmentTypeNames', start);
+  const block = server.slice(start, end);
+  assert.match(block, /joined\.includes\('mecanico'\)/);
+  assert.match(block, /joined\.includes\('manutencao'\)/);
+  assert.match(server, /else if \(!unitAccess\.allowAll\) \{[\s\S]*?this\.whereIn\('unitId', unitAccess\.ids\)/);
+  assert.match(compatibility, /staffText\.includes\('mecan'\)/);
 });
 
 test('uploads de banco usam escopo da empresa', () => {
@@ -469,4 +502,14 @@ test('responsavel por equipamentos recebe a listagem sem filtro de vendedor', ()
   const route = server.slice(movementStart, movementEnd);
   assert.match(route, /'responsavel equipamentos', 'responsavel por equipamentos', 'responsavel de equipamentos'/);
   assert.match(route, /if \(!isActorAdmin\)[\s\S]*?getPermittedSellerIds/);
+});
+
+test('chamados antigos gravados como todas as unidades reaparecem somente pela unidade do autor', () => {
+  assert.match(server, /async function getLegacyOwnerIdsForUnits/);
+  assert.match(server, /legacyUnit\.toLowerCase\(\) !== 'all'/);
+  assert.match(server, /this\.whereIn\('unitId', \['all', ''\]\)\.orWhereNull\('unitId'\)/);
+  assert.match(server, /whereIn\('userId', legacyOwnerIds\)/);
+  assert.match(server, /joined\.includes\('responsavel equipamento/);
+  assert.match(server, /joined\.includes\('mecanico'\)/);
+  assert.match(server, /joined\.includes\('manutencao'\)/);
 });
