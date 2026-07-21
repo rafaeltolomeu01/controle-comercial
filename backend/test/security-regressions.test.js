@@ -453,3 +453,20 @@ test('sessao recalcula unidades e nao cai por falha de sincronizacao inicial', (
   assert.match(appSource, /Login concluído; sincronização inicial será repetida em segundo plano/);
   assert.match(appSource, /try \{[\s\S]*?await Store\.syncAllFromBackend\(\{ forceRemote: true \}\);[\s\S]*?\} catch \(syncError\)/);
 });
+
+test('movimentacoes legadas reaparecem pelo autor sem atravessar empresas', () => {
+  const helperStart = server.indexOf('function scopeMovementCompany');
+  const helperEnd = server.indexOf('async function getCompanyMovementById', helperStart);
+  const helper = server.slice(helperStart, helperEnd);
+  assert.match(helper, /whereNull\(`\$\{prefix\}empresa_id`\)\.whereIn\(`\$\{prefix\}vendedor_id`/);
+  assert.match(helper, /select\('id'\)\.from\('usuarios'\)\.where\('empresa_id', companyId\)/);
+  assert.match(helper, /where\(`\$\{prefix\}empresa_id`, companyId\)/);
+});
+
+test('responsavel por equipamentos recebe a listagem sem filtro de vendedor', () => {
+  const movementStart = server.indexOf("app.get('/api/equipamentos/movimentacoes'");
+  const movementEnd = server.indexOf("app.put('/api/equipamentos/movimentacoes/:id'", movementStart);
+  const route = server.slice(movementStart, movementEnd);
+  assert.match(route, /'responsavel equipamentos', 'responsavel por equipamentos', 'responsavel de equipamentos'/);
+  assert.match(route, /if \(!isActorAdmin\)[\s\S]*?getPermittedSellerIds/);
+});

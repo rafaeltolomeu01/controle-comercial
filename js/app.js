@@ -6662,6 +6662,10 @@ const App = {
       });
     } catch (err) {
       console.error('Erro ao carregar movimentações:', err);
+      const body = document.getElementById('movements-table-body');
+      if (body) {
+        body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--danger);">Não foi possível carregar as movimentações. Aguarde a inicialização do serviço e atualize a página.</td></tr>';
+      }
     }
   },
 

@@ -141,6 +141,14 @@ function scopeMovementCompany(query, user, companyCandidates, alias = '') {
     this.where(`${prefix}empresa_id`, companyId)
       .orWhere(function() {
         this.whereNull(`${prefix}empresa_id`).whereIn(`${prefix}empresa`, companyCandidates);
+      })
+      // Compatibilidade segura com registros antigos cujo nome livre de
+      // empresa mudou: aceita o registro apenas quando o autor ainda pertence
+      // à mesma empresa autenticada e o empresa_id legado continua nulo.
+      .orWhere(function() {
+        this.whereNull(`${prefix}empresa_id`).whereIn(`${prefix}vendedor_id`, function() {
+          this.select('id').from('usuarios').where('empresa_id', companyId);
+        });
       });
   });
 }
@@ -4180,12 +4188,14 @@ app.get('/api/equipamentos/movimentacoes', async (req, res) => {
     const profileNorm = normalizeRole(req.user && req.user.profile);
     const isActorAdmin = [
       'administrador', 'administrador sistema', 
-      'responsavel equipamentos', 'gestor equipamentos', 'gestor de equipamentos', 
+      'responsavel equipamentos', 'responsavel por equipamentos', 'responsavel de equipamentos',
+      'gestor equipamentos', 'gestor de equipamentos', 
       'conferente', 'financeiro'
     ].includes(profileNorm) 
     || hasAnyPermission(req.user, [
       'Administrador', 'Administrador (Acesso Total)', 
-      'Responsável Equipamentos', 'Gestor Equipamentos', 'Gestor de Equipamentos', 
+      'Responsável Equipamentos', 'Responsável por Equipamentos', 'Responsável de Equipamentos',
+      'Gestor Equipamentos', 'Gestor de Equipamentos', 
       'Equipamentos', 'Avaliação de Movimentação', 'Confirmação de Movimentação'
     ]);
 
