@@ -41,6 +41,7 @@ const accountabilityMigration = fs.readFileSync(path.join(__dirname, '..', 'migr
 const accountabilityPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'prestacao-contas.html'), 'utf8');
 const accountabilityJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'prestacao-contas.js'), 'utf8');
 const accountabilityCss = fs.readFileSync(path.join(__dirname, '..', '..', 'css', 'prestacao-contas.css'), 'utf8');
+const expensesPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'despesas.html'), 'utf8');
 
 test('prestacao de contas cria historico aditivo e rollback nao destrutivo', () => {
   assert.match(accountabilityMigration, /createTable\('prestacoes_contas'/);
@@ -82,6 +83,34 @@ test('layout da prestacao de contas e isolado e responsivo', () => {
   assert.match(accountabilityCss, /minmax\(0/);
   assert.match(accountabilityCss, /@media \(max-width: 650px\)/);
   assert.equal(accountabilityCss.includes('overflow-x: hidden'), false);
+});
+
+test('saldos corporativo e beneficio ficam separados sem migracao destrutiva', () => {
+  assert.match(server, /function ccFinancialBucket/);
+  assert.match(server, /balance_type/);
+  assert.match(server, /Saldo lançado diretamente.*\[\$\{typeLabel\}\]/s);
+  assert.match(listUpdates, /approvedBalanceByBucket/);
+  assert.match(listUpdates, /metric-balance-corporate/);
+  assert.match(listUpdates, /metric-balance-benefit/);
+  assert.match(accountabilityServer, /corporate_balance/);
+  assert.match(accountabilityServer, /benefit_balance/);
+  assert.match(accountabilityServer, /approved_corporate_expenses_total/);
+  assert.match(accountabilityServer, /approved_benefit_expenses_total/);
+  assert.equal(/alterTable\(['"]despesas_solicitacoes/.test(accountabilityServer), false);
+});
+
+test('requisicao continua fora do consumo de saldo', () => {
+  assert.match(accountabilityServer, /item\.is_requisition/);
+  assert.match(accountabilityServer, /requisition_expenses_total/);
+  assert.match(listUpdates, /isRequisitionExpense/);
+  assert.match(expensesPage, /metric-expense-requisition/);
+});
+
+test('registro de despesa permanece visivel para administrador e vendedor', () => {
+  assert.match(expensesPage, /id="btn-open-expense-form"/);
+  assert.match(compatibility, /installExpenseRegistrationLastGuard/);
+  assert.match(compatibility, /admin\|vendedor\|supervisor/);
+  assert.match(compatibility, /cc_expense_approval_mode/);
 });
 
 test('nao contem credencial administrativa padrao', () => {
@@ -637,7 +666,7 @@ test('lista principal de clientes permanece paginada em cinco registros', () => 
 test('requisicoes ficam auditaveis mas nao reduzem o saldo aprovado', () => {
   const accountabilityBackend = fs.readFileSync(path.join(__dirname, '..', 'src', 'prestacoes-contas.js'), 'utf8');
   const expensesPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'despesas.html'), 'utf8');
-  assert.match(accountabilityBackend, /isRequisition = normalizeRole\(expense\.operacao \|\| ''\)\.includes\('requis'\)/);
+  assert.match(accountabilityBackend, /const isRequisition = bucket === 'requisicao'/);
   assert.match(accountabilityBackend, /filter\(item => !item\.is_requisition\)/);
   assert.match(accountabilityBackend, /requisition_expenses_total: requisitionExpensesTotal/);
   assert.match(expensesPage, /id="metric-expense-requisition"/);

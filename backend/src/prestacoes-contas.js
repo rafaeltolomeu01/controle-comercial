@@ -14,6 +14,13 @@ module.exports = function installPrestacoesContas(deps) {
   const isIsoDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
   const textRole = user => normalizeRole(user && (user.profile || user.role || user.perfil) || '');
   const permissionText = user => (Array.isArray(user && user.permissions) ? user.permissions : []).map(normalizeRole);
+  const financialBucket = value => {
+    const text = normalizeRole(value || '');
+    if (text.includes('requis')) return 'requisicao';
+    if (/benef|hosped|hotel|alimenta|refei/.test(text)) return 'beneficio';
+    if (/corpor|abastec|combust|gasolina/.test(text)) return 'corporativo';
+    return 'corporativo';
+  };
 
   function canOpen(user) {
     const role = textRole(user);
@@ -92,20 +99,24 @@ module.exports = function installPrestacoesContas(deps) {
     const items = requestIds.length ? await db('despesas_solicitacoes_itens').whereIn('solicitacao_id', requestIds) : [];
     const approvals = requestIds.length ? await db('despesas_aprovacoes').whereIn('solicitacao_id', requestIds) : [];
 
-    const requestedValue = request => {
-      const extraTotal = extras.filter(row => String(row.solicitacao_id) === String(request.id))
-        .reduce((sum, row) => sum + money(row.valor), 0);
-      return roundMoney(money(request.valor_hotel_alim) + money(request.valor_abastecimento) + extraTotal);
-    };
-    const approvedValue = request => {
+    const requestValues = (request, approved) => {
       const requestItems = items.filter(row => String(row.solicitacao_id) === String(request.id));
-      if (!requestItems.length) return normalizeRole(request.status).includes('aprov') ? requestedValue(request) : 0;
-      return roundMoney(requestItems.reduce((sum, item) => {
+      if (!requestItems.length) {
+        if (approved && !normalizeRole(request.status).includes('aprov')) return { corporativo: 0, beneficio: 0 };
+        const extraTotal = extras.filter(row => String(row.solicitacao_id) === String(request.id)).reduce((sum, row) => sum + money(row.valor), 0);
+        return { corporativo: roundMoney(money(request.valor_abastecimento) + extraTotal), beneficio: roundMoney(request.valor_hotel_alim) };
+      }
+      return requestItems.reduce((result, item) => {
         const status = normalizeRole(item.status || '');
-        if (status.includes('reprov') || status.includes('correc') || status === 'pendente') return sum;
-        return sum + money(item.valor_aprovado);
-      }, 0));
+        if (approved && (status.includes('reprov') || status.includes('correc') || status === 'pendente')) return result;
+        const bucket = financialBucket(item.categoria);
+        if (bucket !== 'beneficio') result.corporativo += money(approved ? item.valor_aprovado : item.valor_solicitado);
+        else result.beneficio += money(approved ? item.valor_aprovado : item.valor_solicitado);
+        return result;
+      }, { corporativo: 0, beneficio: 0 });
     };
+    const requestedValue = request => { const value = requestValues(request, false); return roundMoney(value.corporativo + value.beneficio); };
+    const approvedValue = request => { const value = requestValues(request, true); return roundMoney(value.corporativo + value.beneficio); };
 
     const balanceEvents = requests.map(request => {
       const requestItems = items.filter(row => String(row.solicitacao_id) === String(request.id));
@@ -113,6 +124,8 @@ module.exports = function installPrestacoesContas(deps) {
       const direct = categoryText.includes('diretamente');
       const removal = direct && (categoryText.includes('remov') || approvedValue(request) < 0);
       const approval = approvals.filter(row => String(row.solicitacao_id) === String(request.id)).sort((a, b) => money(b.id) - money(a.id))[0];
+      const requestedByType = requestValues(request, false);
+      const approvedByType = requestValues(request, true);
       return {
         id: request.id,
         type: direct ? (removal ? 'saldo_retirado' : 'saldo_adicionado') : 'solicitacao_saldo',
@@ -120,6 +133,9 @@ module.exports = function installPrestacoesContas(deps) {
         time: request.hora_solicitacao,
         requested: requestedValue(request),
         approved: approvedValue(request),
+        requested_by_type: requestedByType,
+        approved_by_type: approvedByType,
+        balance_type: approvedByType.beneficio && approvedByType.corporativo ? 'Misto' : (approvedByType.beneficio ? 'Benefício' : 'Corporativo'),
         status: request.status,
         description: request.justificativa || '',
         approval_date: approval && approval.data_aprovacao || requestItems.find(row => row.data_aprovacao)?.data_aprovacao || null,
@@ -131,7 +147,8 @@ module.exports = function installPrestacoesContas(deps) {
     const approvedExpenses = [];
     const unapprovedExpenses = [];
     expenses.forEach(expense => {
-      const isRequisition = normalizeRole(expense.operacao || '').includes('requis');
+      const bucket = financialBucket(expense.operacao || expense.finalidade);
+      const isRequisition = bucket === 'requisicao';
       const item = {
         id: expense.id,
         code: `DP-${expense.id}`,
@@ -143,6 +160,7 @@ module.exports = function installPrestacoesContas(deps) {
         value: roundMoney(expense.value),
         status: expense.status || 'Pendente',
         is_requisition: isRequisition,
+        financial_bucket: bucket,
         receipt: expense.foto_comprovante || null,
         odometer: expense.foto_odometro || null
       };
@@ -153,6 +171,8 @@ module.exports = function installPrestacoesContas(deps) {
     const calculatedBalance = roundMoney(balanceEvents
       .filter(event => normalizeRole(event.status || '').includes('aprov'))
       .reduce((sum, event) => sum + money(event.approved), 0));
+    const corporateBalance = roundMoney(balanceEvents.filter(event => normalizeRole(event.status || '').includes('aprov')).reduce((sum, event) => sum + money(event.approved_by_type?.corporativo), 0));
+    const benefitBalance = roundMoney(balanceEvents.filter(event => normalizeRole(event.status || '').includes('aprov')).reduce((sum, event) => sum + money(event.approved_by_type?.beneficio), 0));
     // Requisicao e paga diretamente pela empresa. Ela deve aparecer no dossie,
     // mas nunca consumir o saldo financeiro aprovado para o usuario.
     const approvedExpensesAllTotal = roundMoney(approvedExpenses.reduce((sum, item) => sum + money(item.value), 0));
@@ -162,7 +182,11 @@ module.exports = function installPrestacoesContas(deps) {
     const approvedExpensesTotal = roundMoney(approvedExpenses
       .filter(item => !item.is_requisition)
       .reduce((sum, item) => sum + money(item.value), 0));
+    const approvedCorporateExpensesTotal = roundMoney(approvedExpenses.filter(item => item.financial_bucket === 'corporativo').reduce((sum, item) => sum + money(item.value), 0));
+    const approvedBenefitExpensesTotal = roundMoney(approvedExpenses.filter(item => item.financial_bucket === 'beneficio').reduce((sum, item) => sum + money(item.value), 0));
     const unapprovedExpensesTotal = roundMoney(unapprovedExpenses.reduce((sum, item) => sum + money(item.value), 0));
+    const pendingCorporateExpensesTotal = roundMoney(unapprovedExpenses.filter(item => item.financial_bucket === 'corporativo').reduce((sum, item) => sum + money(item.value), 0));
+    const pendingBenefitExpensesTotal = roundMoney(unapprovedExpenses.filter(item => item.financial_bucket === 'beneficio').reduce((sum, item) => sum + money(item.value), 0));
 
     return {
       recipient: { id: target.id, name: target.name, profile: target.profile, unitIds: target.unitIds || [] },
@@ -172,13 +196,21 @@ module.exports = function installPrestacoesContas(deps) {
       permissions: { can_close: canClose(actor), seller_locked: textRole(actor) === 'vendedor' },
       balance_events: balanceEvents,
       calculated_balance: calculatedBalance,
+      corporate_balance: corporateBalance,
+      benefit_balance: benefitBalance,
       approved_expenses: approvedExpenses,
       approved_expenses_total: approvedExpensesTotal,
+      approved_corporate_expenses_total: approvedCorporateExpensesTotal,
+      approved_benefit_expenses_total: approvedBenefitExpensesTotal,
       approved_expenses_all_total: approvedExpensesAllTotal,
       requisition_expenses_total: requisitionExpensesTotal,
       unapproved_expenses: unapprovedExpenses,
       unapproved_expenses_count: unapprovedExpenses.length,
       unapproved_expenses_total: unapprovedExpensesTotal,
+      pending_corporate_expenses_total: pendingCorporateExpensesTotal,
+      pending_benefit_expenses_total: pendingBenefitExpensesTotal,
+      corporate_difference: roundMoney(corporateBalance - approvedCorporateExpensesTotal),
+      benefit_difference: roundMoney(benefitBalance - approvedBenefitExpensesTotal),
       difference: roundMoney(calculatedBalance - approvedExpensesTotal)
     };
   }

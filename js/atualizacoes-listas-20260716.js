@@ -450,12 +450,13 @@
     const unitId = modal.querySelector('#cc-direct-unit')?.value;
     const periodStart = modal.querySelector('#cc-direct-start')?.value;
     const periodEnd = modal.querySelector('#cc-direct-end')?.value;
+    const balanceType = modal.querySelector('#cc-direct-balance-type')?.value || 'corporativo';
     if (!recipientId || !unitId || !periodStart || !periodEnd) return resetDirectBalanceSummary(modal);
     const panel = modal.querySelector('#cc-direct-summary');
     const requestNumber = ++directSummaryRequest;
     panel.querySelector('[data-direct-summary-status]').textContent = 'Calculando valores...';
     try {
-      const params = new URLSearchParams({ recipient_id: recipientId, unit_id: unitId, period_start: periodStart, period_end: periodEnd });
+      const params = new URLSearchParams({ recipient_id: recipientId, unit_id: unitId, period_start: periodStart, period_end: periodEnd, balance_type: balanceType });
       const summary = await api(`/api/despesas/direct-credit/summary?${params.toString()}`);
       if (requestNumber !== directSummaryRequest) return;
       panel.querySelector('[data-direct-summary-status]').textContent = `${Number(summary.notes_count) || 0} nota(s) no periodo`;
@@ -526,6 +527,7 @@
         </div>
         <form id="cc-direct-balance-form">
           <div class="form-group"><label for="cc-direct-operation">Operação</label><select id="cc-direct-operation" required><option value="add">Adicionar saldo</option><option value="remove">Remover saldo disponível</option></select></div>
+          <div class="form-group"><label for="cc-direct-balance-type">Finalidade do saldo</label><select id="cc-direct-balance-type" required><option value="corporativo">Corporativo (abastecimento)</option><option value="beneficio">Benefício (hotel e alimentação)</option></select></div>
           <div class="form-grid two-columns">
             <div class="form-group"><label for="cc-direct-profile">Categoria / Perfil</label><select id="cc-direct-profile"><option value="">Todos os perfis</option></select></div>
             <div class="form-group"><label for="cc-direct-recipient">Usuário</label><select id="cc-direct-recipient" required><option value="">Carregando usuários...</option></select></div>
@@ -561,6 +563,7 @@
       resetDirectBalanceSummary(modal);
     });
     modal.querySelector('#cc-direct-operation').addEventListener('change', () => updateDirectOperationUi(modal));
+    modal.querySelector('#cc-direct-balance-type').addEventListener('change', () => loadDirectBalanceSummary(modal));
     modal.querySelector('#cc-direct-recipient').addEventListener('change', () => {
       const person = directBalanceRecipients.find(item => String(item.id) === modal.querySelector('#cc-direct-recipient').value);
       const unitSelect = modal.querySelector('#cc-direct-unit');
@@ -581,6 +584,7 @@
       const recipientSelect = document.getElementById('cc-direct-recipient');
       const unitSelect = document.getElementById('cc-direct-unit');
       const operation = document.getElementById('cc-direct-operation').value;
+      const balanceType = document.getElementById('cc-direct-balance-type').value;
       const amount = Number(document.getElementById('cc-direct-amount').value);
       const periodStart = document.getElementById('cc-direct-start').value;
       const periodEnd = document.getElementById('cc-direct-end').value;
@@ -597,6 +601,7 @@
             recipient_id: recipientSelect.value,
             unit_id: unitSelect.value,
             operation,
+            balance_type: balanceType,
             period_start: periodStart,
             period_end: periodEnd,
             amount,
@@ -1224,6 +1229,27 @@
     return normalize(pick(expense, ['operacao', 'operation', 'tipo_operacao', 'tipoOperacao'])).includes('requis');
   }
 
+  function financialBucket(value) {
+    const text = normalize(value);
+    if (text.includes('requis')) return 'requisicao';
+    if (/benef|hosped|hotel|alimenta|refei/.test(text)) return 'beneficio';
+    return 'corporativo';
+  }
+
+  function approvedBalanceByBucket(balance, bucket) {
+    const items = balance.itens || balance.items || balance.solicitacao_itens || [];
+    if (Array.isArray(items) && items.length) {
+      return items.reduce((sum, item) => {
+        const status = normalize(item.status || '');
+        if (status.includes('reprov') || status.includes('correc') || financialBucket(item.categoria) !== bucket) return sum;
+        return sum + numericValue(item.valor_aprovado ?? item.valor_solicitado);
+      }, 0);
+    }
+    return bucket === 'beneficio'
+      ? numericValue(balance.valor_hotel_alim_aprovado ?? balance.valor_hotel_alim)
+      : numericValue(balance.valor_abastecimento_aprovado ?? balance.valor_abastecimento);
+  }
+
   function isApproved(record) {
     return normalize(record?.status).includes('aprov');
   }
@@ -1266,11 +1292,21 @@
     const approvedExpenses = expenses.filter(isApproved);
     const requisitionSpent = approvedExpenses.filter(isRequisitionExpense).reduce((sum, item) => sum + expenseValue(item), 0);
     const totalSpent = approvedExpenses.filter(item => !isRequisitionExpense(item)).reduce((sum, item) => sum + expenseValue(item), 0);
+    const corporateBalance = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceByBucket(item, 'corporativo'), 0);
+    const benefitBalance = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceByBucket(item, 'beneficio'), 0);
+    const corporateSpent = approvedExpenses.filter(item => financialBucket(pick(item, ['operacao','operation','finalidade'])) === 'corporativo').reduce((sum, item) => sum + expenseValue(item), 0);
+    const benefitSpent = approvedExpenses.filter(item => financialBucket(pick(item, ['operacao','operation','finalidade'])) === 'beneficio').reduce((sum, item) => sum + expenseValue(item), 0);
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = formatMoney(value); };
     set('metric-balance-available', totalApproved);
     set('metric-balance-used', totalSpent);
     set('metric-balance-remaining', totalApproved - totalSpent);
     set('metric-expense-requisition', requisitionSpent);
+    set('metric-balance-corporate', corporateBalance);
+    set('metric-expense-corporate', corporateSpent);
+    set('metric-remaining-corporate', corporateBalance - corporateSpent);
+    set('metric-balance-benefit', benefitBalance);
+    set('metric-expense-benefit', benefitSpent);
+    set('metric-remaining-benefit', benefitBalance - benefitSpent);
   }
 
   function renderDashboardBars(elementId, rows, formatter) {

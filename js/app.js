@@ -4300,6 +4300,10 @@ const App = {
         <label style="font-size: 0.7rem; color: var(--text-muted);">Descrição do Gasto Extra</label>
         <input type="text" class="extra-desc" required value="${desc}" placeholder="Ex: Estacionamento, pedágio, etc.">
       </div>
+      <div class="form-group" style="width: 170px; margin-bottom: 0;">
+        <label style="font-size: 0.7rem; color: var(--text-muted);">Finalidade do saldo</label>
+        <select class="extra-balance-type"><option value="corporativo">Corporativo</option><option value="beneficio">Benefício</option></select>
+      </div>
       <div class="form-group" style="width: 150px; margin-bottom: 0;">
         <label style="font-size: 0.7rem; color: var(--text-muted);">Valor (R$)</label>
         <input type="number" class="extra-val" required value="${val}" step="0.01" min="0.01" placeholder="0.00">
@@ -4382,8 +4386,9 @@ const App = {
       rows.forEach(row => {
         const desc = row.querySelector('.extra-desc').value.trim();
         const val = parseFloat(row.querySelector('.extra-val').value) || 0;
+        const tipo = row.querySelector('.extra-balance-type')?.value || 'corporativo';
         if (desc && val > 0) {
-          extras.push({ descricao: desc, valor: val });
+          extras.push({ descricao: desc, valor: val, tipo });
         }
       });
 
@@ -5609,8 +5614,9 @@ const App = {
             rows.forEach(row => {
               const desc = row.querySelector('.extra-desc').value.trim();
               const val = parseFloat(row.querySelector('.extra-val').value) || 0;
+              const tipo = row.querySelector('.extra-balance-type')?.value || 'corporativo';
               if (desc && val > 0) {
-                extras.push({ descricao: desc, valor: val });
+                extras.push({ descricao: desc, valor: val, tipo });
               }
             });
 

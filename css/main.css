@@ -24,6 +24,24 @@
   --mobile-nav-height: 60px;
 }
 
+/* Clientes cadastrados: tabela estável, sem largura mínima artificial e cartões
+   responsivos em telas menores. Regras isoladas para não atingir outros módulos. */
+#view-clientes .table-responsive { width:100%; max-width:100%; min-width:0; overflow:visible; }
+#view-clientes table { width:100% !important; min-width:0 !important; table-layout:fixed; }
+#view-clientes th, #view-clientes td { min-width:0 !important; white-space:normal !important; overflow-wrap:anywhere; padding:9px 7px; }
+#view-clientes .card:has(#clients-table-body) { min-height:560px; }
+@media (max-width:1180px) {
+  #view-clientes table, #view-clientes tbody { display:block !important; width:100% !important; }
+  #view-clientes thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+  #view-clientes #clients-table-body tr { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); width:100% !important; margin-bottom:12px; border:1px solid var(--border-color); border-radius:10px; }
+  #view-clientes #clients-table-body td { display:grid !important; grid-template-columns:minmax(85px,35%) minmax(0,1fr); gap:8px; width:auto !important; max-width:100% !important; border-bottom:1px solid rgba(148,163,184,.16); }
+  #view-clientes #clients-table-body td::before { content:attr(data-label); color:var(--text-muted); font-size:.68rem; font-weight:700; text-transform:uppercase; }
+}
+@media (max-width:640px) {
+  #view-clientes #clients-table-body tr { grid-template-columns:1fr; }
+  #view-clientes .card:has(#clients-table-body) { min-height:0; }
+}
+
 /* ===== Fila de aprovacao de clientes: responsivo e isolado ===== */
 #view-aprovacao,
 #view-aprovacao .client-approval-card,

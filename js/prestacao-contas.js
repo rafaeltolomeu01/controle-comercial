@@ -78,12 +78,15 @@
     state.preview = preview;
     byId('accountability-result').hidden = false;
     byId('accountability-pdf').disabled = false;
-    byId('accountability-balance').textContent = brl(preview.calculated_balance);
-    byId('accountability-approved').textContent = brl(preview.approved_expenses_total);
+    byId('accountability-balance-corporate').textContent = brl(preview.corporate_balance);
+    byId('accountability-balance-benefit').textContent = brl(preview.benefit_balance);
+    byId('accountability-approved-corporate').textContent = brl(preview.approved_corporate_expenses_total);
+    byId('accountability-approved-benefit').textContent = brl(preview.approved_benefit_expenses_total);
     byId('accountability-requisition').textContent = brl(preview.requisition_expenses_total);
-    const diff = Number(preview.considered_balance ?? preview.calculated_balance) - Number(preview.approved_expenses_total || 0);
-    byId('accountability-difference').textContent = brl(diff);
-    byId('accountability-pending').textContent = String(preview.unapproved_expenses_count || 0);
+    byId('accountability-difference-corporate').textContent = brl(preview.corporate_difference);
+    byId('accountability-difference-benefit').textContent = brl(preview.benefit_difference);
+    byId('accountability-pending-corporate').textContent = brl(preview.pending_corporate_expenses_total);
+    byId('accountability-pending-benefit').textContent = brl(preview.pending_benefit_expenses_total);
 
     const warning = byId('accountability-warning');
     warning.hidden = !(preview.unapproved_expenses_count > 0);
@@ -96,13 +99,13 @@
       const labels = { solicitacao_saldo: 'Solicitação de saldo', saldo_adicionado: 'Saldo adicionado diretamente', saldo_retirado: 'Saldo retirado diretamente' };
       return `<article class="accountability-event">
         <div><b>${esc(labels[event.type] || 'Movimentação de saldo')}</b><br><small>${dateBr(event.date)} ${esc(event.time || '')} · ${esc(event.status || '')}<br>${esc(event.description || '')}</small></div>
-        <strong>${brl(event.approved)}</strong>
+        <strong>${esc(event.balance_type || '')}<br>${brl(event.approved)}</strong>
       </article>`;
     }).join('') : '<div class="accountability-empty">Nenhuma movimentação de saldo no período.</div>';
 
     const expenses = preview.approved_expenses || [];
     byId('accountability-expenses').innerHTML = expenses.length ? expenses.map(expense => `<article class="accountability-expense" data-expense-id="${esc(expense.id)}" tabindex="0" role="button">
-      <div><b>${esc(expense.code || `DP-${expense.id}`)}</b> <span class="accountability-status">${expense.is_requisition ? 'Requisição — não desconta saldo' : 'Aprovada'}</span><br><small>${dateBr(expense.date)} ${esc(expense.time || '')} · ${esc(expense.purpose || expense.description || 'Despesa')}</small></div>
+      <div><b>${esc(expense.code || `DP-${expense.id}`)}</b> <span class="accountability-status">${expense.is_requisition ? 'Requisição — não desconta saldo' : (expense.financial_bucket === 'beneficio' ? 'Benefício' : 'Corporativo')}</span><br><small>${dateBr(expense.date)} ${esc(expense.time || '')} · ${esc(expense.purpose || expense.description || 'Despesa')}</small></div>
       <strong>${brl(expense.value)}</strong>
     </article>`).join('') : '<div class="accountability-empty">Nenhuma despesa aprovada no período.</div>';
 
@@ -252,11 +255,17 @@
     const consideredForPdf = !byId('accountability-close-panel')?.hidden && byId('accountability-considered')?.value
       ? parseMoney(byId('accountability-considered').value)
       : Number(p.considered_balance ?? p.calculated_balance);
-    add(`Saldo aprovado/considerado: ${brl(consideredForPdf)}`);
-    add(`Despesas aprovadas que consomem saldo: ${brl(p.approved_expenses_total)}`);
+    add(`Saldo aprovado corporativo: ${brl(p.corporate_balance)}`);
+    add(`Saldo aprovado benefício: ${brl(p.benefit_balance)}`);
+    add(`Despesas aprovadas corporativas: ${brl(p.approved_corporate_expenses_total)}`);
+    add(`Despesas aprovadas de benefício: ${brl(p.approved_benefit_expenses_total)}`);
     add(`Despesas aprovadas por requisição (não descontam saldo): ${brl(p.requisition_expenses_total)}`);
     add(`Total geral de despesas aprovadas: ${brl(p.approved_expenses_all_total ?? (Number(p.approved_expenses_total || 0) + Number(p.requisition_expenses_total || 0)))}`);
     add(`Saldo para o próximo período: ${brl(consideredForPdf - Number(p.approved_expenses_total || 0))}`);
+    add(`Restante corporativo: ${brl(p.corporate_difference)}`);
+    add(`Restante benefício: ${brl(p.benefit_difference)}`);
+    add(`Pendentes corporativas: ${brl(p.pending_corporate_expenses_total)}`);
+    add(`Pendentes de benefício: ${brl(p.pending_benefit_expenses_total)}`);
     add(`Despesas não aprovadas (fora da soma): ${p.unapproved_expenses_count || 0} — ${brl(p.unapproved_expenses_total)}`, { gap: 5 });
     add('MOVIMENTAÇÕES DE SALDO', { size: 12, bold: true });
     (p.balance_events || []).forEach(event => add(`${dateBr(event.date)} ${event.time || ''} | ${event.type.replaceAll('_',' ')} | solicitado ${brl(event.requested)} | aprovado ${brl(event.approved)} | ${event.status}. ${event.description || ''}`));

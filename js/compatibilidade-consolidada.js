@@ -406,6 +406,81 @@
   document.addEventListener('DOMContentLoaded', () => { clearTemporaryFormCache(); markFormsNoAutocomplete(); });
 })();
 
+/* Garantia final de acesso ao registro de despesas.
+   Esta regra fica no final do arquivo para não ser anulada por módulos legados. */
+(function installFinalExpenseRegistrationAccess(){
+  'use strict';
+  if (window.__ccFinalExpenseRegistrationAccess) return;
+  window.__ccFinalExpenseRegistrationAccess = true;
+
+  function normalized(value){
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function synchronize(){
+    if (window.location.hash !== '#despesas') return;
+    const user = window.Store?.getLoggedUser?.() || {};
+    const role = normalized(user.profile || user.role);
+    const permissions = (Array.isArray(user.permissions) ? user.permissions : []).map(normalized);
+    const isApprovalMode = sessionStorage.getItem('cc_expense_approval_mode') === '1';
+    const hasModuleAccess = /admin|vendedor|supervisor|gerente|financeiro|manutencao|motorista|ajudante/.test(role)
+      || permissions.some(permission => /administrador|despesa|financeiro/.test(permission));
+    const visible = Boolean(user.id && hasModuleAccess && !isApprovalMode);
+    const card = document.getElementById('expense-form-card');
+    const button = document.getElementById('btn-open-expense-form');
+    if (card) {
+      card.hidden = !visible;
+      card.style.setProperty('display', visible ? 'block' : 'none', 'important');
+    }
+    if (button) {
+      button.hidden = !visible;
+      button.style.setProperty('display', visible ? 'inline-flex' : 'none', 'important');
+      button.disabled = false;
+    }
+  }
+
+  const schedule = () => {
+    clearTimeout(window.__ccFinalExpenseRegistrationAccessTimer);
+    window.__ccFinalExpenseRegistrationAccessTimer = setTimeout(synchronize, 100);
+  };
+  document.addEventListener('DOMContentLoaded', schedule);
+  window.addEventListener('hashchange', schedule);
+  document.addEventListener('click', schedule, true);
+  new MutationObserver(schedule).observe(document.documentElement, { childList:true, subtree:true });
+  schedule();
+})();
+
+/* Registro de despesa: visível para qualquer perfil com acesso ao módulo,
+   inclusive Administrador. Continua oculto apenas no modo de aprovação. */
+(function installExpenseRegistrationVisibility(){
+  'use strict';
+  if (window.__ccExpenseRegistrationVisibility) return;
+  window.__ccExpenseRegistrationVisibility = true;
+  function sync(){
+    if (window.location.hash !== '#despesas') return;
+    const approvalMode = sessionStorage.getItem('cc_expense_approval_mode') === '1';
+    const user = Store.getLoggedUser?.() || {};
+    const permissions = Array.isArray(user.permissions) ? user.permissions.map(String) : [];
+    const role = String(user.profile || user.role || '').toLowerCase();
+    const canRegister = role.includes('admin') || role.includes('vendedor') || role.includes('supervisor') || role.includes('gerente') || role.includes('financeiro') || permissions.some(value => /despesas|administrador/i.test(value));
+    const card = document.getElementById('expense-form-card');
+    const button = document.getElementById('btn-open-expense-form');
+    if (card) card.style.display = canRegister && !approvalMode ? '' : 'none';
+    if (button) button.style.display = canRegister && !approvalMode ? 'inline-flex' : 'none';
+  }
+  document.addEventListener('DOMContentLoaded', () => setTimeout(sync, 100));
+  window.addEventListener('hashchange', () => setTimeout(sync, 120));
+  document.addEventListener('click', event => {
+    if (event.target?.closest?.('.view-tabs')) setTimeout(sync, 180);
+  }, true);
+  const observer = new MutationObserver(() => {
+    clearTimeout(window.__ccExpenseRegistrationVisibilityTimer);
+    window.__ccExpenseRegistrationVisibilityTimer = setTimeout(sync, 80);
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(sync, 150);
+})();
+
 
 /* ===== rodada-14-19.js ===== */
 
@@ -6134,6 +6209,16 @@
   }
 
   async function findImportedClientByCode(code) {
+    // Consulta primeiro o banco da empresa inteira. Esta rota nao recebe nem
+    // aplica a unidade selecionada no cabecalho; o cache fica como fallback
+    // para uso offline ou indisponibilidade temporaria.
+    try {
+      if (window.Store && typeof Store.backendRequest === 'function' && Store.getToken && Store.getToken()) {
+        const response = await Store.backendRequest(`/api/clientes-importados/lookup/${encodeURIComponent(String(code || '').trim())}`);
+        if (response && response.client) return response.client;
+      }
+    } catch (_) {}
+
     let rows = getRowsLocal();
     let found = findImportedClientByCodeFromRows(code, rows);
     if (found) return found;
@@ -6339,6 +6424,7 @@
     }
 
     const row = await findImportedClientByCode(code);
+    if (input.value.trim() !== code) return;
     if (!row) {
       unlockClientFields(['mov-client-name', 'mov-client-city', 'mov-client-address', 'mov-client-seller']);
       const sellerManual = document.getElementById('mov-client-seller');
@@ -6437,6 +6523,7 @@
     }
 
     const row = await findImportedClientByCode(code);
+    if (input.value.trim() !== code) return;
     if (!row) {
       unlockClientFields(['ticket-open-client', 'ticket-open-fantasy', 'ticket-open-city', 'ticket-open-address']);
       setHiddenValue('ticket-open-client-code-hidden', code);
@@ -6490,6 +6577,7 @@
     }
 
     const row = await findImportedClientByCode(code);
+    if (input.value.trim() !== code) return;
     if (!row) {
       setLocked(nameInput, false);
       setHiddenValue('exchange-client-seller-imported', '');
@@ -9586,4 +9674,65 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
   window.addEventListener('hashchange', function(){ setTimeout(start, 150); });
+})();
+
+/* Paginação final da fila de aprovação: mantém toda a lógica/botões do renderizador
+   existente e mostra cinco registros por página. */
+(function installClientApprovalPagination(){
+  'use strict';
+  if (!window.UI || UI.__ccApprovalPaginationFinal) return;
+  UI.__ccApprovalPaginationFinal = true;
+  var base = UI.renderApprovals ? UI.renderApprovals.bind(UI) : null;
+  if (!base) return;
+  var page = 1;
+  function paginate(){
+    var body = document.getElementById('approvals-table-body');
+    if (!body) return;
+    var rows = Array.from(body.querySelectorAll('tr'));
+    var dataRows = rows.filter(function(row){ return row.children.length > 1; });
+    var totalPages = Math.max(1, Math.ceil(dataRows.length / 5));
+    page = Math.min(Math.max(1, page), totalPages);
+    dataRows.forEach(function(row, index){ row.style.display = index >= (page - 1) * 5 && index < page * 5 ? '' : 'none'; });
+    var wrap = body.closest('.client-approval-table-wrap');
+    if (!wrap) return;
+    var pager = document.getElementById('cc-client-approval-pager');
+    if (!pager) {
+      pager = document.createElement('div');
+      pager.id = 'cc-client-approval-pager';
+      pager.className = 'cc-list-pager no-print';
+      wrap.insertAdjacentElement('afterend', pager);
+    }
+    pager.innerHTML = '<span>Mostrando '+(dataRows.length ? ((page-1)*5+1) : 0)+'-'+Math.min(page*5,dataRows.length)+' de '+dataRows.length+'</span><div class="cc-pager-actions"><button class="btn btn-secondary btn-sm" '+(page<=1?'disabled':'')+' data-approval-prev>Anterior</button><span>Página '+page+' de '+totalPages+'</span><button class="btn btn-secondary btn-sm" '+(page>=totalPages?'disabled':'')+' data-approval-next>Próxima</button></div>';
+    pager.querySelector('[data-approval-prev]')?.addEventListener('click', function(){ page--; paginate(); });
+    pager.querySelector('[data-approval-next]')?.addEventListener('click', function(){ page++; paginate(); });
+  }
+  UI.renderApprovals = function(input){ page = 1; var result = base(input); setTimeout(paginate, 0); return result; };
+})();
+
+/* Última salvaguarda: módulos legados não podem ocultar o registro de despesa
+   de administradores, vendedores ou dos demais perfis autorizados. */
+(function installExpenseRegistrationLastGuard(){
+  'use strict';
+  if (window.__ccExpenseRegistrationLastGuard) return;
+  window.__ccExpenseRegistrationLastGuard = true;
+  function normalize(value){ return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  function apply(){
+    if (location.hash !== '#despesas') return;
+    var user = window.Store && Store.getLoggedUser ? (Store.getLoggedUser() || {}) : {};
+    var role = normalize(user.profile || user.role);
+    var permissions = (Array.isArray(user.permissions) ? user.permissions : []).map(normalize);
+    var allowed = Boolean(user.id) && (/admin|vendedor|supervisor|gerente|financeiro|manutencao|motorista|ajudante/.test(role)
+      || permissions.some(function(permission){ return /administrador|despesa|financeiro/.test(permission); }));
+    var visible = allowed && sessionStorage.getItem('cc_expense_approval_mode') !== '1';
+    var card = document.getElementById('expense-form-card');
+    var button = document.getElementById('btn-open-expense-form');
+    if (card) { card.hidden = !visible; card.style.setProperty('display', visible ? 'block' : 'none', 'important'); }
+    if (button) { button.hidden = !visible; button.disabled = false; button.style.setProperty('display', visible ? 'inline-flex' : 'none', 'important'); }
+  }
+  function schedule(){ clearTimeout(window.__ccExpenseRegistrationLastGuardTimer); window.__ccExpenseRegistrationLastGuardTimer = setTimeout(apply, 120); }
+  document.addEventListener('DOMContentLoaded', schedule);
+  window.addEventListener('hashchange', schedule);
+  document.addEventListener('click', schedule, true);
+  new MutationObserver(schedule).observe(document.documentElement, { childList:true, subtree:true });
+  schedule();
 })();

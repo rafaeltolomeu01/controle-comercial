@@ -9,6 +9,17 @@ function ccNum(v) {
   const n = parseFloat(raw);
   return Number.isFinite(n) ? n : 0;
 }
+function ccFinancialBucket(value) {
+  const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (text.includes('requis')) return 'requisicao';
+  if (/benef|hosped|hotel|alimenta|refei/.test(text)) return 'beneficio';
+  if (/corpor|abastec|combust|gasolina/.test(text)) return 'corporativo';
+  // Compatibilidade com lançamentos antigos, que não guardavam a finalidade.
+  return 'corporativo';
+}
+function ccItemBucket(item) {
+  return ccFinancialBucket(item && (item.categoria || item.tipo || item.descricao));
+}
 function getBrasiliaDateTime() {
   const now = new Date();
   const dateStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
@@ -1148,14 +1159,43 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
     }
 
     // BrasilAPI separa o tipo de logradouro (ex: "Rua") do nome — precisamos concatenar
-    const tipoLogradouro = !usedReceita ? (dados.descricao_tipo_de_logradouro || '') : '';
-    const nomeLogradouro = dados.logradouro || '';
+    const enderecoFonte = (dados.estabelecimento && typeof dados.estabelecimento === 'object')
+      ? dados.estabelecimento
+      : ((dados.endereco && typeof dados.endereco === 'object') ? dados.endereco : {});
+    const tipoLogradouro = !usedReceita
+      ? (dados.descricao_tipo_de_logradouro || enderecoFonte.descricao_tipo_de_logradouro || enderecoFonte.tipo_logradouro || '')
+      : '';
+    let nomeLogradouro = dados.logradouro || enderecoFonte.logradouro || enderecoFonte.nome_logradouro || '';
+    let bairroNormalizado = dados.bairro || enderecoFonte.bairro || '';
+    let cidadeNormalizada = dados.municipio || dados.cidade || enderecoFonte.municipio || enderecoFonte.cidade || '';
+    let estadoNormalizado = dados.uf || dados.estado || enderecoFonte.uf || enderecoFonte.estado || '';
+    const cepNormalizado = String(dados.cep || enderecoFonte.cep || '').replace(/\D/g, '');
+
+    if (!nomeLogradouro && cepNormalizado.length === 8) {
+      try {
+        const cepResponse = await fetch(`https://brasilapi.com.br/api/cep/v2/${cepNormalizado}`, {
+          headers: { 'User-Agent': 'ControleCampo/1.0' }
+        });
+        if (cepResponse.ok) {
+          const cepData = await cepResponse.json();
+          nomeLogradouro = cepData.street || cepData.logradouro || nomeLogradouro;
+          bairroNormalizado = bairroNormalizado || cepData.neighborhood || cepData.bairro || '';
+          cidadeNormalizada = cidadeNormalizada || cepData.city || cepData.cidade || '';
+          estadoNormalizado = estadoNormalizado || cepData.state || cepData.uf || '';
+        }
+      } catch (_) {
+        // A consulta principal continua valida se o servico de CEP falhar.
+      }
+    }
     const logradouroFull = tipoLogradouro && nomeLogradouro
       ? `${tipoLogradouro} ${nomeLogradouro}`
       : nomeLogradouro || tipoLogradouro;
 
     // "SN" = sem número; não preenche campo
-    const numeroFull = dados.numero && String(dados.numero).toUpperCase() !== 'SN' ? String(dados.numero) : '';
+    const numeroRaw = dados.numero || enderecoFonte.numero || enderecoFonte.numero_estabelecimento || '';
+    const numeroFull = numeroRaw && !['SN', 'S/N', 'SEM NUMERO', 'SEM NÚMERO'].includes(String(numeroRaw).trim().toUpperCase())
+      ? String(numeroRaw).trim()
+      : '';
 
     const resultado = {
       cnpj,
@@ -1163,12 +1203,12 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       nome_fantasia: dados.nome_fantasia || dados.fantasia || dados.nome || '',
       email: dados.email || '',
       telefone: dados.ddd_telefone_1 || dados.telefone || '',
-      cep: dados.cep ? String(dados.cep).replace(/\D/g, '') : '',
+      cep: cepNormalizado,
       logradouro: logradouroFull,
       numero: numeroFull,
-      bairro: dados.bairro || '',
-      cidade: dados.municipio || dados.cidade || '',
-      estado: dados.uf || dados.estado || '',
+      bairro: bairroNormalizado,
+      cidade: cidadeNormalizada,
+      estado: estadoNormalizado,
       inscricao_estadual: dados.inscricao_estadual || '',
       atividade_principal: cnaeDescricao || '',
       cnae_principal: cnaePrincipal,
@@ -1177,8 +1217,8 @@ app.get('/api/cnpj/:cnpj', async (req, res) => {
       // Compatibilidade reversa para o front-end legado
       razaoSocial: dados.razao_social || dados.nome || '',
       nomeFantasia: dados.nome_fantasia || dados.fantasia || dados.nome || '',
-      municipio: dados.municipio || dados.cidade || '',
-      uf: dados.uf || dados.estado || '',
+      municipio: cidadeNormalizada,
+      uf: estadoNormalizado,
       cnaePrincipal: cnaePrincipal,
       cnaeDescricao: cnaeDescricao
     };
@@ -2698,6 +2738,35 @@ app.get('/api/store/:key', async (req, res) => {
   }
 });
 
+// Busca um cliente importado em todas as unidades da empresa autenticada.
+// O filtro de unidade da tela nao participa desta consulta; o isolamento por
+// company_id permanece obrigatorio para nao expor dados de outra empresa.
+app.get('/api/clientes-importados/lookup/:codigo', async (req, res) => {
+  try {
+    const companyId = getStoreCompanyId(req);
+    const rawCode = String(req.params.codigo || '').trim();
+    const cleanCode = rawCode.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const digits = rawCode.replace(/\D/g, '');
+    const numericCode = digits ? String(Number(digits)) : '';
+    if (!cleanCode && !numericCode) return res.status(400).json({ error: 'Informe o codigo do cliente.' });
+
+    const rows = await getMergedGlobalStoreValue(companyId, 'clientes_importador_sistema');
+    const client = (Array.isArray(rows) ? rows : []).find(item => {
+      const itemCode = item && item.codigo != null ? String(item.codigo) : '';
+      const itemClean = itemCode.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const itemDigits = itemCode.replace(/\D/g, '');
+      const itemNumeric = itemDigits ? String(Number(itemDigits)) : '';
+      return (cleanCode && itemClean === cleanCode) || (numericCode && itemNumeric === numericCode);
+    });
+
+    if (!client) return res.status(404).json({ error: 'Codigo de cliente nao encontrado.' });
+    return res.json({ client });
+  } catch (err) {
+    console.error('Erro ao consultar cliente importado por codigo:', err);
+    return res.status(500).json({ error: 'Erro ao consultar cliente importado.' });
+  }
+});
+
 app.post('/api/store/:key', async (req, res) => {
   try {
     const key = req.params.key;
@@ -3175,9 +3244,10 @@ app.post('/api/despesas', async (req, res) => {
       await db('despesas_itens_extras').insert(extraRows);
 
       extras.forEach(ext => {
+        const bucket = ccFinancialBucket(ext.tipo || ext.balance_type || 'corporativo');
         itemsToInsert.push({
           solicitacao_id: id,
-          categoria: ext.descricao,
+          categoria: `[${bucket === 'beneficio' ? 'Benefício' : 'Corporativo'}] ${ext.descricao}`,
           valor_solicitado: ext.valor,
           quantidade_solicitada: null,
           status: 'pendente'
@@ -3225,6 +3295,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   const periodStart = String(req.body && req.body.period_start || '').trim();
   const periodEnd = String(req.body && req.body.period_end || '').trim();
   const operation = String(req.body && req.body.operation || 'add').trim().toLowerCase();
+  const balanceType = ccFinancialBucket(req.body && (req.body.balance_type || req.body.balanceType) || 'corporativo');
   const observation = String(req.body && req.body.observation || '').trim().slice(0, 1000);
   const amount = Number(req.body && req.body.amount);
   const isoDate = /^\d{4}-\d{2}-\d{2}$/;
@@ -3240,6 +3311,9 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
   }
   if (!['add', 'remove'].includes(operation)) {
     return res.status(400).json({ error: 'Operação de saldo inválida.' });
+  }
+  if (!['corporativo', 'beneficio'].includes(balanceType)) {
+    return res.status(400).json({ error: 'Selecione saldo Corporativo ou Benefício.' });
   }
   if (operation === 'remove' && !observation) {
     return res.status(400).json({ error: 'Informe o motivo da remoção do saldo.' });
@@ -3268,8 +3342,9 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
     const now = bdt.iso;
     const isRemoval = operation === 'remove';
     const signedAmount = isRemoval ? -amount : amount;
+    const typeLabel = balanceType === 'beneficio' ? 'Benefício' : 'Corporativo';
     const operationLabel = isRemoval ? 'Remoção de saldo' : 'Saldo direto';
-    const description = `${operationLabel} - período ${periodText}`;
+    const description = `${operationLabel} ${typeLabel} - período ${periodText}`;
 
     const requestId = await db.transaction(async (trx) => {
       // Bloqueia o destinatário durante o cálculo/gravação para duas remoções
@@ -3284,16 +3359,13 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
         const requestIds = balanceRequests.map(row => row.id);
         const extras = requestIds.length ? await trx('despesas_itens_extras').whereIn('solicitacao_id', requestIds) : [];
         const items = requestIds.length ? await trx('despesas_solicitacoes_itens').whereIn('solicitacao_id', requestIds) : [];
-        const requestedValue = request => {
-          const extraTotal = extras.filter(extra => String(extra.solicitacao_id) === String(request.id)).reduce((sum, extra) => sum + ccNum(extra.valor), 0);
-          return ccNum(request.valor_hotel_alim) + ccNum(request.valor_abastecimento) + extraTotal;
-        };
+        const requestedValue = request => balanceType === 'beneficio' ? ccNum(request.valor_hotel_alim) : ccNum(request.valor_abastecimento);
         const approvedValue = request => {
           const requestItems = items.filter(item => String(item.solicitacao_id) === String(request.id));
           if (!requestItems.length) return requestedValue(request);
           return requestItems.reduce((sum, item) => {
             const itemStatus = normalizeRole(item.status || '');
-            return itemStatus.includes('reprov') || itemStatus.includes('correc') ? sum : sum + ccNum(item.valor_aprovado);
+            return itemStatus.includes('reprov') || itemStatus.includes('correc') || ccItemBucket(item) !== balanceType ? sum : sum + ccNum(item.valor_aprovado);
           }, 0);
         };
         const approvedBalance = balanceRequests
@@ -3306,7 +3378,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
         const expensesConsidered = expenses
           .filter(expense => {
             const expenseStatus = normalizeRole(expense.status || 'Pendente');
-            return !expenseStatus.includes('reprov') && !expenseStatus.includes('correc');
+            return !expenseStatus.includes('reprov') && !expenseStatus.includes('correc') && ccFinancialBucket(expense.operacao) === balanceType;
           })
           .reduce((sum, expense) => sum + ccNum(expense.value), 0);
         const availableBalance = Number((approvedBalance - expensesConsidered).toFixed(2));
@@ -3346,7 +3418,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       });
       await trx('despesas_solicitacoes_itens').insert({
         solicitacao_id: newId,
-        categoria: isRemoval ? 'Saldo removido diretamente' : 'Saldo lançado diretamente',
+        categoria: `${isRemoval ? 'Saldo removido diretamente' : 'Saldo lançado diretamente'} [${typeLabel}]`,
         valor_solicitado: signedAmount,
         quantidade_solicitada: null,
         valor_aprovado: signedAmount,
@@ -3371,7 +3443,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
       await trx('auditoria_logs').insert({
         usuario_id: req.user.id,
         acao: isRemoval ? 'REMOVEU_SALDO_DIRETO' : 'LANCOU_SALDO_DIRETO',
-        detalhes: `${operationLabel} de R$ ${amount.toFixed(2)} para ${recipient.name} (${recipient.profile || 'Sem perfil'}, ${recipient.id}), unidade ${selectedUnit.name} (${selectedUnit.id}), período ${periodText}. Motivo: ${observation || '-'}`,
+        detalhes: `${operationLabel} ${typeLabel} de R$ ${amount.toFixed(2)} para ${recipient.name} (${recipient.profile || 'Sem perfil'}, ${recipient.id}), unidade ${selectedUnit.name} (${selectedUnit.id}), período ${periodText}. Motivo: ${observation || '-'}`,
         empresa_id: req.user.empresa_id
       });
       return newId;
@@ -3387,7 +3459,7 @@ app.post('/api/despesas/direct-credit', async (req, res) => {
         : `Foi lançado saldo de R$ ${amount.toFixed(2)} para o período ${periodText}.`
     });
 
-    res.json({ success: true, id: requestId, operation, amount: signedAmount, recipient: recipient.name, profile: recipient.profile, unitId: selectedUnit.id, unit: selectedUnit.name, period: periodText });
+    res.json({ success: true, id: requestId, operation, balance_type: balanceType, amount: signedAmount, recipient: recipient.name, profile: recipient.profile, unitId: selectedUnit.id, unit: selectedUnit.name, period: periodText });
   } catch (err) {
     console.error('Erro ao lançar saldo direto:', err);
     res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Erro ao lançar ou remover saldo direto.' });
@@ -3422,6 +3494,7 @@ app.get('/api/despesas/direct-credit/summary', async (req, res) => {
   const unitId = String(req.query.unit_id || req.query.unitId || '').trim();
   const periodStart = String(req.query.period_start || '').trim();
   const periodEnd = String(req.query.period_end || '').trim();
+  const balanceType = ccFinancialBucket(req.query.balance_type || req.query.balanceType || 'corporativo');
   const isoDate = /^\d{4}-\d{2}-\d{2}$/;
   if (!recipientId || !unitId || unitId === 'all' || !isoDate.test(periodStart) || !isoDate.test(periodEnd) || periodStart > periodEnd) {
     return res.status(400).json({ error: 'Usuário e período válidos são obrigatórios.' });
@@ -3454,26 +3527,23 @@ app.get('/api/despesas/direct-credit/summary', async (req, res) => {
     const extras = requestIds.length ? await db('despesas_itens_extras').whereIn('solicitacao_id', requestIds) : [];
     const items = requestIds.length ? await db('despesas_solicitacoes_itens').whereIn('solicitacao_id', requestIds) : [];
 
-    const requestedValue = request => {
-      const extraTotal = extras.filter(extra => String(extra.solicitacao_id) === String(request.id))
-        .reduce((sum, extra) => sum + ccNum(extra.valor), 0);
-      return ccNum(request.valor_hotel_alim) + ccNum(request.valor_abastecimento) + extraTotal;
-    };
+    const requestedValue = request => balanceType === 'beneficio' ? ccNum(request.valor_hotel_alim) : ccNum(request.valor_abastecimento);
     const approvedValue = request => {
       const requestItems = items.filter(item => String(item.solicitacao_id) === String(request.id));
       if (!requestItems.length) return requestedValue(request);
       return requestItems.reduce((sum, item) => {
         const status = normalizeRole(item.status || '');
         if (status.includes('reprov') || status.includes('correc')) return sum;
-        return sum + ccNum(item.valor_aprovado);
+        return ccItemBucket(item) === balanceType ? sum + ccNum(item.valor_aprovado) : sum;
       }, 0);
     };
 
-    const notesTotal = expenses.reduce((sum, expense) => sum + ccNum(expense.value), 0);
-    const expensesConsidered = expenses
+    const bucketExpenses = expenses.filter(expense => ccFinancialBucket(expense.operacao) === balanceType);
+    const notesTotal = bucketExpenses.reduce((sum, expense) => sum + ccNum(expense.value), 0);
+    const expensesConsidered = bucketExpenses
       .filter(expense => {
         const status = normalizeRole(expense.status || 'Pendente');
-        return !status.includes('reprov') && !status.includes('correc');
+        return !status.includes('reprov') && !status.includes('correc') && ccFinancialBucket(expense.operacao) === balanceType;
       })
       .reduce((sum, expense) => sum + ccNum(expense.value), 0);
     const approvedBalance = balanceRequests
@@ -3491,7 +3561,8 @@ app.get('/api/despesas/direct-credit/summary', async (req, res) => {
       unit: { id: selectedUnit.id, name: selectedUnit.name },
       period_start: periodStart,
       period_end: periodEnd,
-      notes_count: expenses.length,
+      balance_type: balanceType,
+      notes_count: bucketExpenses.length,
       notes_total: Number(notesTotal.toFixed(2)),
       expenses_considered: Number(expensesConsidered.toFixed(2)),
       approved_balance: Number(approvedBalance.toFixed(2)),
