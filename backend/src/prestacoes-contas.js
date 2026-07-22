@@ -131,6 +131,7 @@ module.exports = function installPrestacoesContas(deps) {
     const approvedExpenses = [];
     const unapprovedExpenses = [];
     expenses.forEach(expense => {
+      const isRequisition = normalizeRole(expense.operacao || '').includes('requis');
       const item = {
         id: expense.id,
         code: `DP-${expense.id}`,
@@ -141,6 +142,7 @@ module.exports = function installPrestacoesContas(deps) {
         description: expense.descreva || expense.observation || '',
         value: roundMoney(expense.value),
         status: expense.status || 'Pendente',
+        is_requisition: isRequisition,
         receipt: expense.foto_comprovante || null,
         odometer: expense.foto_odometro || null
       };
@@ -151,7 +153,15 @@ module.exports = function installPrestacoesContas(deps) {
     const calculatedBalance = roundMoney(balanceEvents
       .filter(event => normalizeRole(event.status || '').includes('aprov'))
       .reduce((sum, event) => sum + money(event.approved), 0));
-    const approvedExpensesTotal = roundMoney(approvedExpenses.reduce((sum, item) => sum + money(item.value), 0));
+    // Requisicao e paga diretamente pela empresa. Ela deve aparecer no dossie,
+    // mas nunca consumir o saldo financeiro aprovado para o usuario.
+    const approvedExpensesAllTotal = roundMoney(approvedExpenses.reduce((sum, item) => sum + money(item.value), 0));
+    const requisitionExpensesTotal = roundMoney(approvedExpenses
+      .filter(item => item.is_requisition)
+      .reduce((sum, item) => sum + money(item.value), 0));
+    const approvedExpensesTotal = roundMoney(approvedExpenses
+      .filter(item => !item.is_requisition)
+      .reduce((sum, item) => sum + money(item.value), 0));
     const unapprovedExpensesTotal = roundMoney(unapprovedExpenses.reduce((sum, item) => sum + money(item.value), 0));
 
     return {
@@ -164,6 +174,8 @@ module.exports = function installPrestacoesContas(deps) {
       calculated_balance: calculatedBalance,
       approved_expenses: approvedExpenses,
       approved_expenses_total: approvedExpensesTotal,
+      approved_expenses_all_total: approvedExpensesAllTotal,
+      requisition_expenses_total: requisitionExpensesTotal,
       unapproved_expenses: unapprovedExpenses,
       unapproved_expenses_count: unapprovedExpenses.length,
       unapproved_expenses_total: unapprovedExpensesTotal,

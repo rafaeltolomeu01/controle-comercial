@@ -469,8 +469,10 @@ test('unidade global limita listas, filtros dinamicos e paginacao inclusive para
 
 test('cartoes de despesas usam somente saldos e despesas aprovados do mesmo filtro', () => {
   assert.match(listUpdates, /const totalApproved = balances\.filter\(isApproved\)/);
-  assert.match(listUpdates, /const totalSpent = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const approvedExpenses = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /filter\(item => !isRequisitionExpense\(item\)\)/);
   assert.match(listUpdates, /metric-balance-remaining/);
+  assert.match(listUpdates, /metric-expense-requisition/);
   assert.match(listUpdates, /totalApproved - totalSpent/);
 });
 
@@ -516,9 +518,9 @@ test('movimentacoes antigas sao separadas pela empresa base sem regravar o banco
 test('painel pessoal usa somente usuario logado e nao desconta despesa pendente', () => {
   assert.match(listUpdates, /const own = list => .*belongsToUser/s);
   assert.match(listUpdates, /'userName', 'usuario_nome', 'name', 'nome'/);
-  assert.match(listUpdates, /const approvedExpenses = expenses\.filter\(isApproved\)/);
+  assert.match(listUpdates, /const approvedExpenseRows = expenses\.filter\(isApproved\)/);
   assert.match(listUpdates, /const spent = approvedExpenses/);
-  assert.match(listUpdates, /set\('dash-pending-expenses', formatMoney\(approvedExpenses\)\)/);
+  assert.match(listUpdates, /set\('dash-pending-expenses', formatMoney\(approvedExpensesAll\)\)/);
   assert.match(listUpdates, /const pendingExpenses = expenses\.filter/);
 });
 
@@ -630,4 +632,23 @@ test('lista principal de clientes permanece paginada em cinco registros', () => 
   assert.match(textFixes, /function renderClientsStable\(input\)[\s\S]*?var pageSize = 5;/);
   assert.match(textFixes, /data\.slice\(start, start \+ pageSize\)/);
   assert.match(textFixes, /window\.__ccStableClientsGo/);
+});
+
+test('requisicoes ficam auditaveis mas nao reduzem o saldo aprovado', () => {
+  const accountabilityBackend = fs.readFileSync(path.join(__dirname, '..', 'src', 'prestacoes-contas.js'), 'utf8');
+  const expensesPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'despesas.html'), 'utf8');
+  assert.match(accountabilityBackend, /isRequisition = normalizeRole\(expense\.operacao \|\| ''\)\.includes\('requis'\)/);
+  assert.match(accountabilityBackend, /filter\(item => !item\.is_requisition\)/);
+  assert.match(accountabilityBackend, /requisition_expenses_total: requisitionExpensesTotal/);
+  assert.match(expensesPage, /id="metric-expense-requisition"/);
+  assert.match(listUpdates, /function isRequisitionExpense\(expense\)/);
+});
+
+test('detalhe da despesa na prestacao fecha ao trocar filtros ou sair da pagina', () => {
+  const accountabilityUi = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'prestacao-contas.js'), 'utf8');
+  assert.match(accountabilityUi, /function closeExpenseDetail\(\)/);
+  assert.match(accountabilityUi, /accountability-user'\)\.addEventListener\('change', resetPreviewForFilterChange\)/);
+  assert.match(accountabilityUi, /accountability-start'\)\.addEventListener\('change', resetPreviewForFilterChange\)/);
+  assert.match(accountabilityUi, /window\.location\.hash !== '#prestacao-contas'/);
+  assert.match(accountabilityUi, /accountability-close-expense/);
 });

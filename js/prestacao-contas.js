@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const state = { preview: null, recipients: [], sellerLocked: false, canClose: false };
+  const state = { preview: null, recipients: [], sellerLocked: false, canClose: false, openExpenseId: null, receiptObjectUrl: null };
   const byId = id => document.getElementById(id);
   const esc = value => String(value == null ? '' : value).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[ch]));
   const brl = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -19,6 +19,29 @@
     el.hidden = !text;
     el.textContent = text || '';
     el.classList.toggle('is-error', !!error);
+  }
+
+  function closeExpenseDetail() {
+    const detail = byId('accountability-expense-detail');
+    if (state.receiptObjectUrl) {
+      URL.revokeObjectURL(state.receiptObjectUrl);
+      state.receiptObjectUrl = null;
+    }
+    state.openExpenseId = null;
+    if (!detail) return;
+    detail.hidden = true;
+    detail.innerHTML = '';
+  }
+
+  function resetPreviewForFilterChange() {
+    closeExpenseDetail();
+    state.preview = null;
+    const result = byId('accountability-result');
+    if (result) result.hidden = true;
+    const pdf = byId('accountability-pdf');
+    if (pdf) pdf.disabled = true;
+    const closePanel = byId('accountability-close-panel');
+    if (closePanel) closePanel.hidden = true;
   }
 
   function populateUnits() {
@@ -51,11 +74,13 @@
   }
 
   function renderPreview(preview) {
+    closeExpenseDetail();
     state.preview = preview;
     byId('accountability-result').hidden = false;
     byId('accountability-pdf').disabled = false;
     byId('accountability-balance').textContent = brl(preview.calculated_balance);
     byId('accountability-approved').textContent = brl(preview.approved_expenses_total);
+    byId('accountability-requisition').textContent = brl(preview.requisition_expenses_total);
     const diff = Number(preview.considered_balance ?? preview.calculated_balance) - Number(preview.approved_expenses_total || 0);
     byId('accountability-difference').textContent = brl(diff);
     byId('accountability-pending').textContent = String(preview.unapproved_expenses_count || 0);
@@ -77,7 +102,7 @@
 
     const expenses = preview.approved_expenses || [];
     byId('accountability-expenses').innerHTML = expenses.length ? expenses.map(expense => `<article class="accountability-expense" data-expense-id="${esc(expense.id)}" tabindex="0" role="button">
-      <div><b>${esc(expense.code || `DP-${expense.id}`)}</b> <span class="accountability-status">Aprovada</span><br><small>${dateBr(expense.date)} ${esc(expense.time || '')} · ${esc(expense.purpose || expense.description || 'Despesa')}</small></div>
+      <div><b>${esc(expense.code || `DP-${expense.id}`)}</b> <span class="accountability-status">${expense.is_requisition ? 'Requisição — não desconta saldo' : 'Aprovada'}</span><br><small>${dateBr(expense.date)} ${esc(expense.time || '')} · ${esc(expense.purpose || expense.description || 'Despesa')}</small></div>
       <strong>${brl(expense.value)}</strong>
     </article>`).join('') : '<div class="accountability-empty">Nenhuma despesa aprovada no período.</div>';
 
@@ -97,9 +122,11 @@
     const expense = [...(preview.approved_expenses || []), ...(preview.unapproved_expenses || [])].find(item => String(item.id) === String(id));
     if (!expense) return;
     const detail = byId('accountability-expense-detail');
+    closeExpenseDetail();
+    state.openExpenseId = String(id);
     detail.hidden = false;
     const receipt = expense.receipt ? `<img id="accountability-receipt-preview" alt="Comprovante da despesa ${esc(expense.code)}"><p id="accountability-receipt-status" class="accountability-empty">Carregando comprovante...</p>` : '<p class="accountability-empty">Sem comprovante disponível.</p>';
-    detail.innerHTML = `<h3>Detalhes da despesa ${esc(expense.code)}</h3>
+    detail.innerHTML = `<div class="accountability-history-heading"><h3>Detalhes da despesa ${esc(expense.code)}</h3><button id="accountability-close-expense" class="btn btn-secondary" type="button">Fechar detalhes</button></div>
       <div class="accountability-detail-grid">
         <div><small>Data</small><br><b>${dateBr(expense.date)} ${esc(expense.time || '')}</b></div>
         <div><small>Valor</small><br><b>${brl(expense.value)}</b></div>
@@ -107,7 +134,8 @@
         <div><small>Finalidade</small><br><b>${esc(expense.purpose || '-')}</b></div>
         <div><small>Operação</small><br><b>${esc(expense.operation || '-')}</b></div>
         <div><small>Descrição</small><br><b>${esc(expense.description || '-')}</b></div>
-      </div>${receipt}`;
+      </div>${expense.is_requisition ? '<p class="accountability-warning">Esta despesa foi paga por requisição e não reduz o saldo aprovado.</p>' : ''}${receipt}`;
+    byId('accountability-close-expense')?.addEventListener('click', closeExpenseDetail);
     detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     if (expense.receipt) {
       const image = byId('accountability-receipt-preview');
@@ -122,7 +150,8 @@
           const token = Store.getToken ? Store.getToken() : '';
           const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
           if (!response.ok) throw new Error('Comprovante não localizado');
-          image.src = URL.createObjectURL(await response.blob());
+          state.receiptObjectUrl = URL.createObjectURL(await response.blob());
+          image.src = state.receiptObjectUrl;
         }
         status.hidden = true;
       } catch (error) {
@@ -133,6 +162,7 @@
   }
 
   async function calculate() {
+    closeExpenseDetail();
     const query = new URLSearchParams({
       usuario_id: byId('accountability-user').value,
       unit_id: byId('accountability-unit').value,
@@ -223,7 +253,9 @@
       ? parseMoney(byId('accountability-considered').value)
       : Number(p.considered_balance ?? p.calculated_balance);
     add(`Saldo aprovado/considerado: ${brl(consideredForPdf)}`);
-    add(`Despesas aprovadas: ${brl(p.approved_expenses_total)}`);
+    add(`Despesas aprovadas que consomem saldo: ${brl(p.approved_expenses_total)}`);
+    add(`Despesas aprovadas por requisição (não descontam saldo): ${brl(p.requisition_expenses_total)}`);
+    add(`Total geral de despesas aprovadas: ${brl(p.approved_expenses_all_total ?? (Number(p.approved_expenses_total || 0) + Number(p.requisition_expenses_total || 0)))}`);
     add(`Saldo para o próximo período: ${brl(consideredForPdf - Number(p.approved_expenses_total || 0))}`);
     add(`Despesas não aprovadas (fora da soma): ${p.unapproved_expenses_count || 0} — ${brl(p.unapproved_expenses_total)}`, { gap: 5 });
     add('MOVIMENTAÇÕES DE SALDO', { size: 12, bold: true });
@@ -231,7 +263,7 @@
     if (!(p.balance_events || []).length) add('Nenhuma movimentação de saldo no período.');
     y += 3;
     add('DESPESAS APROVADAS CONSIDERADAS', { size: 12, bold: true });
-    (p.approved_expenses || []).forEach(expense => add(`${expense.code} | ${dateBr(expense.date)} ${expense.time || ''} | ${expense.purpose || expense.description || 'Despesa'} | ${brl(expense.value)} | Aprovada`));
+    (p.approved_expenses || []).forEach(expense => add(`${expense.code} | ${dateBr(expense.date)} ${expense.time || ''} | ${expense.purpose || expense.description || 'Despesa'} | ${brl(expense.value)} | ${expense.is_requisition ? 'Requisição (não desconta saldo)' : 'Aprovada'}`));
     if (!(p.approved_expenses || []).length) add('Nenhuma despesa aprovada no período.');
     if ((p.unapproved_expenses || []).length) {
       y += 3; add('PENDÊNCIAS / DESPESAS NÃO CONSIDERADAS', { size: 12, bold: true });
@@ -251,7 +283,10 @@
     byId('accountability-start').value = first.toISOString().slice(0, 10);
     byId('accountability-end').value = today.toISOString().slice(0, 10);
     try { await loadRecipients(); } catch (error) { message(error.message, true); }
-    byId('accountability-unit').addEventListener('change', async () => { await loadRecipients(); await loadHistory(); });
+    byId('accountability-unit').addEventListener('change', async () => { resetPreviewForFilterChange(); await loadRecipients(); await loadHistory(); });
+    byId('accountability-user').addEventListener('change', resetPreviewForFilterChange);
+    byId('accountability-start').addEventListener('change', resetPreviewForFilterChange);
+    byId('accountability-end').addEventListener('change', resetPreviewForFilterChange);
     byId('accountability-calculate').addEventListener('click', calculate);
     byId('accountability-save').addEventListener('click', save);
     byId('accountability-pdf').addEventListener('click', generatePdf);
@@ -259,5 +294,9 @@
     await loadHistory();
   }
 
-  window.AccountabilityModule = { init, generatePdf };
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash !== '#prestacao-contas') resetPreviewForFilterChange();
+  });
+
+  window.AccountabilityModule = { init, generatePdf, closeExpenseDetail };
 })();

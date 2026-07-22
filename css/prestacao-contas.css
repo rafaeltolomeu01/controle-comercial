@@ -13,7 +13,7 @@
 .accountability-message { background: rgba(37,99,235,.12); border: 1px solid rgba(37,99,235,.35); }
 .accountability-message.is-error { color: #fecaca; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.35); }
 .accountability-warning { color: #fde68a; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35); }
-.accountability-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.accountability-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .accountability-summary article { min-width: 0; display: grid; gap: 8px; padding: 17px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); }
 .accountability-summary span { color: var(--text-muted); font-size: .75rem; }
 .accountability-summary strong { font: 700 1.35rem var(--font-title); overflow-wrap: anywhere; }

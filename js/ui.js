@@ -289,8 +289,12 @@ const UI = {
       .filter(b => b.status === 'Aprovada' || b.status === 'Aprovada (não valor total)' || b.status === 'Aprovado')
       .reduce((sum, curr) => sum + (Number(curr.totalAprovado) || 0), 0);
       
+    const isRequisition = e => String(e.operacao || e.operation || e.tipo_operacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('requis');
     const totalSpent = expenses
-      .filter(e => e.status === 'Aprovado' || e.status === 'Pendente')
+      .filter(e => (e.status === 'Aprovado' || e.status === 'Pendente') && !isRequisition(e))
+      .reduce((sum, curr) => sum + (Number(curr.value) || 0), 0);
+    const requisitionSpent = expenses
+      .filter(e => (e.status === 'Aprovado' || e.status === 'Pendente') && isRequisition(e))
       .reduce((sum, curr) => sum + (Number(curr.value) || 0), 0);
       
     const balanceRemaining = totalApproved - totalSpent;
@@ -306,6 +310,9 @@ const UI = {
     
     const elRemaining = document.getElementById('metric-balance-remaining');
     if (elRemaining) elRemaining.textContent = fmt(balanceRemaining);
+
+    const elRequisition = document.getElementById('metric-expense-requisition');
+    if (elRequisition) elRequisition.textContent = fmt(requisitionSpent);
     
     // Also update the dashboard card if it exists
     const dashBalances = document.getElementById('dash-pending-balances');

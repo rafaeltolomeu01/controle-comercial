@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20260721-05-menu-prestacao';
+const CACHE_VERSION = '20260721-06-requisicao-saldo';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

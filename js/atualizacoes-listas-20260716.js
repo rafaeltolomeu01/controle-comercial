@@ -1220,6 +1220,10 @@
     return numericValue(pick(expense, ['value', 'valor', 'amount', 'total', 'totalGeral', 'total_geral']));
   }
 
+  function isRequisitionExpense(expense) {
+    return normalize(pick(expense, ['operacao', 'operation', 'tipo_operacao', 'tipoOperacao'])).includes('requis');
+  }
+
   function isApproved(record) {
     return normalize(record?.status).includes('aprov');
   }
@@ -1259,11 +1263,14 @@
 
     const totalApproved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
     // "Utilizado" representa somente despesas efetivamente aprovadas.
-    const totalSpent = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
+    const approvedExpenses = expenses.filter(isApproved);
+    const requisitionSpent = approvedExpenses.filter(isRequisitionExpense).reduce((sum, item) => sum + expenseValue(item), 0);
+    const totalSpent = approvedExpenses.filter(item => !isRequisitionExpense(item)).reduce((sum, item) => sum + expenseValue(item), 0);
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = formatMoney(value); };
     set('metric-balance-available', totalApproved);
     set('metric-balance-used', totalSpent);
     set('metric-balance-remaining', totalApproved - totalSpent);
+    set('metric-expense-requisition', requisitionSpent);
   }
 
   function renderDashboardBars(elementId, rows, formatter) {
@@ -1319,7 +1326,9 @@
       const kind = approvalStatusKind(record);
       values[kind] += kind === 'approved' ? approvedBalanceValue(record) : approvalRequestTotal(record);
     });
-    const approvedExpenses = expenses.filter(isApproved).reduce((sum, record) => sum + expenseValue(record), 0);
+    const approvedExpenseRows = expenses.filter(isApproved);
+    const requisitionExpenses = approvedExpenseRows.filter(isRequisitionExpense).reduce((sum, record) => sum + expenseValue(record), 0);
+    const approvedExpenses = approvedExpenseRows.filter(record => !isRequisitionExpense(record)).reduce((sum, record) => sum + expenseValue(record), 0);
     const remaining = values.approved - approvedExpenses;
     const maximum = Math.max(values.approved, approvedExpenses, Math.abs(remaining), values.pending, values.rejected, values.correction, 1);
     const bar = (label, value) => {
@@ -1336,13 +1345,13 @@
       unitRows[unitId] = unitRows[unitId] || { balance: 0, expense: 0 };
       if (approvalStatusKind(record) === 'approved') unitRows[unitId].balance += approvedBalanceValue(record);
     });
-    expenses.filter(isApproved).forEach(record => {
+    expenses.filter(record => isApproved(record) && !isRequisitionExpense(record)).forEach(record => {
       const unitId = String(pick(record, ['unitId', 'unit_id', 'unidadeId', 'unidade_id']) || 'Sem unidade');
       unitRows[unitId] = unitRows[unitId] || { balance: 0, expense: 0 };
       unitRows[unitId].expense += expenseValue(record);
     });
     const ranking = Object.entries(unitRows).map(([unitId, value]) => `<li style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-color)"><span>${escapeHtml(UI.getUnitName?.(unitId) || unitId)}</span><strong>${escapeHtml(formatMoney(value.balance - value.expense))}</strong></li>`).join('') || '<li style="color:var(--text-muted)">Sem dados para os filtros selecionados.</li>';
-    body.innerHTML = `<div><h4>Resumo por Status</h4>${bar('Saldo aprovado', values.approved)}${bar('Despesas aprovadas', approvedExpenses)}${bar('Saldo restante', remaining)}${bar('Saldos pendentes', values.pending)}${bar('Correção', values.correction)}${bar('Reprovados', values.rejected)}</div><div><h4>Pizza por situação</h4><div style="min-height:160px;border-radius:12px;background:conic-gradient(var(--success) 0 ${approvedDeg}deg,var(--warning) ${approvedDeg}deg ${pendingDeg}deg,#3b82f6 ${pendingDeg}deg ${correctionDeg}deg,var(--danger) ${correctionDeg}deg 360deg);display:flex;align-items:center;justify-content:center"><span style="background:var(--bg-card);padding:14px;border-radius:999px;font-weight:700">${escapeHtml(formatMoney(remaining))}</span></div></div><div><h4>Ranking / Unidade</h4><ol style="padding-left:18px;margin:0">${ranking}</ol></div>`;
+    body.innerHTML = `<div><h4>Resumo por Status</h4>${bar('Saldo aprovado', values.approved)}${bar('Despesas aprovadas que consomem saldo', approvedExpenses)}${bar('Gasto por requisição', requisitionExpenses)}${bar('Saldo restante', remaining)}${bar('Saldos pendentes', values.pending)}${bar('Correção', values.correction)}${bar('Reprovados', values.rejected)}</div><div><h4>Pizza por situação</h4><div style="min-height:160px;border-radius:12px;background:conic-gradient(var(--success) 0 ${approvedDeg}deg,var(--warning) ${approvedDeg}deg ${pendingDeg}deg,#3b82f6 ${pendingDeg}deg ${correctionDeg}deg,var(--danger) ${correctionDeg}deg 360deg);display:flex;align-items:center;justify-content:center"><span style="background:var(--bg-card);padding:14px;border-radius:999px;font-weight:700">${escapeHtml(formatMoney(remaining))}</span></div></div><div><h4>Ranking / Unidade</h4><ol style="padding-left:18px;margin:0">${ranking}</ol></div>`;
   }
 
   async function refreshApprovalDashboardFromFilters() {
@@ -1431,7 +1440,10 @@
     const approved = balances.filter(isApproved).reduce((sum, item) => sum + approvedBalanceValue(item), 0);
     // Valores pessoais permanecem separados por usuario. O supervisor e os
     // demais vendedores nunca entram nos cartoes do usuario logado.
-    const approvedExpenses = expenses.filter(isApproved).reduce((sum, item) => sum + expenseValue(item), 0);
+    const approvedExpenseRows = expenses.filter(isApproved);
+    const approvedExpensesAll = approvedExpenseRows.reduce((sum, item) => sum + expenseValue(item), 0);
+    const requisitionExpenses = approvedExpenseRows.filter(isRequisitionExpense).reduce((sum, item) => sum + expenseValue(item), 0);
+    const approvedExpenses = approvedExpenseRows.filter(item => !isRequisitionExpense(item)).reduce((sum, item) => sum + expenseValue(item), 0);
     // Saldo disponivel considera somente despesas ja aprovadas. Pendentes ficam
     // destacadas separadamente e nao reduzem o saldo antes da aprovacao.
     const spent = approvedExpenses;
@@ -1439,7 +1451,7 @@
     const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
     set('dash-pending-approvals', String(clients.filter(item => normalize(item.status) === 'pendente').length));
     set('dash-open-tickets', String(tickets.filter(item => ['aberto', 'em atendimento'].includes(normalize(item.status))).length));
-    set('dash-pending-expenses', formatMoney(approvedExpenses));
+    set('dash-pending-expenses', formatMoney(approvedExpensesAll));
     set('dash-pending-balances', formatMoney(approved - spent));
     const correctionExpenses = expenses.filter(item => normalize(item.status).includes('correc')).length;
     const correctionClients = clients.filter(item => {
@@ -1463,6 +1475,7 @@
     renderDashboardBars('dash-expense-bars', [
       { label: 'Pendentes', value: pendingExpenses },
       { label: 'Aprovadas', value: approvedExpenses },
+      { label: 'Requisições', value: requisitionExpenses },
       { label: 'Reprovadas', value: expenses.filter(item => normalize(item.status).includes('reprov')).reduce((sum, item) => sum + expenseValue(item), 0) }
     ], formatMoney);
     renderDashboardBars('dash-balance-bars', [

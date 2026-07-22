@@ -798,12 +798,16 @@
     if (activeUnitId !== 'all') { balances = balances.filter(b => String(b.unitId ?? b.empresa_id ?? '') === String(activeUnitId)); expenses = expenses.filter(e => String(e.unitId ?? e.empresa_id ?? '') === String(activeUnitId)); }
     if (user.profile === 'Vendedor' && !isAdmin(user)) { balances = balances.filter(b => String(b.usuario_id ?? b.userId ?? b.user_id) === String(user.id)); expenses = expenses.filter(e => String(e.userId ?? e.user_id ?? e.usuario_id) === String(user.id)); }
     const approvedBalance = balances.filter(b => isApproved(b.status)).reduce((s,b)=>s+getApprovedBalanceValue(b),0);
-    const approvedExpense = expenses.filter(e => statusText(e.status) === 'aprovado').reduce((s,e)=>s+getExpenseValue(e),0);
+    const isRequisition = e => statusText(e.operacao ?? e.operation ?? e.tipo_operacao ?? e.tipoOperacao).includes('requis');
+    const approvedRows = expenses.filter(e => statusText(e.status) === 'aprovado');
+    const requisitionExpense = approvedRows.filter(isRequisition).reduce((s,e)=>s+getExpenseValue(e),0);
+    const approvedExpense = approvedRows.filter(e => !isRequisition(e)).reduce((s,e)=>s+getExpenseValue(e),0);
     const remaining = approvedBalance - approvedExpense;
     const set = (id,val) => { const el=document.getElementById(id); if(el) el.textContent = val; };
     set('metric-balance-available', money(approvedBalance));
     set('metric-balance-used', money(approvedExpense));
     set('metric-balance-remaining', money(remaining));
+    set('metric-expense-requisition', money(requisitionExpense));
     renderFinanceCharts({balances, expenses, approvedBalance, approvedExpense, remaining});
   };
 
@@ -828,7 +832,7 @@
     const units = {};
     [...ctx.expenses, ...ctx.balances].forEach(x=>{ const id = x.unitId ?? x.empresa_id ?? 'Sem unidade'; units[id] = units[id] || {saldo:0, desp:0}; });
     ctx.balances.filter(b=>isApproved(b.status)).forEach(b=>{ const id=b.unitId??b.empresa_id??'Sem unidade'; units[id].saldo += getApprovedBalanceValue(b); });
-    ctx.expenses.filter(e=>statusText(e.status)==='aprovado').forEach(e=>{ const id=e.unitId??e.empresa_id??'Sem unidade'; units[id].desp += getExpenseValue(e); });
+    ctx.expenses.filter(e=>statusText(e.status)==='aprovado' && !statusText(e.operacao ?? e.operation ?? e.tipo_operacao ?? e.tipoOperacao).includes('requis')).forEach(e=>{ const id=e.unitId??e.empresa_id??'Sem unidade'; units[id].desp += getExpenseValue(e); });
     const unitRows = Object.entries(units).slice(0,8).map(([id,v])=>`<li style="display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid var(--border-color);"><span>${escapeHtml(UI.getUnitName?.(id)||id)}</span><strong>${money(v.saldo-v.desp)}</strong></li>`).join('') || '<li style="color:var(--text-muted);">Sem dados.</li>';
     body.innerHTML = `
       <div><h4>Resumo por Status</h4>${bar('Saldo aprovado',ctx.approvedBalance,max)}${bar('Despesas aprovadas',ctx.approvedExpense,max)}${bar('Saldo restante',ctx.remaining,max)}${bar('Pendentes',pendingExp,max)}${bar('Correção',corrExp,max)}${bar('Reprovadas',rejExp,max)}</div>
