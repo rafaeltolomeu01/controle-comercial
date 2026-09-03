@@ -1025,6 +1025,18 @@ app.get('/index.html', (req, res) => {
   res.sendFile(path.join(FRONTEND_ROOT, 'index.html'));
 });
 
+// Verificacao publica e sem dados sensiveis para o Render. O servico so fica
+// saudavel quando a aplicacao consegue consultar o banco configurado.
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.raw('SELECT 1');
+    return res.json({ status: 'ok', database: 'connected' });
+  } catch (err) {
+    console.error('Health check: banco indisponivel:', err.message);
+    return res.status(503).json({ status: 'error', database: 'unavailable' });
+  }
+});
+
 // Real JWT Authentication Middleware
 app.use(async (req, res, next) => {
   const publicPaths = ['/api/login', '/api/auth/login'];
@@ -2482,6 +2494,44 @@ function clientRecordMatches(item, id, index = 0) {
   return wanted && keys.includes(wanted);
 }
 
+function getClientCreatedAt(item) {
+  return String((item && (item.createdAt || item.created_at || item.created || item.created_date)) || '').trim();
+}
+
+function clientRecordsClearlyDifferent(existing, incoming) {
+  if (!existing || !incoming) return false;
+  const existingOwner = getClientOwnerId(existing);
+  const incomingOwner = getClientOwnerId(incoming);
+  if (existingOwner && incomingOwner && existingOwner !== incomingOwner) return true;
+
+  // Uma edicao normal preserva a data original. Mesmo id com duas datas de
+  // criacao distintas indica a colisao produzida pelas versoes antigas, que
+  // geravam somente CL-100 a CL-999.
+  const existingCreatedAt = getClientCreatedAt(existing);
+  const incomingCreatedAt = getClientCreatedAt(incoming);
+  return !!existingCreatedAt && !!incomingCreatedAt && existingCreatedAt !== incomingCreatedAt;
+}
+
+function findClientIdCollision(existingList, incomingList) {
+  const seenIncoming = new Set();
+  for (const item of (Array.isArray(incomingList) ? incomingList : [])) {
+    const id = String((item && item.id) || '').trim();
+    if (!id) continue;
+    if (seenIncoming.has(id)) return id;
+    seenIncoming.add(id);
+  }
+
+  const existingById = new Map((Array.isArray(existingList) ? existingList : [])
+    .filter(item => item && item.id)
+    .map(item => [String(item.id), item]));
+  for (const item of (Array.isArray(incomingList) ? incomingList : [])) {
+    const id = String((item && item.id) || '').trim();
+    const existing = id ? existingById.get(id) : null;
+    if (existing && clientRecordsClearlyDifferent(existing, item)) return id;
+  }
+  return '';
+}
+
 async function getMergedClientsStore(companyId) {
   const rows = await getClientStoreRows(companyId);
   const globalRows = [];
@@ -2783,6 +2833,12 @@ app.post('/api/store/:key', async (req, res) => {
     if (key === 'clients' && Array.isArray(data)) {
       const existingList = await getMergedClientsStore(companyId);
       previousMergedClientsForAudit = existingList;
+      const collidedClientId = findClientIdCollision(existingList, data);
+      if (collidedClientId) {
+        return res.status(409).json({
+          error: `Conflito de identificador no cadastro ${collidedClientId}. Nenhum dado foi alterado; atualize a tela e envie novamente.`
+        });
+      }
       const canApprove = canApproveClientsUser(req.user);
       const currentUserId = req.user && req.user.id ? String(req.user.id) : '';
       const incoming = data.map(item => ({ ...(item || {}) }));
@@ -2884,26 +2940,72 @@ app.post('/api/store/:key', async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const existing = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
-    const previousData = previousMergedClientsForAudit || (existing ? safeParseStoreJson(existing.data_json, []) : []);
-    if (existing) {
-      await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).update({
-        data_json: dataJson,
-        updated_by: req.user.id,
-        updated_at: now
+    let previousData = previousMergedClientsForAudit || [];
+    let finalData = safeParseStoreJson(dataJson, []);
+
+    if (key === 'clients' && Array.isArray(finalData)) {
+      // O cadastro de clientes ainda usa uma lista JSON compartilhada. O lock
+      // evita que dois vendedores, salvando ao mesmo tempo, facam a ultima
+      // requisicao sobrescrever o cliente confirmado pela primeira.
+      await db.transaction(async trx => {
+        await trx('app_kv_store').insert({
+          company_id: companyId,
+          store_key: 'clients',
+          data_json: '[]',
+          updated_by: req.user.id,
+          created_at: now,
+          updated_at: now
+        }).onConflict(['company_id', 'store_key']).ignore();
+
+        const lockedRows = await trx('app_kv_store')
+          .where({ company_id: companyId })
+          .andWhere(function() {
+            this.where('store_key', 'clients').orWhere('store_key', 'like', '%_clients');
+          })
+          .forUpdate();
+        const scopedLists = [];
+        const globalLists = [];
+        lockedRows.forEach(row => {
+          const parsed = safeParseStoreJson(row.data_json, []);
+          if (!Array.isArray(parsed)) return;
+          if (row.store_key === 'clients') globalLists.push(parsed);
+          else scopedLists.push(parsed);
+        });
+        const latestClients = mergeStoreArrays(...scopedLists, ...globalLists);
+        const concurrentCollision = findClientIdCollision(latestClients, finalData);
+        if (concurrentCollision) {
+          const collisionError = new Error(`Conflito de identificador no cadastro ${concurrentCollision}. Nenhum dado foi alterado; atualize a tela e envie novamente.`);
+          collisionError.status = 409;
+          throw collisionError;
+        }
+        finalData = mergeStoreArrays(latestClients, finalData);
+        dataJson = JSON.stringify(finalData);
+        await trx('app_kv_store').where({ company_id: companyId, store_key: 'clients' }).update({
+          data_json: dataJson,
+          updated_by: req.user.id,
+          updated_at: now
+        });
       });
     } else {
-      await db('app_kv_store').insert({
-        company_id: companyId,
-        store_key: dbKey,
-        data_json: dataJson,
-        updated_by: req.user.id,
-        created_at: now,
-        updated_at: now
-      });
+      const existing = await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).first();
+      previousData = existing ? safeParseStoreJson(existing.data_json, []) : [];
+      if (existing) {
+        await db('app_kv_store').where({ company_id: companyId, store_key: dbKey }).update({
+          data_json: dataJson,
+          updated_by: req.user.id,
+          updated_at: now
+        });
+      } else {
+        await db('app_kv_store').insert({
+          company_id: companyId,
+          store_key: dbKey,
+          data_json: dataJson,
+          updated_by: req.user.id,
+          created_at: now,
+          updated_at: now
+        });
+      }
     }
-
-    const finalData = safeParseStoreJson(dataJson, []);
 
     await registrarDiferencasStore(req, key, previousData, finalData);
 
@@ -3082,7 +3184,7 @@ app.post('/api/store/:key', async (req, res) => {
     res.json({ success: true, key });
   } catch (err) {
     console.error('Erro ao salvar item da store:', err);
-    res.status(500).json({ error: 'Erro ao salvar dado no banco.' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Erro ao salvar dado no banco.' });
   }
 });
 

@@ -1332,8 +1332,15 @@ const App = {
         }
         const nowIso = new Date().toISOString();
         const nowPtBr = new Date().toLocaleDateString('pt-BR');
+        // O identificador antigo tinha somente 900 combinacoes (CL-100 a CL-999).
+        // Em bases maiores, dois cadastros podiam receber o mesmo id e a
+        // sincronizacao interpretava ambos como um unico cliente. UUID evita a
+        // colisao sem alterar os identificadores que ja existem no banco.
+        const clientUniqueId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+          ? window.crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
         const newClient = {
-          id: 'CL-' + Math.floor(100 + Math.random() * 900),
+          id: 'CL-' + clientUniqueId,
           name,
           cnpj,
           phone,
@@ -1398,7 +1405,24 @@ const App = {
         newClient.classification = scoringResult.classification;
 
         clients.push(newClient);
-        Store.saveClients(clients);
+
+        // A interface so pode confirmar o cadastro depois que o PostgreSQL
+        // responder com sucesso. Antes, Store.saveClients disparava a gravacao
+        // em segundo plano e a tela mostrava sucesso mesmo com Render/banco
+        // indisponivel; numa sincronizacao posterior o cadastro parecia sumir.
+        if (!Store.backendRequest || !Store.getToken || !Store.getToken()) {
+          throw new Error('Sessao sem conexao com o banco. Entre novamente e tente salvar.');
+        }
+        await Store.backendRequest('/api/store/clients', {
+          method: 'POST',
+          body: JSON.stringify({ data: clients })
+        });
+
+        // Atualiza o cache local somente depois da confirmacao do servidor e
+        // sem disparar uma segunda requisicao concorrente com os mesmos dados.
+        if (!Store.saveClientsLocal || !Store.saveClientsLocal(clients)) {
+          throw new Error('O cadastro foi salvo no banco, mas o navegador nao conseguiu atualizar a copia local. Recarregue a pagina.');
+        }
         this.refreshAllLists();
         clientForm.reset();
         document.querySelectorAll('[data-cnpj-api-locked="1"]').forEach(el => {

@@ -260,17 +260,22 @@ const Store = {
   /**
    * Generic List saver
    */
-  saveList(key, data) {
+  saveListLocal(key, data) {
     try {
       const scope = STORE_GLOBAL_KEYS.includes(key) ? DATA_GLOBAL_SCOPE : this.getUserScope();
       const stableKey = DATA_KEY_PREFIX + scope + '_' + key;
       localStorage.setItem(stableKey, JSON.stringify(data));
-      this.saveToBackend(key, data);
       return true;
     } catch (e) {
       console.error(e);
       return false;
     }
+  },
+
+  saveList(key, data) {
+    const savedLocally = this.saveListLocal(key, data);
+    if (savedLocally) this.saveToBackend(key, data);
+    return savedLocally;
   },
 
   // Specialized getters/setters for operations
@@ -290,6 +295,7 @@ const Store = {
   },
   // Retorna TODOS os clientes independente do filtro (para uso interno)
   getAllClients() { return this.getList('clients', DEFAULT_CLIENTS); },
+  saveClientsLocal(data) { return this.saveListLocal('clients', data); },
   saveClients(data) { return this.saveList('clients', data); },
 
   // Exclui cliente localmente (usando lista COMPLETA) e sincroniza com backend

@@ -42,6 +42,7 @@ const accountabilityPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pag
 const accountabilityJs = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'prestacao-contas.js'), 'utf8');
 const accountabilityCss = fs.readFileSync(path.join(__dirname, '..', '..', 'css', 'prestacao-contas.css'), 'utf8');
 const expensesPage = fs.readFileSync(path.join(__dirname, '..', '..', 'pages', 'despesas.html'), 'utf8');
+const renderConfig = fs.readFileSync(path.join(__dirname, '..', '..', 'render.yaml'), 'utf8');
 
 test('prestacao de contas cria historico aditivo e rollback nao destrutivo', () => {
   assert.match(accountabilityMigration, /createTable\('prestacoes_contas'/);
@@ -194,6 +195,42 @@ test('cadastro de cliente preserva valores brasileiros sem reduzir milhares', ()
   assert.deepEqual(Array.from(context.result), [2000, 2000, 2000.5, 2000.5]);
   assert.match(appSource, /firstOrderValue = ccParseBrazilianMoney/);
   assert.match(compatibility, /firstOrderValue: window\.ccParseBrazilianMoney/);
+});
+
+test('novo cliente usa identificador forte e so confirma depois do banco', () => {
+  const newClientStart = appSource.indexOf('const clientUniqueId');
+  const successToast = appSource.indexOf('Cadastro comercial completo enviado para aprovação!', newClientStart);
+  assert.ok(newClientStart >= 0 && successToast > newClientStart);
+  const block = appSource.slice(newClientStart, successToast);
+  assert.match(block, /crypto\.randomUUID/);
+  assert.equal(block.includes("Math.floor(100 + Math.random() * 900)"), false);
+  const remoteSave = block.indexOf("await Store.backendRequest('/api/store/clients'");
+  const localSave = block.indexOf('Store.saveClientsLocal(clients)');
+  assert.ok(remoteSave >= 0 && localSave > remoteSave, 'cache local nao pode ser confirmado antes do PostgreSQL');
+});
+
+test('backend rejeita colisao de id de cliente sem alterar dados', () => {
+  assert.match(server, /function findClientIdCollision/);
+  assert.match(server, /const collidedClientId = findClientIdCollision\(existingList, data\)/);
+  assert.match(server, /Conflito de identificador[\s\S]*Nenhum dado foi alterado/);
+  const collisionCheck = server.indexOf('const collidedClientId = findClientIdCollision(existingList, data)');
+  const storeWrite = server.indexOf("await db('app_kv_store')", collisionCheck);
+  assert.ok(collisionCheck >= 0 && storeWrite > collisionCheck);
+});
+
+test('salvamentos simultaneos de clientes usam transacao e bloqueio da lista', () => {
+  const routeStart = server.indexOf("app.post('/api/store/:key'");
+  const routeEnd = server.indexOf('function canApproveFinancial', routeStart);
+  const route = server.slice(routeStart, routeEnd);
+  assert.match(route, /if \(key === 'clients'[\s\S]*?await db\.transaction\(async trx/);
+  assert.match(route, /\.forUpdate\(\)/);
+  assert.match(route, /finalData = mergeStoreArrays\(latestClients, finalData\)/);
+});
+
+test('render monitora a conexao real com o PostgreSQL', () => {
+  assert.match(server, /app\.get\('\/api\/health'[\s\S]*?await db\.raw\('SELECT 1'\)/);
+  assert.match(server, /status\(503\).*database: 'unavailable'/s);
+  assert.match(renderConfig, /healthCheckPath: \/api\/health/);
 });
 
 test('cliente pendente pode ser editado pelo autor ou admin e aprovado perde o botao', () => {
