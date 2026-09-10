@@ -164,6 +164,18 @@ test('login usa bcrypt e migracao gradual da senha', () => {
   assert.equal(server.includes('.andWhere({ password })'), false);
 });
 
+test('cadastro e recadastro aceitam senha simples com quatro caracteres', () => {
+  const validatorStart = server.indexOf('function isPasswordStrong');
+  const validatorEnd = server.indexOf('\n}', validatorStart) + 2;
+  const validator = server.slice(validatorStart, validatorEnd);
+  assert.match(validator, /password\.trim\(\)\.length >= 4/);
+  assert.equal(validator.includes('/[A-Za-z]/'), false);
+  assert.equal(validator.includes('/\\d/'), false);
+  assert.equal(server.includes('ao menos 10 caracteres, com letras e numeros'), false);
+  assert.equal((server.match(/A senha deve ter ao menos 4 caracteres\./g) || []).length, 2);
+  assert.match(server, /updatedData\.password = await bcrypt\.hash\(String\(password\), 12\)/);
+});
+
 test('servidor nao publica a raiz inteira do projeto', () => {
   assert.equal(server.includes('express.static(FRONTEND_ROOT'), false);
   assert.match(server, /express\.static\(path\.join\(FRONTEND_ROOT, 'css'\)/);

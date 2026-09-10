@@ -1613,7 +1613,7 @@ function isAdminUser(user) {
 
 function isPasswordStrong(value) {
   const password = String(value || '');
-  return password.length >= 10 && /[A-Za-z]/.test(password) && /\d/.test(password);
+  return password.trim().length >= 4;
 }
 
 function safeAuditJson(value) {
@@ -5207,7 +5207,7 @@ app.post('/api/usuarios', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios faltando' });
   }
   if (!isPasswordStrong(password)) {
-    return res.status(400).json({ error: 'A senha deve ter ao menos 10 caracteres, com letras e numeros.' });
+    return res.status(400).json({ error: 'A senha deve ter ao menos 4 caracteres.' });
   }
 
   try {
@@ -5526,7 +5526,7 @@ app.put('/api/usuarios/:id/permissions', async (req, res) => {
     }
     if (password !== undefined && String(password).trim() !== '') {
       if (!isPasswordStrong(password)) {
-        return res.status(400).json({ error: 'A senha deve ter ao menos 10 caracteres, com letras e numeros.' });
+        return res.status(400).json({ error: 'A senha deve ter ao menos 4 caracteres.' });
       }
       updatedData.password = await bcrypt.hash(String(password), 12);
     }
