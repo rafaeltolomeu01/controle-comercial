@@ -3026,7 +3026,7 @@
       aprovacao: { renderMethod: 'renderApprovals', tbodyId: 'approvals-table-body', fields: ['search','empresa','unitId','city','vendedor','supervisor','status'] },
       prospeccao: { renderMethod: 'renderProspects', tbodyId: 'prospects-table-body', fields: ['search','empresa','unitId','period','vendedor','supervisor','status','city'] },
       equipamentos: { renderMethod: 'renderEquipments', tbodyId: 'equipments-table-body', fields: ['search','empresa','unitId','type','model','serial','situation'] },
-      movimentacao: { renderMethod: 'renderMovements', tbodyId: 'movements-table-body', fields: ['search','empresa','unitId','vendedor','client','status','serial','responsible','period'] },
+      movimentacao: { renderMethod: 'renderMovements', tbodyId: 'movements-table-body', fields: ['search','empresa','unitId','vendedor','client','status','operation','serial','responsible','period'] },
       chamados: { renderMethod: 'renderTickets', tbodyId: 'tickets-table-body', fields: ['search','empresa','unitId','vendedor','client','status','priority','serial','responsible','period'] },
       despesas: { renderMethod: 'renderExpenses', tbodyId: 'expenses-table-body', fields: ['search','empresa','unitId','vendedor','supervisor','status','period'] },
       'solicitacao-despesas': { renderMethod: 'renderBalances', tbodyId: 'balances-table-body', fields: ['search','empresa','unitId','vendedor','supervisor','status','period'] },
@@ -3053,7 +3053,10 @@
 
         bar.querySelectorAll('.filter-ctrl').forEach(ctrl => {
           ctrl.addEventListener(ctrl.tagName === 'SELECT' ? 'change' : 'input', () => {
-            if (ctrl.tagName === 'SELECT') ctrl.dataset.userHasChanged = '1';
+            if (ctrl.tagName === 'SELECT') {
+              ctrl.dataset.userHasChanged = '1';
+              bar.dataset.lastChangedField = ctrl.dataset.field || '';
+            }
             this.triggerFiltering(moduleKey);
           });
         });
@@ -3065,7 +3068,13 @@
       bar.querySelectorAll('.select-ctrl').forEach(select => {
         const field = select.dataset.field;
         const current = select.value;
-        const values = this.getUniqueValues(this.caches[moduleKey] || [], field);
+        const activeFilters = this.getFilterValues(moduleKey);
+        const lastChangedField = bar.dataset.lastChangedField || '';
+        const optionFilters = field === lastChangedField
+          ? Object.fromEntries(Object.entries(activeFilters).filter(([key]) => ['search','period'].includes(key)))
+          : { ...activeFilters, [field]: '' };
+        const compatibleRows = this.filterData(this.caches[moduleKey] || [], optionFilters, moduleKey);
+        const values = this.getUniqueValues(compatibleRows, field);
         select.innerHTML = `<option value="">Todos</option>${values.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('')}`;
         
         if (!select.dataset.userHasChanged) {
@@ -3076,12 +3085,16 @@
           }
         } else if ([...select.options].some(o => o.value === current)) {
           select.value = current;
+        } else if (current) {
+          select.value = '';
+          if (window.App && App.showToast) App.showToast(`O filtro ${select.closest('.filter-group')?.querySelector('label')?.textContent || field} foi limpo porque não é compatível com os demais filtros.`);
         }
       });
+      delete bar.dataset.lastChangedField;
     },
 
     buildFilterControls(moduleKey) {
-      const labels = { empresa:'Empresa', unitId:'Unidade', city:'Cidade', category:'Categoria', status:'Status', vendedor:'Vendedor', supervisor:'Supervisor', type:'Tipo', model:'Modelo', serial:'Patrimônio', situation:'Situação', plate:'Placa', number:'Número OS', responsible:'Responsável', profile:'Perfil', client:'Cliente', priority:'Prioridade' };
+      const labels = { empresa:'Empresa', unitId:'Unidade', city:'Cidade', category:'Categoria', status:'Status', operation:'Operação', vendedor:'Vendedor', supervisor:'Supervisor', type:'Tipo', model:'Modelo', serial:'Patrimônio', situation:'Situação', plate:'Placa', number:'Número OS', responsible:'Responsável', profile:'Perfil', client:'Cliente', priority:'Prioridade' };
       return (this.configs[moduleKey].fields || []).map(field => {
         if (field === 'search') return `<div class="filter-group" style="flex:2;min-width:180px;display:flex;flex-direction:column;gap:4px;"><label style="font-size:.72rem;font-weight:600;color:var(--text-muted);">Buscar Texto</label><input type="text" class="filter-ctrl search-ctrl" data-field="search" placeholder="Pesquisar..." style="height:36px;padding:0 10px;background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-main);border-radius:6px;font-size:.82rem;"></div>`;
         if (field === 'period') return `<div class="filter-group" style="flex:1.5;min-width:140px;display:flex;flex-direction:column;gap:4px;"><label style="font-size:.72rem;font-weight:600;color:var(--text-muted);">Período</label><select class="filter-ctrl period-ctrl" data-field="period" style="height:36px;padding:0 10px;background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-main);border-radius:6px;font-size:.82rem;"><option value="">Qualquer data</option><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="week">Últimos 7 dias</option><option value="month">Últimos 30 dias</option></select></div>`;
@@ -3113,6 +3126,7 @@
       if (field === 'profile') return pick(item, ['profile','perfil']);
       if (field === 'client') return pick(item, ['client','cliente','cliente_nome','clientName','name','nomeFantasia','cliente_nome_fantasia']);
       if (field === 'priority') return pick(item, ['priority','prioridade']);
+      if (field === 'operation') return pick(item, ['tipo_solicitacao','operacao','operation','tipo_operacao']);
       return pick(item, [field]);
     },
 
@@ -3125,8 +3139,13 @@
 
     triggerFiltering(moduleKey) {
       const config = this.configs[moduleKey];
+      this.ensureFilterPanel(moduleKey);
       const data = this.filterData(this.caches[moduleKey] || [], this.getFilterValues(moduleKey), moduleKey);
       if (window.UI && UI['_original_' + config.renderMethod]) UI['_original_' + config.renderMethod](data);
+      if (!data.length) {
+        const tbody = document.getElementById(config.tbodyId);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="20" style="text-align:center;padding:24px;color:var(--text-muted);">Nenhum registro encontrado para a combinação de filtros selecionada.</td></tr>';
+      }
     },
 
     clearFilters(moduleKey) {
@@ -3209,7 +3228,7 @@
       clients.forEach(c => ['photoFachada','photoInterna01','photoInterna02','photoInterna03','photoRua01','photoRua02','photoCnpj'].forEach(k => add(c[k], labelMedia(k), c, 'Clientes')));
       getStoreList('getExpenses').forEach(e => { add(e.foto_odometro || e.photoOdometro, 'Imagem do Odômetro', e, 'Despesas'); add(e.foto_comprovante || e.photo || e.photoComprovante, 'Imagem do Comprovante', e, 'Despesas'); });
       getStoreList('getMovements').forEach(m => ['foto_equipamento_url','foto_antes_url','foto_depois_url','video_url','fotoAntigo','fotoNovo','fotoRecolha','fotoAntes','fotoDepois'].forEach(k => add(m[k], labelMedia(k), m, 'Movimentações')));
-      getStoreList('getTickets').forEach(t => ['defectPhoto','defectVideo','fotoAntes','fotoDepois','fotoPlaqueta','videoAtendimento'].forEach(k => add(t[k], labelMedia(k), t, 'Chamados')));
+      getStoreList('getTickets').forEach(t => ['openingEquipmentPhoto','defectPhoto','defectVideo','fotoAntes','fotoDepois','fotoComplementar','fotoPlaqueta','videoAtendimento'].forEach(k => add(t[k], labelMedia(k), t, 'Chamados')));
       return files;
     },
 
@@ -3294,12 +3313,15 @@
   function ticketRow(t) {
     return {
       'OS': value(pick(t, ['id','os'])),
-      'Data de Abertura': formatDate(pick(t, ['created_at','createdAt','date','data'])),
-      'Hora de Abertura': value(pick(t, ['startTime','hora_inicio','time'])),
+      'Data de Abertura': formatDate(pick(t, ['openedAt','created_at','createdAt','date','data'])),
+      'Hora de Abertura': formatTime(pick(t, ['openedAt','created_at','createdAt','time'])),
+      'Início da Manutenção': value(pick(t, ['maintenanceStartedAt','startTime','hora_inicio'])),
+      'Tempo de Espera para Início': window.AmarettoMaintenance ? window.AmarettoMaintenance.waitingTime(t) : value(''),
       'Mecânico Responsável': value(pick(t, ['mechanic','mecanico'])),
       'Unidade': value(unitName(pick(t, ['unitId','unit_id']))),
       'Vendedor Responsável': value(pick(t, ['vendedor','seller','seller_name']) || userName(pick(t, ['userId','user_id']))),
       'Tipo de Equipamento': value(pick(t, ['equipmentType','tipo_equipamento'])),
+      'Marca da Geladeira / Freezer': value(pick(t, ['equipmentBrand','marca_equipamento'])),
       'Patrimônio / Serial': value(pick(t, ['equipmentSerial','patrimonio','serial'])),
       'Cliente': value(pick(t, ['client','cliente'])),
       'Nome Fantasia': value(pick(t, ['fantasyName','nomeFantasia'])),
@@ -3309,16 +3331,19 @@
       'Prioridade': value(pick(t, ['priority','prioridade'])),
       'Peças Utilizadas': listText(pick(t, ['parts','pecas'])),
       'Serviços Executados': listText(pick(t, ['services','servicos'])),
+      'Descrição do Serviço Realizado': value(pick(t, ['serviceDescription','solutionDescription','solucao'])),
       'Descrição do Problema': value(pick(t, ['faultDescription','descricao_falha'])),
       'Solução Aplicada': value(pick(t, ['solutionDescription','solucao'])),
       'Estado Pós Atendimento': value(pick(t, ['eqStatusAfter','estado_pos'])),
       'Carga de Gás (g)': value(pick(t, ['gasCharge','carga_gas'])),
       'Observações': value(pick(t, ['additionalNotes','observations','observacoes'])),
-      'Link da Foto do Defeito': mediaUrl(pick(t, ['defectPhoto'])),
+      'Link da Foto do Equipamento Completo': mediaUrl(pick(t, ['openingEquipmentPhoto','defectPhoto'])),
+      'Link da Foto do Defeito (histórico)': mediaUrl(pick(t, ['defectPhoto'])),
       'Link do Vídeo do Defeito': mediaUrl(pick(t, ['defectVideo'])),
       'Link da Foto Antes do Reparo': mediaUrl(pick(t, ['fotoAntes'])),
       'Link da Foto Depois do Reparo': mediaUrl(pick(t, ['fotoDepois'])),
       'Link da Foto da Plaqueta': mediaUrl(pick(t, ['fotoPlaqueta'])),
+      'Link da Foto Complementar': mediaUrl(pick(t, ['fotoComplementar','fotoPlaqueta'])),
       'Link do Vídeo do Atendimento': mediaUrl(pick(t, ['videoAtendimento'])),
       'Status': value(pick(t, ['status'])),
       'Hora de Conclusão': value(pick(t, ['endTime','hora_conclusao']))
@@ -3430,7 +3455,7 @@
   function listText(v) { if (!v) return '—'; if (Array.isArray(v)) return v.join(' | '); try { const a = JSON.parse(v); if (Array.isArray(a)) return a.join(' | '); } catch(_) {} return String(v); }
   function mediaList(obj, keys) { const arr = []; keys.forEach(k => { const v = obj && obj[k]; if (Array.isArray(v)) v.forEach(x => arr.push(mediaUrl(x))); else if (v) arr.push(mediaUrl(v)); }); return arr.filter(x => x && x !== '—').join(' | ') || '—'; }
   function mediaUrl(url) { let raw = Array.isArray(url) ? url[0] : url; if (!raw) return '—'; if (typeof raw === 'object') raw = raw.url || raw.path || raw.src || ''; raw = String(raw || '').trim(); if (!raw || ['null','undefined','—','-'].includes(raw.toLowerCase()) || raw.startsWith('data:')) return raw.startsWith('data:') ? 'Mídia salva em base64/local; reenviar para gerar link público.' : '—'; if (window.TempPhotosCache && window.TempPhotosCache[raw]) raw = window.TempPhotosCache[raw]; if (raw.startsWith('http://') || raw.startsWith('https://')) return raw; if (raw.startsWith('/')) return window.location.origin + raw; return window.location.origin + '/' + raw.replace(/^\/+/, ''); }
-  function labelMedia(k) { return ({ photoFachada:'Foto da Fachada', photoInterna01:'Foto Interna 01', photoInterna02:'Foto Interna 02', photoInterna03:'Foto Interna 03', photoRua01:'Foto Externa Rua 01', photoRua02:'Foto Externa Rua 02', photoCnpj:'Foto do CNPJ', foto_odometro:'Imagem do Odômetro', foto_comprovante:'Imagem do Comprovante', foto_antes_url:'Foto Antes', foto_depois_url:'Foto Depois', foto_equipamento_url:'Foto do Equipamento', video_url:'Vídeo', defectPhoto:'Foto do Defeito', defectVideo:'Vídeo do Defeito', fotoAntes:'Foto Antes', fotoDepois:'Foto Depois', fotoPlaqueta:'Foto da Plaqueta', videoAtendimento:'Vídeo do Atendimento' }[k] || k); }
+  function labelMedia(k) { return ({ photoFachada:'Foto da Fachada', photoInterna01:'Foto Interna 01', photoInterna02:'Foto Interna 02', photoInterna03:'Foto Interna 03', photoRua01:'Foto Externa Rua 01', photoRua02:'Foto Externa Rua 02', photoCnpj:'Foto do CNPJ', foto_odometro:'Imagem do Odômetro', foto_comprovante:'Imagem do Comprovante', foto_antes_url:'Foto Antes', foto_depois_url:'Foto Depois', foto_equipamento_url:'Foto do Equipamento', video_url:'Vídeo', openingEquipmentPhoto:'Equipamento Completo na Abertura', defectPhoto:'Foto do Defeito', defectVideo:'Vídeo do Defeito', fotoAntes:'Foto Antes', fotoDepois:'Foto Depois', fotoComplementar:'Foto Complementar', fotoPlaqueta:'Foto da Plaqueta', videoAtendimento:'Vídeo do Atendimento' }[k] || k); }
   function getStoreList(method) { try { return (window.Store && Store[method] && Store[method]()) || []; } catch(_) { return []; } }
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function escapeAttr(v) { return escapeHtml(v).replace(/`/g, '&#96;'); }
@@ -3789,7 +3814,8 @@
       services: services.length ? services : saved.services,
       fotoAntes: imgUrl('preview-img-ticket-foto-antes', saved.fotoAntes),
       fotoDepois: imgUrl('preview-img-ticket-foto-depois', saved.fotoDepois),
-      fotoPlaqueta: imgUrl('preview-img-ticket-foto-plaqueta', saved.fotoPlaqueta),
+      fotoComplementar: imgUrl('preview-img-ticket-foto-plaqueta', saved.fotoComplementar || saved.fotoPlaqueta),
+      serviceDescription: document.getElementById('ticket-service-description')?.value || saved.serviceDescription || saved.solutionDescription || '',
       defectPhoto: saved.defectPhoto || '',
       defectVideo: saved.defectVideo || '',
       videoAtendimento: saved.videoAtendimento || ''
@@ -3817,16 +3843,21 @@
 
       y = section(doc, y, '1. Identificação do Atendimento', title);
       fieldBox(doc, 14, y, 'Mecânico Responsável', ticket.mechanic, 80);
-      fieldBox(doc, 108, y, 'Data de Realização', ticket.date, 80);
+      const maintenanceTools = window.AmarettoMaintenance;
+      const openedText = maintenanceTools ? maintenanceTools.formatDateTime(maintenanceTools.openingDate(ticket)) : (ticket.openedAt || ticket.created_at || ticket.date);
+      const startedText = maintenanceTools ? maintenanceTools.formatDateTime(maintenanceTools.maintenanceDate(ticket)) : (ticket.maintenanceStartedAt || ticket.startTime);
+      const waitText = maintenanceTools ? maintenanceTools.waitingTime(ticket) : '—';
+      fieldBox(doc, 108, y, 'Data de Abertura', openedText, 80);
       y += 20;
-      fieldBox(doc, 14, y, 'Hora de Início / Conclusão', `${val(ticket.startTime)} / ${val(ticket.endTime)}`, 80);
-      fieldBox(doc, 108, y, 'Unidade Vinculada', ticket.unit || unitName(ticket.unitId), 80);
+      fieldBox(doc, 14, y, 'Início da Manutenção', startedText, 54);
+      fieldBox(doc, 75, y, 'Tempo de Espera', waitText, 54);
+      fieldBox(doc, 136, y, 'Hora de Conclusão', ticket.endTime, 54);
       y += 22;
 
       y = section(doc, y, '2. Identificação do Equipamento', title);
       fieldBox(doc, 14, y, 'Tipo de Equipamento', ticket.equipmentType, 54);
       fieldBox(doc, 75, y, 'Nº Patrimônio / Serial', ticket.equipmentSerial, 54);
-      fieldBox(doc, 136, y, 'Cliente Vinculado', ticket.client, 54);
+      fieldBox(doc, 136, y, 'Marca', ticket.equipmentBrand, 54);
       y += 20;
       fieldBox(doc, 14, y, 'Código do Cliente', ticket.clientCode || ticket.cliente_codigo || '-', 54);
       fieldBox(doc, 75, y, 'Vendedor do Cliente', ticket.clientSeller || ticket.cliente_vendedor || '-', 54);
@@ -3841,7 +3872,10 @@
       y += 20;
       y = textBlock(doc, y, 'Descrição Simplificada da Falha', ticket.title, title);
 
-      y = section(doc, y, '3. Peças Utilizadas', title);
+      y = section(doc, y, '3. Serviço Realizado', title);
+      y = textBlock(doc, y, 'Descrição do Serviço Realizado', ticket.serviceDescription || ticket.solutionDescription || ticket.faultDescription, title);
+
+      y = section(doc, y, '4. Dados Históricos — Peças Utilizadas', title);
       const parts = list(ticket.parts);
       y = ensurePage(doc, y, 14 + Math.ceil((parts.length || 1)/4)*8, title);
       doc.setFont('helvetica','bold');
@@ -3860,7 +3894,7 @@
       }
       y += 14;
 
-      y = section(doc, y, '4. Serviços Executados', title);
+      y = section(doc, y, '5. Dados Históricos — Serviços Executados', title);
       const services = list(ticket.services);
       y = ensurePage(doc, y, 14 + Math.ceil((services.length || 1)/4)*8, title);
       doc.setFont('helvetica','bold');
@@ -3879,21 +3913,21 @@
       }
       y += 14;
 
-      y = section(doc, y, '5. Laudo e Diagnóstico Técnico', title);
+      y = section(doc, y, '6. Dados Técnicos Históricos', title);
       y = textBlock(doc, y, 'Descrição Detalhada do Problema Encontrado', ticket.faultDescription, title);
       y = textBlock(doc, y, 'Solução Aplicada / Laudo Técnico', ticket.solutionDescription, title);
       fieldBox(doc, 14, y, 'Carga de Gás (gramas)', ticket.gasCharge ? `${ticket.gasCharge}g` : '—', 80);
       fieldBox(doc, 108, y, 'Observações Adicionais', ticket.additionalNotes, 80);
       y += 23;
 
-      y = section(doc, y, '6. Fotos e Vídeo da Visita', title);
+      y = section(doc, y, '7. Fotografias e Anexos', title);
       y = ensurePage(doc, y, 145, title);
-      await addImageBox(doc, 12, y, 88, 66, 'Foto do Defeito', ticket.defectPhoto);
+      await addImageBox(doc, 12, y, 88, 66, 'Equipamento Completo na Abertura', ticket.openingEquipmentPhoto || ticket.defectPhoto);
       await addImageBox(doc, 110, y, 88, 66, 'Foto Antes do Reparo', ticket.fotoAntes);
       y += 72;
       y = ensurePage(doc, y, 76, title);
       await addImageBox(doc, 12, y, 88, 66, 'Foto Depois do Reparo', ticket.fotoDepois);
-      await addImageBox(doc, 110, y, 88, 66, 'Foto da Plaqueta', ticket.fotoPlaqueta);
+      await addImageBox(doc, 110, y, 88, 66, 'Foto Complementar', ticket.fotoComplementar || ticket.fotoPlaqueta);
       y += 72;
 
       const v1 = mediaUrl(ticket.defectVideo);
@@ -9013,6 +9047,7 @@
             unitId: document.getElementById('ticket-open-unit')?.value || '',
             userId: document.getElementById('ticket-open-seller')?.value || '',
             equipmentType: document.getElementById('ticket-open-eq-type')?.value || '',
+            equipmentBrand: document.getElementById('ticket-open-brand')?.value.trim() || '',
             equipmentSerial: document.getElementById('ticket-open-serial')?.value.trim() || '',
             clientCode: document.getElementById('ticket-open-client-code')?.value.trim() || '',
             clientSeller: document.getElementById('ticket-open-client-seller-imported')?.value.trim() || '',
@@ -9025,6 +9060,7 @@
             priority: document.getElementById('ticket-open-priority')?.value || '',
             observations: document.getElementById('ticket-open-obs')?.value.trim() || '',
             defectPhoto: photoUrl,
+            openingEquipmentPhoto: photoUrl,
             defectVideo: videoUrl
           })
         });
@@ -9141,6 +9177,7 @@
       setValue('ticket-open-seller', t.userId);
       setValue('ticket-open-eq-type', t.equipmentType);
       setValue('ticket-open-serial', t.equipmentSerial);
+      setValue('ticket-open-brand', t.equipmentBrand || '');
       setValue('ticket-open-client-code', t.clientCode || t.cliente_codigo || '');
       setValue('ticket-open-client', t.client);
       setValue('ticket-open-fantasy', t.fantasyName);

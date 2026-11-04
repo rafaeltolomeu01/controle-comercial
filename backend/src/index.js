@@ -626,6 +626,7 @@ async function initDb() {
       table.string('userId').notNullable();
       table.string('equipmentSerial').notNullable();
       table.string('equipmentType').nullable();
+      table.string('equipmentBrand').nullable();
       table.string('client').nullable();
       table.string('fantasyName').nullable();
       table.string('city').nullable();
@@ -638,13 +639,17 @@ async function initDb() {
       table.text('observations').nullable();
       table.string('defectPhoto').nullable();
       table.string('defectVideo').nullable();
+      table.string('openingEquipmentPhoto').nullable();
       table.string('status').notNullable().defaultTo('Aberto');
       table.string('mechanic').nullable();
       table.string('date').nullable();
       table.string('startTime').nullable();
+      table.timestamp('openedAt', { useTz: true }).nullable();
+      table.timestamp('maintenanceStartedAt', { useTz: true }).nullable();
       table.string('endTime').nullable();
       table.text('faultDescription').nullable();
       table.text('solutionDescription').nullable();
+      table.text('serviceDescription').nullable();
       table.string('eqStatusAfter').nullable();
       table.string('gasCharge').nullable();
       table.text('additionalNotes').nullable();
@@ -653,6 +658,7 @@ async function initDb() {
       table.string('fotoAntes').nullable();
       table.string('fotoDepois').nullable();
       table.string('fotoPlaqueta').nullable();
+      table.string('fotoComplementar').nullable();
       table.string('videoAtendimento').nullable();
       table.timestamps(true, true);
     });
@@ -665,6 +671,7 @@ async function initDb() {
       userId: t => t.string('userId').notNullable().defaultTo('demo_user'),
       equipmentSerial: t => t.string('equipmentSerial').notNullable().defaultTo(''),
       equipmentType: t => t.string('equipmentType').nullable(),
+      equipmentBrand: t => t.string('equipmentBrand').nullable(),
       client: t => t.string('client').nullable(),
       fantasyName: t => t.string('fantasyName').nullable(),
       city: t => t.string('city').nullable(),
@@ -677,13 +684,17 @@ async function initDb() {
       observations: t => t.text('observations').nullable(),
       defectPhoto: t => t.string('defectPhoto').nullable(),
       defectVideo: t => t.string('defectVideo').nullable(),
+      openingEquipmentPhoto: t => t.string('openingEquipmentPhoto').nullable(),
       status: t => t.string('status').notNullable().defaultTo('Aberto'),
       mechanic: t => t.string('mechanic').nullable(),
       date: t => t.string('date').nullable(),
       startTime: t => t.string('startTime').nullable(),
+      openedAt: t => t.timestamp('openedAt', { useTz: true }).nullable(),
+      maintenanceStartedAt: t => t.timestamp('maintenanceStartedAt', { useTz: true }).nullable(),
       endTime: t => t.string('endTime').nullable(),
       faultDescription: t => t.text('faultDescription').nullable(),
       solutionDescription: t => t.text('solutionDescription').nullable(),
+      serviceDescription: t => t.text('serviceDescription').nullable(),
       eqStatusAfter: t => t.string('eqStatusAfter').nullable(),
       gasCharge: t => t.string('gasCharge').nullable(),
       additionalNotes: t => t.text('additionalNotes').nullable(),
@@ -692,6 +703,7 @@ async function initDb() {
       fotoAntes: t => t.string('fotoAntes').nullable(),
       fotoDepois: t => t.string('fotoDepois').nullable(),
       fotoPlaqueta: t => t.string('fotoPlaqueta').nullable(),
+      fotoComplementar: t => t.string('fotoComplementar').nullable(),
       videoAtendimento: t => t.string('videoAtendimento').nullable()
     };
     for (const [col, addColumn] of Object.entries(chamadoColumns)) {
@@ -6377,6 +6389,13 @@ app.post('/api/chamados', async (req, res) => {
     if (!body.equipmentSerial || !body.title) {
       return res.status(400).json({ error: 'Patrimônio e descrição do defeito são obrigatórios.' });
     }
+    if (!String(body.equipmentBrand || '').trim()) {
+      return res.status(400).json({ error: 'A marca da geladeira/freezer é obrigatória.' });
+    }
+    const openingEquipmentPhoto = String(body.openingEquipmentPhoto || body.defectPhoto || '').trim();
+    if (!openingEquipmentPhoto) {
+      return res.status(400).json({ error: 'A foto do equipamento completo é obrigatória.' });
+    }
     const typeCheck = await validateMechanicalEquipmentType(req, body.equipmentType);
     // Aceita o tipo mesmo que não esteja na lista global (ex: importado da planilha)
     const resolvedEquipmentType = typeCheck.ok ? typeCheck.typeName : String(body.equipmentType || '').trim();
@@ -6391,6 +6410,7 @@ app.post('/api/chamados', async (req, res) => {
       userId: ownerId,
       equipmentSerial: String(body.equipmentSerial || '').trim(),
       equipmentType: resolvedEquipmentType,
+      equipmentBrand: String(body.equipmentBrand || '').trim(),
       client: body.client || '',
       fantasyName: body.fantasyName || '',
       city: body.city || '',
@@ -6403,13 +6423,17 @@ app.post('/api/chamados', async (req, res) => {
       observations: body.observations || '',
       defectPhoto: body.defectPhoto || '',
       defectVideo: body.defectVideo || '',
+      openingEquipmentPhoto,
       status: 'Aberto',
       mechanic: '',
       date: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       startTime: '',
+      openedAt: now.toISOString(),
+      maintenanceStartedAt: null,
       endTime: '',
       faultDescription: '',
       solutionDescription: '',
+      serviceDescription: '',
       eqStatusAfter: '',
       gasCharge: '',
       additionalNotes: '',
@@ -6418,6 +6442,7 @@ app.post('/api/chamados', async (req, res) => {
       fotoAntes: '',
       fotoDepois: '',
       fotoPlaqueta: '',
+      fotoComplementar: '',
       videoAtendimento: '',
       created_at: now.toISOString(),
       updated_at: now.toISOString()
@@ -6488,10 +6513,10 @@ app.put('/api/chamados/:id', async (req, res) => {
     const body = req.body || {};
     const updates = { updated_at: new Date().toISOString() };
     const allowed = [
-      'unitId', 'userId', 'equipmentSerial', 'equipmentType', 'client', 'fantasyName', 'city', 'address',
-      'clientCode', 'clientSeller', 'clientGroup', 'title', 'priority', 'observations', 'defectPhoto', 'defectVideo',
+      'unitId', 'userId', 'equipmentSerial', 'equipmentType', 'equipmentBrand', 'client', 'fantasyName', 'city', 'address',
+      'clientCode', 'clientSeller', 'clientGroup', 'title', 'priority', 'observations', 'defectPhoto', 'defectVideo', 'openingEquipmentPhoto',
       'status', 'mechanic', 'date', 'startTime', 'endTime', 'faultDescription', 'solutionDescription',
-      'eqStatusAfter', 'gasCharge', 'additionalNotes', 'fotoAntes', 'fotoDepois', 'fotoPlaqueta', 'videoAtendimento'
+      'serviceDescription', 'eqStatusAfter', 'gasCharge', 'additionalNotes', 'fotoAntes', 'fotoDepois', 'fotoPlaqueta', 'fotoComplementar', 'videoAtendimento'
     ];
     for (const field of allowed) {
       if (Object.prototype.hasOwnProperty.call(body, field)) updates[field] = body[field] == null ? '' : body[field];
@@ -6569,11 +6594,27 @@ app.put('/api/chamados/:id/status', async (req, res) => {
     if (!staff && !allowedIds.map(String).includes(String(chamado.userId))) return res.status(403).json({ error: 'Acesso negado' });
     const updates = { status, updated_at: new Date().toISOString() };
     if (status === 'Em Atendimento') {
-      updates.mechanic = req.user.name || req.user.id;
-      updates.startTime = new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
-      updates.date = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const startedAt = new Date();
+      updates.mechanic = chamado.mechanic || req.user.name || req.user.id;
+      // O primeiro início é imutável: reabrir ou editar o chamado não reinicia o relógio de espera.
+      if (!chamado.maintenanceStartedAt) {
+        const legacyDate = String(chamado.date || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        const legacyTime = String(chamado.startTime || '').match(/^(\d{2}):(\d{2})/);
+        updates.maintenanceStartedAt = legacyDate && legacyTime
+          ? `${legacyDate[3]}-${legacyDate[2]}-${legacyDate[1]}T${legacyTime[1]}:${legacyTime[2]}:00-03:00`
+          : startedAt.toISOString();
+      }
+      if (!chamado.startTime) {
+        updates.startTime = startedAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
+      }
     }
     await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update(updates);
+    await db('auditoria_logs').insert({
+      usuario_id: req.user.id,
+      acao: status === 'Em Atendimento' ? 'INICIOU_CHAMADO' : 'ALTEROU_STATUS_CHAMADO',
+      detalhes: `Chamado mecânico ${req.params.id} alterado para ${status}.`,
+      empresa_id: req.user.empresa_id || '001'
+    }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -6588,24 +6629,35 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
     const staff = canSeeAllMechanicalTickets(req.user) || ['Gerente', 'Supervisor', 'Mecânico', 'Mecanico'].includes(req.user.profile);
     if (!staff) return res.status(403).json({ error: 'Acesso negado: somente equipe técnica pode finalizar ficha.' });
     const b = req.body || {};
-    await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update({
+    const serviceDescription = String(b.serviceDescription || '').trim();
+    const eqStatusAfter = String(b.eqStatusAfter || '').trim();
+    const fotoAntes = String(b.fotoAntes || chamado.fotoAntes || '').trim();
+    const fotoDepois = String(b.fotoDepois || chamado.fotoDepois || '').trim();
+    const allowedEquipmentStates = [
+      'Funcionando normalmente',
+      'Funcionando parcialmente',
+      'Aguardando peça',
+      'Aguardando troca',
+      'Recolhimento necessário'
+    ];
+    if (!serviceDescription) return res.status(400).json({ error: 'A descrição do serviço realizado é obrigatória.' });
+    if (!allowedEquipmentStates.includes(eqStatusAfter)) return res.status(400).json({ error: 'Selecione um estado válido para o equipamento.' });
+    if (!fotoAntes || !fotoDepois) return res.status(400).json({ error: 'As fotos de antes e depois do reparo são obrigatórias.' });
+
+    const updates = {
       status: 'Resolvido',
       mechanic: b.mechanic || chamado.mechanic || req.user.name || req.user.id,
-      date: b.date || chamado.date || '',
       endTime: b.endTime || '',
-      faultDescription: b.faultDescription || '',
-      solutionDescription: b.solutionDescription || '',
-      eqStatusAfter: b.eqStatusAfter || '',
-      gasCharge: b.gasCharge || '',
-      additionalNotes: b.additionalNotes || '',
-      parts: JSON.stringify(Array.isArray(b.parts) ? b.parts : []),
-      services: JSON.stringify(Array.isArray(b.services) ? b.services : []),
-      fotoAntes: b.fotoAntes || chamado.fotoAntes || '',
-      fotoDepois: b.fotoDepois || chamado.fotoDepois || '',
-      fotoPlaqueta: b.fotoPlaqueta || chamado.fotoPlaqueta || '',
-      videoAtendimento: b.videoAtendimento || chamado.videoAtendimento || '',
+      serviceDescription,
+      // Mantém compatibilidade com PDFs e integrações antigas sem apagar o laudo histórico.
+      solutionDescription: serviceDescription,
+      eqStatusAfter,
+      fotoAntes,
+      fotoDepois,
+      fotoComplementar: b.fotoComplementar || chamado.fotoComplementar || '',
       updated_at: new Date().toISOString()
-    });
+    };
+    await db('chamados_tecnicos').where({ id: req.params.id, empresa_id: req.user.empresa_id || '001' }).update(updates);
     await db('auditoria_logs').insert({
       usuario_id: req.user.id,
       acao: 'FINALIZOU_CHAMADO',

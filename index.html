@@ -315,6 +315,7 @@
   <script src="js/preservacao-fotos-edicao-20260717.js?v=20260717-v4"></script>
   <script src="js/prestacao-contas.js?v=20260721-saldos-v7"></script>
   <script src="js/modulos-menu-20260721.js?v=20260721-02"></script>
+  <script src="js/amaretto-manutencao-20261104.js?v=20261104-01"></script>
   <script>
     // Initialise Application when scripts are fully loaded
     document.addEventListener('DOMContentLoaded', () => {
@@ -1040,68 +1041,12 @@
           </div>
         </div>
 
-        <!-- BLOCO 3: PEÇAS UTILIZADAS -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">3. Peças Utilizadas</h4>
-        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todas as peças usadas no atendimento. É possível selecionar múltiplas peças.</p>
-        <div id="ticket-parts-container" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-          <button type="button" class="btn-part-toggle" data-part="Compressor" onclick="App.togglePartBtn(this)">Compressor</button>
-          <button type="button" class="btn-part-toggle" data-part="Capacitor" onclick="App.togglePartBtn(this)">Capacitor</button>
-          <button type="button" class="btn-part-toggle" data-part="Filtro Secador" onclick="App.togglePartBtn(this)">Filtro Secador</button>
-          <button type="button" class="btn-part-toggle" data-part="Relé" onclick="App.togglePartBtn(this)">Relé</button>
-          <button type="button" class="btn-part-toggle" data-part="Mangueira de Dreno" onclick="App.togglePartBtn(this)">Mangueira de Dreno</button>
-          <button type="button" class="btn-part-toggle" data-part="Rodízio" onclick="App.togglePartBtn(this)">Rodízio</button>
-          <button type="button" class="btn-part-toggle" data-part="Lâmpada" onclick="App.togglePartBtn(this)">Lâmpada</button>
-          <button type="button" class="btn-part-toggle" data-part="Timer" onclick="App.togglePartBtn(this)">Timer</button>
-          <button type="button" class="btn-part-toggle" data-part="Termostato" onclick="App.togglePartBtn(this)">Termostato</button>
-          <button type="button" class="btn-part-toggle" data-part="Micro Motor" onclick="App.togglePartBtn(this)">Micro Motor</button>
-          <button type="button" class="btn-part-toggle" data-part="Cabo/Fio" onclick="App.togglePartBtn(this)">Cabo/Fio</button>
-          <button type="button" class="btn-part-toggle" data-part="Condensador" onclick="App.togglePartBtn(this)">Condensador</button>
-          <button type="button" class="btn-part-toggle" data-part="Hélice" onclick="App.togglePartBtn(this)">Hélice</button>
-          <button type="button" class="btn-part-toggle" data-part="Resistência Degelo" onclick="App.togglePartBtn(this)">Resistência Degelo</button>
-          <button type="button" class="btn-part-toggle" data-part="Interruptor da Porta" onclick="App.togglePartBtn(this)">Interruptor da Porta</button>
-          <button type="button" class="btn-part-toggle btn-part-outra" data-part="Outra Peça" onclick="App.toggleOtherPart(this)">+ Outra Peça</button>
-        </div>
-        <div id="ticket-outra-peca-container" style="display:none; margin-bottom:12px;">
-          <div class="form-group" style="margin-bottom:0;">
-            <label for="ticket-outra-peca">Descreva a outra peça utilizada</label>
-            <input type="text" id="ticket-outra-peca" placeholder="Nome da peça utilizada...">
-          </div>
-        </div>
-
-        <!-- BLOCO 4: SERVIÇOS EXECUTADOS -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">4. Serviços Executados</h4>
-        <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:10px;">Selecione todos os serviços realizados no atendimento. É possível selecionar múltiplos serviços.</p>
-        <div id="ticket-services-container" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-          <button type="button" class="btn-part-toggle" data-service="Recarga de Gás" onclick="App.toggleServiceBtn(this)">Recarga de Gás</button>
-          <button type="button" class="btn-part-toggle" data-service="Troca de Peça" onclick="App.toggleServiceBtn(this)">Troca de Peça</button>
-          <button type="button" class="btn-part-toggle" data-service="Limpeza Geral" onclick="App.toggleServiceBtn(this)">Limpeza Geral</button>
-          <button type="button" class="btn-part-toggle" data-service="Regulagem" onclick="App.toggleServiceBtn(this)">Regulagem</button>
-          <button type="button" class="btn-part-toggle" data-service="Instalação" onclick="App.toggleServiceBtn(this)">Instalação</button>
-          <button type="button" class="btn-part-toggle" data-service="Soldagem" onclick="App.toggleServiceBtn(this)">Soldagem</button>
-          <button type="button" class="btn-part-toggle" data-service="Diagnóstico Elétrico" onclick="App.toggleServiceBtn(this)">Diagnóstico Elétrico</button>
-          <button type="button" class="btn-part-toggle" data-service="Desgelo Forçado" onclick="App.toggleServiceBtn(this)">Desgelo Forçado</button>
-          <button type="button" class="btn-part-toggle" data-service="Adesivação" onclick="App.toggleServiceBtn(this)">Adesivação</button>
-          <button type="button" class="btn-part-toggle" data-service="Reparo Estrutural" onclick="App.toggleServiceBtn(this)">Reparo Estrutural</button>
-          <button type="button" class="btn-part-toggle" data-service="Substituição de Motor" onclick="App.toggleServiceBtn(this)">Substituição de Motor</button>
-          <button type="button" class="btn-part-toggle btn-part-outra" data-service="Outro Serviço" onclick="App.toggleOtherService(this)">+ Outro Serviço</button>
-        </div>
-        <div id="ticket-outro-servico-container" style="display:none; margin-bottom:12px;">
-          <div class="form-group" style="margin-bottom:0;">
-            <label for="ticket-outro-servico">Descreva o outro serviço executado</label>
-            <input type="text" id="ticket-outro-servico" placeholder="Descreva o serviço executado...">
-          </div>
-        </div>
-
-        <!-- BLOCO 5: LAUDO TÉCNICO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">5. Laudo e Diagnóstico Técnico</h4>
+        <!-- BLOCO 3: REGISTRO SIMPLIFICADO -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">3. Serviço Realizado</h4>
         <div class="form-row">
-          <div class="form-group" style="grid-column: span 2;">
-            <label for="ticket-fault-description">Descrição Detalhada do Problema Encontrado *</label>
-            <textarea id="ticket-fault-description" rows="3" required placeholder="Descreva detalhadamente o problema encontrado, causa provável, e condições do equipamento ao chegar..." style="resize:vertical;"></textarea>
-          </div>
-          <div class="form-group" style="grid-column: span 2;">
-            <label for="ticket-solution-description">Solução Aplicada / Laudo Técnico *</label>
-            <textarea id="ticket-solution-description" rows="3" required placeholder="Descreva o que foi feito para resolver o problema, incluindo ajustes, substituições e verificações..." style="resize:vertical;"></textarea>
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="ticket-service-description">Descrição do Serviço Realizado *</label>
+            <textarea id="ticket-service-description" rows="6" required placeholder="Descreva o problema encontrado, o serviço realizado e o resultado do atendimento." style="resize:vertical;"></textarea>
           </div>
         </div>
         <div class="form-row">
@@ -1113,46 +1058,34 @@
               <option value="Funcionando parcialmente">Funcionando parcialmente</option>
               <option value="Aguardando peça">Aguardando peça</option>
               <option value="Aguardando troca">Aguardando troca</option>
-              <option value="Recolhido para reparo">Recolhido para reparo</option>
+              <option value="Recolhimento necessário">Recolhimento necessário</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label for="ticket-gas-charge">Carga de Gás (gramas) — se aplicável</label>
-            <input type="number" id="ticket-gas-charge" min="0" step="1" placeholder="Ex: 150">
-          </div>
-          <div class="form-group">
-            <label for="ticket-additional-notes">Observações Adicionais</label>
-            <input type="text" id="ticket-additional-notes" placeholder="Informações adicionais para o gestor...">
           </div>
         </div>
 
-        <!-- BLOCO 6: FOTOS E VÍDEO -->
-        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">6. Fotos e Vídeo da Visita</h4>
+        <!-- BLOCO 4: FOTOS -->
+        <h4 style="font-family:var(--font-title); color:var(--primary-color); margin:18px 0 12px 0; border-bottom:1px solid var(--border-color); padding-bottom:6px;">4. Fotografias do Atendimento</h4>
         <div class="form-row" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
             <label for="ticket-foto-antes" style="font-weight:600; font-size:0.75rem;">Foto Antes do Reparo *</label>
-            <input type="file" id="ticket-foto-antes" accept="image/*" required style="font-size:0.75rem; margin-top:4px;">
+            <input type="file" id="ticket-foto-antes" accept="image/*" capture="environment" required style="font-size:0.75rem; margin-top:4px;">
             <div id="preview-ticket-foto-antes" style="display:none; margin-top:6px;">
               <img id="preview-img-ticket-foto-antes" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
             </div>
           </div>
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
             <label for="ticket-foto-depois" style="font-weight:600; font-size:0.75rem;">Foto Depois do Reparo *</label>
-            <input type="file" id="ticket-foto-depois" accept="image/*" required style="font-size:0.75rem; margin-top:4px;">
+            <input type="file" id="ticket-foto-depois" accept="image/*" capture="environment" required style="font-size:0.75rem; margin-top:4px;">
             <div id="preview-ticket-foto-depois" style="display:none; margin-top:6px;">
               <img id="preview-img-ticket-foto-depois" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
             </div>
           </div>
           <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-            <label for="ticket-foto-plaqueta" style="font-weight:600; font-size:0.75rem;">Foto da Plaqueta de Identificação</label>
-            <input type="file" id="ticket-foto-plaqueta" accept="image/*" style="font-size:0.75rem; margin-top:4px;">
+            <label for="ticket-foto-plaqueta" style="font-weight:600; font-size:0.75rem;">Foto Complementar (opcional)</label>
+            <input type="file" id="ticket-foto-plaqueta" accept="image/*" capture="environment" style="font-size:0.75rem; margin-top:4px;">
             <div id="preview-ticket-foto-plaqueta" style="display:none; margin-top:6px;">
               <img id="preview-img-ticket-foto-plaqueta" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
             </div>
-          </div>
-          <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-            <label for="ticket-video" style="font-weight:600; font-size:0.75rem;">Vídeo do Atendimento (opcional)</label>
-            <input type="file" id="ticket-video" accept="video/*" style="font-size:0.75rem; margin-top:4px;">
           </div>
         </div>
 

@@ -36,6 +36,11 @@
                     <label for="ticket-open-serial">Nº Patrimônio (Digitado Manualmente) *</label>
                     <input type="text" id="ticket-open-serial" required placeholder="Digite o nº do patrimônio...">
                   </div>
+                  <div class="form-group">
+                    <label for="ticket-open-brand">Marca da Geladeira / Freezer *</label>
+                    <input type="text" id="ticket-open-brand" required placeholder="Ex: Fricon, Metalfrio ou outra marca..." autocomplete="organization">
+                    <small class="field-help">A marca é registrada somente neste chamado e não altera o cadastro patrimonial.</small>
+                  </div>
                 </div>
 
                 <!-- Container para histórico do patrimônio se existir -->
@@ -82,8 +87,9 @@
 
                 <div class="form-row" style="gap:12px; margin-top: 10px;">
                   <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-                    <label for="ticket-open-photo-defect" style="font-weight:600; font-size:0.75rem;">Fotos do Defeito *</label>
-                    <input type="file" id="ticket-open-photo-defect" accept="image/*" required style="font-size:0.75rem; margin-top:4px;">
+                    <label for="ticket-open-photo-defect" style="font-weight:600; font-size:0.75rem;">Foto do Equipamento Completo *</label>
+                    <p class="field-help">Fotografe o equipamento inteiro, preferencialmente de frente, mostrando suas condições gerais.</p>
+                    <input type="file" id="ticket-open-photo-defect" accept="image/*" capture="environment" required style="font-size:0.75rem; margin-top:4px;">
                     <div id="preview-ticket-open-photo-container" style="display:none; margin-top:6px;">
                       <img id="preview-img-ticket-open-photo" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
                     </div>
@@ -117,13 +123,15 @@
                 <thead>
                   <tr>
                     <th>OS</th>
-                    <th>Data</th>
+                    <th>Abertura</th>
+                    <th>Início</th>
+                    <th>Espera</th>
                     <th>Mecânico</th>
                     <th>Equipamento</th>
+                    <th>Marca</th>
                     <th>Cliente</th>
                     <th>Falha Relatada</th>
-                    <th>Peças</th>
-                    <th>Serviços</th>
+                    <th>Serviço Realizado</th>
                     <th>Estado Pós</th>
                     <th>Prioridade</th>
                     <th>Status</th>

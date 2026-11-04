@@ -1981,6 +1981,7 @@ const App = {
             const fantasyInput = document.getElementById('ticket-open-fantasy');
             const cityInput = document.getElementById('ticket-open-city');
             const addressInput = document.getElementById('ticket-open-address');
+            const brandInput = document.getElementById('ticket-open-brand');
             const unitInput = document.getElementById('ticket-open-unit');
             const sellerInput = document.getElementById('ticket-open-seller');
 
@@ -1988,6 +1989,7 @@ const App = {
             if (fantasyInput) fantasyInput.value = eqClientName;
             if (cityInput) cityInput.value = eqCity;
             if (addressInput) addressInput.value = eqAddress;
+            if (brandInput && !brandInput.value) brandInput.value = res.marca || res.brand || '';
 
             // Search for client in client list to get detailed info
             const clients = Store.getClients();
@@ -2080,6 +2082,8 @@ const App = {
             if (imported && imported.found && imported.equipamento) {
               const eq = imported.equipamento;
               const eqModel = (eq.nome_equipamento || eq.patrimonio || '').trim();
+              const brandInput = document.getElementById('ticket-open-brand');
+              if (brandInput && !brandInput.value) brandInput.value = eq.marca || eq.empresa_nome || '';
               const typeInput = document.getElementById('ticket-open-eq-type');
               if (typeInput && eqModel) {
                 // Salva modelo no dataset para fallback no submit
@@ -2263,6 +2267,7 @@ const App = {
         const fantasyName = document.getElementById('ticket-open-fantasy').value.trim();
         const city = document.getElementById('ticket-open-city').value.trim();
         const address = document.getElementById('ticket-open-address').value.trim();
+        const equipmentBrand = document.getElementById('ticket-open-brand').value.trim();
         const clientCode = ((document.getElementById('ticket-open-client-code-hidden') || {}).value || (document.getElementById('ticket-open-client-code') || {}).value || '').trim();
         const clientSeller = ((document.getElementById('ticket-open-client-seller-imported') || {}).value || '').trim();
         const clientGroup = ((document.getElementById('ticket-open-client-group-imported') || {}).value || '').trim();
@@ -2298,6 +2303,7 @@ const App = {
               userId,
               equipmentSerial: serial,
               equipmentType,
+              equipmentBrand,
               client,
               fantasyName,
               city,
@@ -2308,6 +2314,7 @@ const App = {
               title,
               priority,
               defectPhoto: defectPhotoUrl,
+              openingEquipmentPhoto: defectPhotoUrl,
               defectVideo: defectVideoUrl,
               observations: obs
             })
@@ -2378,34 +2385,9 @@ const App = {
           submitBtn.textContent = 'Salvando ficha técnica...';
         }
 
-        const dateVal = document.getElementById('ticket-start-date')?.value || '';
-        const dateFormatted = dateVal ? dateVal.split('-').reverse().join('/') : '';
-        const endTime = document.getElementById('ticket-end-time').value;
-        const faultDescription = document.getElementById('ticket-fault-description').value.trim();
-        const solutionDescription = document.getElementById('ticket-solution-description').value.trim();
-        const eqStatusAfter = document.getElementById('ticket-eq-status-after').value;
-        const gasCharge = document.getElementById('ticket-gas-charge').value;
-        const additionalNotes = document.getElementById('ticket-additional-notes').value.trim();
-
-        // Collect selected parts
-        const selectedParts = [];
-        document.querySelectorAll('#ticket-parts-container .btn-part-toggle.active').forEach(btn => {
-          selectedParts.push(btn.dataset.part);
-        });
-        const outraPecaInput = document.getElementById('ticket-outra-peca');
-        if (outraPecaInput && outraPecaInput.value.trim()) {
-          selectedParts.push('Outra: ' + outraPecaInput.value.trim());
-        }
-
-        // Collect selected services
-        const selectedServices = [];
-        document.querySelectorAll('#ticket-services-container .btn-part-toggle.active').forEach(btn => {
-          selectedServices.push(btn.dataset.service);
-        });
-        const outroServicoInput = document.getElementById('ticket-outro-servico');
-        if (outroServicoInput && outroServicoInput.value.trim()) {
-          selectedServices.push('Outro: ' + outroServicoInput.value.trim());
-        }
+        const endTime = document.getElementById('ticket-end-time')?.value || '';
+        const serviceDescription = document.getElementById('ticket-service-description')?.value.trim() || '';
+        const eqStatusAfter = document.getElementById('ticket-eq-status-after')?.value || '';
 
         // Photos mapping
         let fotoAntesUrl = (document.getElementById('ticket-foto-antes')?.dataset.uploadedUrl || '').trim();
@@ -2426,39 +2408,35 @@ const App = {
           if (el && el.files && el.files[0]) fotoPlaquetaUrl = await this.uploadFile(el.files[0]);
         }
 
-        let videoAtendimentoUrl = (document.getElementById('ticket-video')?.dataset.uploadedUrl || '').trim();
-        if (!videoAtendimentoUrl) {
-          const el = document.getElementById('ticket-video');
-          if (el && el.files && el.files[0]) videoAtendimentoUrl = await this.uploadFile(el.files[0]);
+        if (!serviceDescription) {
+          alert('Descreva o serviço realizado antes de concluir o atendimento.');
+          delete ticketForm.dataset.saving;
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico'; }
+          return;
+        }
+        if (!fotoAntesUrl || !fotoDepoisUrl) {
+          alert('As fotos do equipamento antes e depois do reparo são obrigatórias. Aguarde o envio ou selecione-as novamente.');
+          delete ticketForm.dataset.saving;
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico'; }
+          return;
         }
 
         try {
           await this.fetchFromApi(`/api/chamados/${encodeURIComponent(ticketId)}/ficha`, {
             method: 'PUT',
             body: JSON.stringify({
-              date: dateFormatted,
               endTime,
-              faultDescription,
-              solutionDescription,
+              serviceDescription,
               eqStatusAfter,
-              gasCharge,
-              additionalNotes,
-              parts: selectedParts,
-              services: selectedServices,
               fotoAntes: fotoAntesUrl,
               fotoDepois: fotoDepoisUrl,
-              fotoPlaqueta: fotoPlaquetaUrl,
-              videoAtendimento: videoAtendimentoUrl
+              fotoComplementar: fotoPlaquetaUrl
             })
           });
           await this.loadTickets();
           
           // Reset Ficha modal form
           ticketForm.reset();
-          document.querySelectorAll('#modal-ficha-tecnica .btn-part-toggle.active').forEach(btn => btn.classList.remove('active'));
-          document.getElementById('ticket-outra-peca-container').style.display = 'none';
-          document.getElementById('ticket-outro-servico-container').style.display = 'none';
-          
           // Hide modal
           document.getElementById('modal-ficha-tecnica').style.display = 'none';
 

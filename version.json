@@ -1,7 +1,7 @@
 {
-  "version": "20260903.01",
-  "updatedAt": "2026-09-03T00:00:00-03:00",
-  "description": "Confirma cadastro de cliente no PostgreSQL antes do sucesso e evita colisao de identificadores",
-  "build": "20260903-01-clientes-persistencia",
-  "buildDate": "2026-09-03T00:00:00-03:00"
+  "version": "20261104.01",
+  "updatedAt": "2026-11-04T00:00:00-03:00",
+  "description": "Filtro de operacao e fluxo simplificado de chamados mecanicos",
+  "build": "20261104-01-manutencao-amaretto",
+  "buildDate": "2026-11-04T00:00:00-03:00"
 }
