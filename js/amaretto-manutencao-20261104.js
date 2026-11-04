@@ -72,6 +72,12 @@
   };
 
   const serviceText = ticket => String(ticket.serviceDescription || ticket.solutionDescription || ticket.faultDescription || '').trim();
+  let latestTickets = new Map();
+  const rememberTickets = tickets => {
+    latestTickets = new Map((Array.isArray(tickets) ? tickets : []).map(ticket => [String(ticket.id), ticket]));
+  };
+  const findTicket = id => latestTickets.get(String(id))
+    || (((window.Store && Store.getTickets && Store.getTickets()) || []).find(ticket => String(ticket.id) === String(id)));
 
   function injectStyles() {
     if (document.getElementById('amaretto-maintenance-style')) return;
@@ -117,6 +123,7 @@
   }
 
   function renderTickets(tickets) {
+    rememberTickets(tickets);
     const activeUnitId = Store.getActiveUnitId();
     const user = Store.getLoggedUser();
     const openCard = document.getElementById('ticket-open-card');
@@ -135,7 +142,7 @@
       let action = '<span style="font-size:.75rem;color:var(--text-muted)">Aberto</span>';
       if (ticket.status === 'Aberto' && staff) action = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.startTicketService('${esc(ticket.id)}')">INICIAR ATENDIMENTO</button>`;
       if (ticket.status === 'Em Atendimento') action = staff ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();App.openFichaTecnica('${esc(ticket.id)}')">FICHA TÉCNICA</button>` : '<span style="font-size:.75rem;color:var(--text-muted)">Em manutenção</span>';
-      if (ticket.status === 'Resolvido') action = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.openFichaTecnica('${esc(ticket.id)}')">VER LAUDO</button>`;
+      if (ticket.status === 'Resolvido') action = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.showTicketDetails('${esc(ticket.id)}')">VER LAUDO</button>`;
       if (admin && typeof App.editTicketAdmin === 'function') action += ` <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.editTicketAdmin('${esc(ticket.id)}')">Editar</button>`;
       return `<tr class="mobile-summary-row" onclick="App.showTicketDetails('${esc(ticket.id)}')">
         <td data-label="Chamado" style="font-family:monospace;font-weight:700">${esc(ticket.id)}</td>
@@ -163,7 +170,7 @@
     if (!original) return;
     App.openFichaTecnica = function (id) {
       original(id);
-      const ticket = ((Store.getTickets && Store.getTickets()) || []).find(item => String(item.id) === String(id));
+      const ticket = findTicket(id);
       if (!ticket) return;
       const description = document.getElementById('ticket-service-description');
       if (description) description.value = serviceText(ticket);
@@ -208,7 +215,7 @@
     App.showTicketDetails = function (id) {
       original(id);
       window.setTimeout(() => {
-        const ticket = ((Store.getTickets && Store.getTickets()) || []).find(item => String(item.id) === String(id));
+        const ticket = findTicket(id);
         const content = document.getElementById('modal-ticket-details-mobile-content');
         if (!ticket || !content || content.querySelector('.amaretto-ticket-extra')) return;
         const media = [
@@ -241,7 +248,7 @@
     const original = App.editTicketAdmin.bind(App);
     App.editTicketAdmin = function (id) {
       original(id);
-      const ticket = ((Store.getTickets && Store.getTickets()) || []).find(item => String(item.id) === String(id));
+      const ticket = findTicket(id);
       const brand = document.getElementById('ticket-open-brand');
       if (brand && ticket) brand.value = ticket.equipmentBrand || '';
     };
@@ -250,7 +257,8 @@
   function install() {
     injectStyles();
     if (!window.App || !window.UI || !window.Store) return;
-    UI.renderTickets = renderTickets;
+    // Preserva o paginador instalado pela camada de compatibilidade.
+    if (!(UI.renderTickets && UI.renderTickets.__ccPaginationWrapper)) UI.renderTickets = renderTickets;
     // O gerenciador de filtros guarda uma referência própria do renderizador.
     UI._original_renderTickets = renderTickets;
     enhanceFicha();
@@ -258,7 +266,7 @@
     patchAdminEditor();
   }
 
-  window.AmarettoMaintenance = { openingDate, maintenanceDate, waitingTime, formatDateTime, serviceText, renderTickets };
+  window.AmarettoMaintenance = { openingDate, maintenanceDate, waitingTime, formatDateTime, serviceText, rememberTickets, findTicket, renderTickets };
   install();
   document.addEventListener('DOMContentLoaded', install);
   window.addEventListener('hashchange', () => window.setTimeout(install, 80));

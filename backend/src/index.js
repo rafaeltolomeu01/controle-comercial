@@ -6652,10 +6652,15 @@ app.put('/api/chamados/:id/ficha', async (req, res) => {
     if (!allowedEquipmentStates.includes(eqStatusAfter)) return res.status(400).json({ error: 'Selecione um estado válido para o equipamento.' });
     if (!fotoAntes || !fotoDepois) return res.status(400).json({ error: 'As fotos de antes e depois do reparo são obrigatórias.' });
 
+    const finalizedAt = new Date();
+    const finalizedTime = finalizedAt.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false });
     const updates = {
       status: 'Resolvido',
       mechanic: b.mechanic || chamado.mechanic || req.user.name || req.user.id,
-      endTime: b.endTime || '',
+      // Proteção para registros antigos finalizados sem terem passado pelo botão Iniciar.
+      maintenanceStartedAt: chamado.maintenanceStartedAt || finalizedAt.toISOString(),
+      startTime: chamado.startTime || finalizedTime,
+      endTime: b.endTime || chamado.endTime || finalizedTime,
       serviceDescription,
       // Mantém compatibilidade com PDFs e integrações antigas sem apagar o laudo histórico.
       solutionDescription: serviceDescription,

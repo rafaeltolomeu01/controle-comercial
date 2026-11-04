@@ -3762,7 +3762,8 @@
 
   function ticketFromFormOrStore(id){
     const tickets = (window.Store && Store.getTickets && Store.getTickets()) || [];
-    const saved = tickets.find(t => String(t.id) === String(id)) || {};
+    const saved = (window.AmarettoMaintenance && window.AmarettoMaintenance.findTicket && window.AmarettoMaintenance.findTicket(id))
+      || tickets.find(t => String(t.id) === String(id)) || {};
 
     const form = document.getElementById('ticket-form');
     const hasForm = form && String(form.dataset.ticketId || '') === String(id);
@@ -4212,7 +4213,8 @@
     App.showTicketDetails=function(id){
       injectStyle();
       var tickets=(Store.getTickets&&Store.getTickets())||[];
-      var ticket=tickets.find(function(t){return String(t.id)===String(id);});
+      var ticket=(window.AmarettoMaintenance&&window.AmarettoMaintenance.findTicket&&window.AmarettoMaintenance.findTicket(id))
+        || tickets.find(function(t){return String(t.id)===String(id);});
       if(!ticket) return alert('Chamado não encontrado.');
       var modal=document.getElementById('modal-ticket-details-mobile');
       if(!modal){modal=document.createElement('div');modal.id='modal-ticket-details-mobile';modal.style.cssText='display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;';document.body.appendChild(modal);}
@@ -4220,13 +4222,16 @@
       modal.innerHTML='<div class=\"login-card cc-pro-modal\"><header class=\"cc-pro-header\"><div class=\"cc-pro-title\"><h3>Detalhes do chamado</h3><p>'+esc(ticket.id||'')+(subtitle?' | '+esc(subtitle):'')+'</p></div><div class=\"cc-pro-actions\"><button class=\"btn btn-primary\" onclick=\"App.generateTicketPdf(\''+esc(ticket.id)+'\')\">PDF</button><button class=\"btn btn-secondary\" onclick=\"document.getElementById(\'modal-ticket-details-mobile\').style.display=\'none\'\">Fechar</button></div></header><div class=\"cc-pro-body\" id=\"modal-ticket-details-mobile-content\"></div></div>';
       var parts=Array.isArray(ticket.parts)?ticket.parts.join(', '):(ticket.parts||'');
       var services=Array.isArray(ticket.services)?ticket.services.join(', '):(ticket.services||'');
-      var resumo='<div class=\"cc-pro-summary\">'+stat('OS',ticket.id)+stat('Data',ticket.date)+stat('Status',ticket.status)+stat('Prioridade',ticket.priority)+'</div>';
+      var maintenanceTools=window.AmarettoMaintenance;
+      var openingText=maintenanceTools?maintenanceTools.formatDateTime(maintenanceTools.openingDate(ticket)):(ticket.date||'-');
+      var startedText=maintenanceTools?maintenanceTools.formatDateTime(maintenanceTools.maintenanceDate(ticket)):([ticket.date,ticket.startTime].filter(Boolean).join(' ')||'-');
+      var resumo='<div class=\"cc-pro-summary\">'+stat('OS',ticket.id)+stat('Abertura',openingText)+stat('Status',ticket.status)+stat('Prioridade',ticket.priority)+'</div>';
       var codeVal = ticket.clientCode || ticket.cliente_codigo || '';
       var codeHtml = codeVal ? '<span style="background-color:#fef08a;color:#1e293b;padding:2px 6px;border-radius:4px;font-weight:700;display:inline-block;">' + esc(codeVal) + '</span>' : '<span class="cc-pro-empty">-</span>';
       var groupVal = ticket.clientGroup || ticket.cliente_grupo || '';
       var groupHtml = groupVal ? esc(groupVal) : '<span class="cc-pro-empty">-</span>';
       var abertura=card('Abertura do chamado',field('Unidade',unit(ticket))+field('Vendedor',seller(ticket))+field('Tipo',ticket.equipmentType)+field('Patrimônio',ticket.equipmentSerial)+field('Cliente',ticket.client)+field('Fantasia',ticket.fantasyName)+fieldHtml('Código do Cliente',codeHtml)+fieldHtml('Grupo de Cliente',groupHtml)+field('Cidade',ticket.city)+field('Endereço',ticket.address)+field('Falha relatada',ticket.title,true)+field('Observações',ticket.observations,true));
-      var atendimento=card('Atendimento técnico',field('Mecânico',ticket.mechanic)+field('Início',ticket.startTime)+field('Conclusão',ticket.endTime)+field('Situação pós',ticket.eqStatusAfter)+field('Peças utilizadas',parts,true)+field('Serviços executados',services,true)+field('Problema encontrado',ticket.faultDescription,true)+field('Solução aplicada',ticket.solutionDescription,true)+field('Carga de gás',ticket.gasCharge)+field('Observações finais',ticket.additionalNotes,true));
+      var atendimento=card('Atendimento técnico',field('Mecânico',ticket.mechanic)+field('Início',startedText)+field('Conclusão',ticket.endTime)+field('Situação pós',ticket.eqStatusAfter)+field('Descrição do serviço realizado',ticket.serviceDescription||ticket.solutionDescription,true)+field('Peças utilizadas',parts,true)+field('Serviços executados',services,true)+field('Problema encontrado',ticket.faultDescription,true)+field('Solução aplicada',ticket.solutionDescription,true)+field('Carga de gás',ticket.gasCharge)+field('Observações finais',ticket.additionalNotes,true));
       document.getElementById('modal-ticket-details-mobile-content').innerHTML=resumo+'<div class=\"cc-pro-grid\"><div class=\"cc-pro-stack\">'+abertura+'</div><div class=\"cc-pro-stack\">'+atendimento+mediaHtml(ticket)+'</div></div>';
       modal.style.display='flex';
       modal.onclick=function(e){if(e.target===modal) modal.style.display='none';};
@@ -8291,6 +8296,7 @@
   window.__ccPaginacaoPerformance0207 = true;
 
   const PAGE_SIZE = 5;
+  const pageSizeFor = moduleKey => moduleKey === 'chamados' ? 10 : PAGE_SIZE;
   const TARGETS = {
     despesas: { renderMethod: 'renderExpenses', tbodyId: 'expenses-table-body', storeMethod: 'getExpenses', label: 'despesas' },
     movimentacao: { renderMethod: 'renderMovements', tbodyId: 'movements-table-body', storeMethod: 'getMovements', label: 'movimentações' },
@@ -8462,7 +8468,7 @@
       pager.className = 'cc-list-pager no-print';
       tableBox.insertAdjacentElement('afterend', pager);
     }
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(total / pageSizeFor(moduleKey)));
     const page = Math.min(Math.max(1, state[moduleKey].page || 1), totalPages);
     const disablePrev = page <= 1 ? 'disabled' : '';
     const disableNext = page >= totalPages ? 'disabled' : '';
@@ -8489,10 +8495,11 @@
       state[moduleKey].signature = sig;
       state[moduleKey].page = 1;
     }
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const pageSize = pageSizeFor(moduleKey);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     if (state[moduleKey].page > totalPages) state[moduleKey].page = totalPages;
-    const start = (state[moduleKey].page - 1) * PAGE_SIZE;
-    const end = Math.min(start + PAGE_SIZE, filtered.length);
+    const start = (state[moduleKey].page - 1) * pageSize;
+    const end = Math.min(start + pageSize, filtered.length);
     return { filtered, pageItems: filtered.slice(start, end), start, end };
   }
 
@@ -8580,7 +8587,13 @@
     patchFiltersManager();
 
     if (!baseRender.movimentacao) baseRender.movimentacao = (UI._original_renderMovements || UI.renderMovements || function(){}).bind(UI);
-    if (!baseRender.chamados) baseRender.chamados = ((window.AmarettoMaintenance && window.AmarettoMaintenance.renderTickets) || UI.renderTickets || UI._original_renderTickets || function(){}).bind(UI);
+    if (!baseRender.chamados) {
+      const fallbackTicketRender = (UI.renderTickets || UI._original_renderTickets || function(){}).bind(UI);
+      baseRender.chamados = function(data){
+        const current = window.AmarettoMaintenance && window.AmarettoMaintenance.renderTickets;
+        return current ? current.call(UI, data) : fallbackTicketRender(data);
+      };
+    }
     if (!baseRender.clientes) baseRender.clientes = (UI._original_renderClients || UI.renderClients || function(){}).bind(UI);
 
     UI.renderExpenses = function(data){
@@ -8596,8 +8609,10 @@
     UI.renderTickets = function(data){
       const raw = Array.isArray(data) ? data : listFromStore('chamados');
       state.chamados.raw = raw;
+      if (window.AmarettoMaintenance && window.AmarettoMaintenance.rememberTickets) window.AmarettoMaintenance.rememberTickets(raw);
       return renderWithBase('chamados', raw);
     };
+    UI.renderTickets.__ccPaginationWrapper = true;
     UI.renderClients = function(data){
       const raw = Array.isArray(data) ? data : listFromStore('clientes');
       state.clientes.raw = raw;
@@ -9008,7 +9023,11 @@
     var rc = UI.renderClients ? UI.renderClients.bind(UI) : null;
     if (rc) UI.renderClients = function(list){ rc(list); addAdminClientButtons(); };
     var rt = UI.renderTickets ? UI.renderTickets.bind(UI) : null;
-    if (rt) UI.renderTickets = function(list){ rt(list); addAdminTicketButtons(); };
+    if (rt) {
+      var wrappedTickets = function(list){ rt(list); addAdminTicketButtons(); };
+      if (rt.__ccPaginationWrapper) wrappedTickets.__ccPaginationWrapper = true;
+      UI.renderTickets = wrappedTickets;
+    }
     var rm = UI.renderMovements ? UI.renderMovements.bind(UI) : null;
     if (rm) UI.renderMovements = function(list){ rm(list); addAdminMovementButtons(); };
   }

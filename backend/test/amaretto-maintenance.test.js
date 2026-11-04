@@ -59,6 +59,8 @@ test('backend exige os novos dados e preserva estruturas históricas', () => {
   assert.match(migration, /defectPhoto2/);
   assert.match(server, /A descrição do serviço realizado é obrigatória/);
   assert.match(server, /if \(!chamado\.maintenanceStartedAt\)/);
+  assert.match(server, /maintenanceStartedAt: chamado\.maintenanceStartedAt \|\| finalizedAt\.toISOString\(\)/);
+  assert.match(server, /endTime: b\.endTime \|\| chamado\.endTime \|\| finalizedTime/);
   assert.match(server, /solutionDescription: serviceDescription/);
   assert.doesNotMatch(migration, /dropColumn|dropTable|\.delete\(|\.del\(/);
 });
@@ -66,12 +68,17 @@ test('backend exige os novos dados e preserva estruturas históricas', () => {
 test('lista desktop usa tabela completa e status de manutenção', () => {
   const maintenance = read('js/amaretto-manutencao-20261104.js');
   const compatibility = read('js/compatibilidade-consolidada.js');
+  const store = read('js/store.js');
   assert.match(maintenance, /@media\(min-width:901px\)/);
   assert.match(maintenance, /table-layout:fixed!important/);
   assert.match(maintenance, /Em manutenção/);
   assert.match(maintenance, /renderTickets \}/);
+  assert.match(maintenance, /App\.showTicketDetails\('\$\{esc\(ticket\.id\)\}'\)\">VER LAUDO/);
+  assert.match(maintenance, /__ccPaginationWrapper/);
   assert.match(compatibility, /AmarettoMaintenance && window\.AmarettoMaintenance\.renderTickets/);
   assert.match(compatibility, /'Foto do Defeito 2', ticket\.defectPhoto2/);
+  assert.match(compatibility, /moduleKey === 'chamados' \? 10 : PAGE_SIZE/);
+  assert.match(store, /saveTickets\(data\) \{ return this\.saveListLocal\('tickets', data\); \}/);
 });
 
 test('filtro Operação integra a filtragem e exportação existentes', () => {

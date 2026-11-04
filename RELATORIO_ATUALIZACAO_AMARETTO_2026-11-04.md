@@ -8,6 +8,15 @@ Ambiente alterado: somente a cópia local recebida; nenhuma ação foi executada
 
 As alterações solicitadas foram implementadas de forma aditiva e compatível com os registros antigos. Não foram removidas tabelas, colunas, mídias ou informações históricas.
 
+### Correção complementar de status, laudo e paginação
+
+- A tabela relacional de chamados passou a ser a fonte única do status, impedindo que uma cópia antiga do navegador mostre **Aberto** depois da finalização.
+- O botão **Ver Laudo** abre os detalhes somente para consulta e geração de PDF; ele não reabre o formulário de finalização.
+- Abertura, início da manutenção e hora de conclusão usam o registro atualizado do chamado.
+- A finalização preenche data/hora de início e conclusão quando um registro antigo não possuir esses valores.
+- A lista de Chamados Mecânicos foi limitada a **10 chamados por página**, preservando filtros e ordenação.
+- A correção foi isolada ao módulo de Chamados Mecânicos; os demais módulos e suas paginações não foram alterados.
+
 ## 1. Histórico de movimentações
 
 - Adicionado o filtro **Operação**, preenchido pelos tipos reais presentes nas movimentações (`tipo_solicitacao`, `operacao`, `operation` ou `tipo_operacao`).

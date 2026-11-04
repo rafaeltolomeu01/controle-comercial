@@ -3727,7 +3727,8 @@ const App = {
    */
   openFichaTecnica(id) {
     const tickets = Store.getTickets();
-    const ticket = tickets.find(t => t.id === id);
+    const ticket = (window.AmarettoMaintenance && window.AmarettoMaintenance.findTicket && window.AmarettoMaintenance.findTicket(id))
+      || tickets.find(t => String(t.id) === String(id));
     if (!ticket) return;
 
     const modal = document.getElementById('modal-ficha-tecnica');
