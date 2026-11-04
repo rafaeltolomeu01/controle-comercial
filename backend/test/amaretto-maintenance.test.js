@@ -43,7 +43,11 @@ test('formulário novo remove entradas redundantes sem excluir suporte históric
   assert.doesNotMatch(html, /id="ticket-video"/);
   assert.match(page, /id="ticket-open-brand"[^>]*required/);
   assert.match(page, /Foto do Equipamento Completo \*/);
+  assert.match(page, /id="ticket-open-photo-defect-1"[^>]*required/);
+  assert.match(page, /id="ticket-open-photo-defect-2"[^>]*required/);
+  assert.doesNotMatch(page, /id="ticket-open-video-defect"/);
   assert.match(page, /capture="environment"/);
+  assert.match(html, /Enviar Finalização da Manutenção/);
 });
 
 test('backend exige os novos dados e preserva estruturas históricas', () => {
@@ -51,10 +55,23 @@ test('backend exige os novos dados e preserva estruturas históricas', () => {
   const migration = read('backend/migrations/20261104_add_chamados_manutencao_fields.js');
   assert.match(server, /A marca da geladeira\/freezer é obrigatória/);
   assert.match(server, /A foto do equipamento completo é obrigatória/);
+  assert.match(server, /As duas fotos do defeito são obrigatórias/);
+  assert.match(migration, /defectPhoto2/);
   assert.match(server, /A descrição do serviço realizado é obrigatória/);
   assert.match(server, /if \(!chamado\.maintenanceStartedAt\)/);
   assert.match(server, /solutionDescription: serviceDescription/);
   assert.doesNotMatch(migration, /dropColumn|dropTable|\.delete\(|\.del\(/);
+});
+
+test('lista desktop usa tabela completa e status de manutenção', () => {
+  const maintenance = read('js/amaretto-manutencao-20261104.js');
+  const compatibility = read('js/compatibilidade-consolidada.js');
+  assert.match(maintenance, /@media\(min-width:901px\)/);
+  assert.match(maintenance, /table-layout:fixed!important/);
+  assert.match(maintenance, /Em manutenção/);
+  assert.match(maintenance, /renderTickets \}/);
+  assert.match(compatibility, /AmarettoMaintenance && window\.AmarettoMaintenance\.renderTickets/);
+  assert.match(compatibility, /'Foto do Defeito 2', ticket\.defectPhoto2/);
 });
 
 test('filtro Operação integra a filtragem e exportação existentes', () => {

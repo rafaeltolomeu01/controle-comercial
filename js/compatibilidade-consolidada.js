@@ -3228,7 +3228,7 @@
       clients.forEach(c => ['photoFachada','photoInterna01','photoInterna02','photoInterna03','photoRua01','photoRua02','photoCnpj'].forEach(k => add(c[k], labelMedia(k), c, 'Clientes')));
       getStoreList('getExpenses').forEach(e => { add(e.foto_odometro || e.photoOdometro, 'Imagem do Odômetro', e, 'Despesas'); add(e.foto_comprovante || e.photo || e.photoComprovante, 'Imagem do Comprovante', e, 'Despesas'); });
       getStoreList('getMovements').forEach(m => ['foto_equipamento_url','foto_antes_url','foto_depois_url','video_url','fotoAntigo','fotoNovo','fotoRecolha','fotoAntes','fotoDepois'].forEach(k => add(m[k], labelMedia(k), m, 'Movimentações')));
-      getStoreList('getTickets').forEach(t => ['openingEquipmentPhoto','defectPhoto','defectVideo','fotoAntes','fotoDepois','fotoComplementar','fotoPlaqueta','videoAtendimento'].forEach(k => add(t[k], labelMedia(k), t, 'Chamados')));
+      getStoreList('getTickets').forEach(t => ['openingEquipmentPhoto','defectPhoto','defectPhoto2','defectVideo','fotoAntes','fotoDepois','fotoComplementar','fotoPlaqueta','videoAtendimento'].forEach(k => add(t[k], labelMedia(k), t, 'Chamados')));
       return files;
     },
 
@@ -3338,7 +3338,8 @@
       'Carga de Gás (g)': value(pick(t, ['gasCharge','carga_gas'])),
       'Observações': value(pick(t, ['additionalNotes','observations','observacoes'])),
       'Link da Foto do Equipamento Completo': mediaUrl(pick(t, ['openingEquipmentPhoto','defectPhoto'])),
-      'Link da Foto do Defeito (histórico)': mediaUrl(pick(t, ['defectPhoto'])),
+      'Link da Foto do Defeito 1': mediaUrl(pick(t, ['defectPhoto'])),
+      'Link da Foto do Defeito 2': mediaUrl(pick(t, ['defectPhoto2'])),
       'Link do Vídeo do Defeito': mediaUrl(pick(t, ['defectVideo'])),
       'Link da Foto Antes do Reparo': mediaUrl(pick(t, ['fotoAntes'])),
       'Link da Foto Depois do Reparo': mediaUrl(pick(t, ['fotoDepois'])),
@@ -3455,7 +3456,7 @@
   function listText(v) { if (!v) return '—'; if (Array.isArray(v)) return v.join(' | '); try { const a = JSON.parse(v); if (Array.isArray(a)) return a.join(' | '); } catch(_) {} return String(v); }
   function mediaList(obj, keys) { const arr = []; keys.forEach(k => { const v = obj && obj[k]; if (Array.isArray(v)) v.forEach(x => arr.push(mediaUrl(x))); else if (v) arr.push(mediaUrl(v)); }); return arr.filter(x => x && x !== '—').join(' | ') || '—'; }
   function mediaUrl(url) { let raw = Array.isArray(url) ? url[0] : url; if (!raw) return '—'; if (typeof raw === 'object') raw = raw.url || raw.path || raw.src || ''; raw = String(raw || '').trim(); if (!raw || ['null','undefined','—','-'].includes(raw.toLowerCase()) || raw.startsWith('data:')) return raw.startsWith('data:') ? 'Mídia salva em base64/local; reenviar para gerar link público.' : '—'; if (window.TempPhotosCache && window.TempPhotosCache[raw]) raw = window.TempPhotosCache[raw]; if (raw.startsWith('http://') || raw.startsWith('https://')) return raw; if (raw.startsWith('/')) return window.location.origin + raw; return window.location.origin + '/' + raw.replace(/^\/+/, ''); }
-  function labelMedia(k) { return ({ photoFachada:'Foto da Fachada', photoInterna01:'Foto Interna 01', photoInterna02:'Foto Interna 02', photoInterna03:'Foto Interna 03', photoRua01:'Foto Externa Rua 01', photoRua02:'Foto Externa Rua 02', photoCnpj:'Foto do CNPJ', foto_odometro:'Imagem do Odômetro', foto_comprovante:'Imagem do Comprovante', foto_antes_url:'Foto Antes', foto_depois_url:'Foto Depois', foto_equipamento_url:'Foto do Equipamento', video_url:'Vídeo', openingEquipmentPhoto:'Equipamento Completo na Abertura', defectPhoto:'Foto do Defeito', defectVideo:'Vídeo do Defeito', fotoAntes:'Foto Antes', fotoDepois:'Foto Depois', fotoComplementar:'Foto Complementar', fotoPlaqueta:'Foto da Plaqueta', videoAtendimento:'Vídeo do Atendimento' }[k] || k); }
+  function labelMedia(k) { return ({ photoFachada:'Foto da Fachada', photoInterna01:'Foto Interna 01', photoInterna02:'Foto Interna 02', photoInterna03:'Foto Interna 03', photoRua01:'Foto Externa Rua 01', photoRua02:'Foto Externa Rua 02', photoCnpj:'Foto do CNPJ', foto_odometro:'Imagem do Odômetro', foto_comprovante:'Imagem do Comprovante', foto_antes_url:'Foto Antes', foto_depois_url:'Foto Depois', foto_equipamento_url:'Foto do Equipamento', video_url:'Vídeo', openingEquipmentPhoto:'Equipamento Completo na Abertura', defectPhoto:'Foto do Defeito 1', defectPhoto2:'Foto do Defeito 2', defectVideo:'Vídeo do Defeito', fotoAntes:'Foto Antes', fotoDepois:'Foto Depois', fotoComplementar:'Foto Complementar', fotoPlaqueta:'Foto da Plaqueta', videoAtendimento:'Vídeo do Atendimento' }[k] || k); }
   function getStoreList(method) { try { return (window.Store && Store[method] && Store[method]()) || []; } catch(_) { return []; } }
   function escapeHtml(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function escapeAttr(v) { return escapeHtml(v).replace(/`/g, '&#96;'); }
@@ -3816,7 +3817,9 @@
       fotoDepois: imgUrl('preview-img-ticket-foto-depois', saved.fotoDepois),
       fotoComplementar: imgUrl('preview-img-ticket-foto-plaqueta', saved.fotoComplementar || saved.fotoPlaqueta),
       serviceDescription: document.getElementById('ticket-service-description')?.value || saved.serviceDescription || saved.solutionDescription || '',
+      openingEquipmentPhoto: saved.openingEquipmentPhoto || '',
       defectPhoto: saved.defectPhoto || '',
+      defectPhoto2: saved.defectPhoto2 || '',
       defectVideo: saved.defectVideo || '',
       videoAtendimento: saved.videoAtendimento || ''
     };
@@ -3923,6 +3926,10 @@
       y = section(doc, y, '7. Fotografias e Anexos', title);
       y = ensurePage(doc, y, 145, title);
       await addImageBox(doc, 12, y, 88, 66, 'Equipamento Completo na Abertura', ticket.openingEquipmentPhoto || ticket.defectPhoto);
+      await addImageBox(doc, 110, y, 88, 66, 'Foto do Defeito 1', ticket.defectPhoto);
+      y += 72;
+      y = ensurePage(doc, y, 76, title);
+      await addImageBox(doc, 12, y, 88, 66, 'Foto do Defeito 2', ticket.defectPhoto2);
       await addImageBox(doc, 110, y, 88, 66, 'Foto Antes do Reparo', ticket.fotoAntes);
       y += 72;
       y = ensurePage(doc, y, 76, title);
@@ -4020,7 +4027,8 @@
   function priorityClass(priority) { if (priority === 'Alta') return 'badge-danger'; if (priority === 'Média') return 'badge-warning'; return 'badge-primary'; }
   function mediaItems(ticket) {
     const items = [];
-    if (validUrl(ticket.defectPhoto)) items.push({ url: ticket.defectPhoto, label: 'Foto do Defeito', kind: 'image' });
+    if (validUrl(ticket.defectPhoto)) items.push({ url: ticket.defectPhoto, label: 'Foto do Defeito 1', kind: 'image' });
+    if (validUrl(ticket.defectPhoto2)) items.push({ url: ticket.defectPhoto2, label: 'Foto do Defeito 2', kind: 'image' });
     if (validUrl(ticket.defectVideo)) items.push({ url: ticket.defectVideo, label: 'Vídeo do Defeito', kind: 'video' });
     if (validUrl(ticket.fotoAntes)) items.push({ url: ticket.fotoAntes, label: 'Foto Antes', kind: 'image' });
     if (validUrl(ticket.fotoDepois)) items.push({ url: ticket.fotoDepois, label: 'Foto Depois', kind: 'image' });
@@ -4157,7 +4165,7 @@
   function seller(ticket){ return ticket.seller || (window.UI && UI.getUserName ? UI.getUserName(ticket.userId) : ticket.userId) || ''; }
   function unit(ticket){ return ticket.unit || (window.UI && UI.getUnitName ? UI.getUnitName(ticket.unitId) : ticket.unitId) || ''; }
   function validUrl(url){ var v = String(url || '').trim(); return !!v && ['null','undefined','/uploads/null','/uploads/undefined','/uploads/'].indexOf(v) === -1; }
-  function mediaItems(ticket){ var items=[]; if(validUrl(ticket.defectPhoto)) items.push({url:ticket.defectPhoto,label:'Foto do defeito',kind:'image'}); if(validUrl(ticket.defectVideo)) items.push({url:ticket.defectVideo,label:'Vídeo do defeito',kind:'video'}); if(validUrl(ticket.fotoAntes)) items.push({url:ticket.fotoAntes,label:'Foto antes',kind:'image'}); if(validUrl(ticket.fotoDepois)) items.push({url:ticket.fotoDepois,label:'Foto depois',kind:'image'}); if(validUrl(ticket.fotoPlaqueta)) items.push({url:ticket.fotoPlaqueta,label:'Plaqueta',kind:'image'}); if(validUrl(ticket.videoAtendimento)) items.push({url:ticket.videoAtendimento,label:'Vídeo atendimento',kind:'video'}); return items; }
+  function mediaItems(ticket){ var items=[]; if(validUrl(ticket.defectPhoto)) items.push({url:ticket.defectPhoto,label:'Foto do defeito 1',kind:'image'}); if(validUrl(ticket.defectPhoto2)) items.push({url:ticket.defectPhoto2,label:'Foto do defeito 2',kind:'image'}); if(validUrl(ticket.defectVideo)) items.push({url:ticket.defectVideo,label:'Vídeo do defeito',kind:'video'}); if(validUrl(ticket.fotoAntes)) items.push({url:ticket.fotoAntes,label:'Foto antes',kind:'image'}); if(validUrl(ticket.fotoDepois)) items.push({url:ticket.fotoDepois,label:'Foto depois',kind:'image'}); if(validUrl(ticket.fotoPlaqueta)) items.push({url:ticket.fotoPlaqueta,label:'Plaqueta',kind:'image'}); if(validUrl(ticket.videoAtendimento)) items.push({url:ticket.videoAtendimento,label:'Vídeo atendimento',kind:'video'}); return items; }
   function injectStyle(){
     if(document.getElementById('cc-chamado-pro-style')) return;
     var style=document.createElement('style');
@@ -8522,7 +8530,7 @@
     if (!body) return;
     const { filtered, pageItems, start, end } = paginatedItems(moduleKey, raw);
     if (!pageItems.length) {
-      const colspan = moduleKey === 'chamados' ? 12 : (moduleKey === 'clientes' ? 10 : 11);
+      const colspan = moduleKey === 'chamados' ? 14 : (moduleKey === 'clientes' ? 10 : 11);
       const msg = moduleKey === 'chamados' ? 'Nenhum chamado mecânico encontrado.' : 
                   moduleKey === 'clientes' ? 'Nenhum cliente cadastrado.' : 'Nenhuma movimentação registrada.';
       body.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-muted); padding:18px;">${msg}</td></tr>`;
@@ -8572,7 +8580,7 @@
     patchFiltersManager();
 
     if (!baseRender.movimentacao) baseRender.movimentacao = (UI._original_renderMovements || UI.renderMovements || function(){}).bind(UI);
-    if (!baseRender.chamados) baseRender.chamados = (UI.renderTickets || UI._original_renderTickets || function(){}).bind(UI);
+    if (!baseRender.chamados) baseRender.chamados = ((window.AmarettoMaintenance && window.AmarettoMaintenance.renderTickets) || UI.renderTickets || UI._original_renderTickets || function(){}).bind(UI);
     if (!baseRender.clientes) baseRender.clientes = (UI._original_renderClients || UI.renderClients || function(){}).bind(UI);
 
     UI.renderExpenses = function(data){
@@ -9034,9 +9042,15 @@
       ev.stopImmediatePropagation();
       if (!isAdmin()) return alert('Somente administrador pode editar chamados.');
       var id = form.dataset.editingId;
+      var openingPhotoUrl = form.dataset.openingEquipmentPhoto || form.dataset.defectPhoto || '';
+      var openingPhoto = document.getElementById('ticket-open-photo-defect');
+      if (openingPhoto && openingPhoto.files && openingPhoto.files[0] && App.uploadFile) openingPhotoUrl = await App.uploadFile(openingPhoto.files[0]);
       var photoUrl = form.dataset.defectPhoto || '';
-      var photo = document.getElementById('ticket-open-photo-defect');
+      var photo = document.getElementById('ticket-open-photo-defect-1');
       if (photo && photo.files && photo.files[0] && App.uploadFile) photoUrl = await App.uploadFile(photo.files[0]);
+      var photo2Url = form.dataset.defectPhoto2 || '';
+      var photo2 = document.getElementById('ticket-open-photo-defect-2');
+      if (photo2 && photo2.files && photo2.files[0] && App.uploadFile) photo2Url = await App.uploadFile(photo2.files[0]);
       var videoUrl = form.dataset.defectVideo || '';
       var video = document.getElementById('ticket-open-video-defect');
       if (video && video.files && video.files[0] && App.uploadFile) videoUrl = await App.uploadFile(video.files[0]);
@@ -9060,7 +9074,8 @@
             priority: document.getElementById('ticket-open-priority')?.value || '',
             observations: document.getElementById('ticket-open-obs')?.value.trim() || '',
             defectPhoto: photoUrl,
-            openingEquipmentPhoto: photoUrl,
+            defectPhoto2: photo2Url,
+            openingEquipmentPhoto: openingPhotoUrl,
             defectVideo: videoUrl
           })
         });
@@ -9171,7 +9186,14 @@
       normalizeTicketTypeSelect();
       show(document.getElementById('ticket-form-container'));
       var form = document.getElementById('ticket-open-form');
-      if (form) { form.dataset.editingId = t.id; form.dataset.defectPhoto = t.defectPhoto || ''; form.dataset.defectVideo = t.defectVideo || ''; form.noValidate = true; }
+      if (form) {
+        form.dataset.editingId = t.id;
+        form.dataset.openingEquipmentPhoto = t.openingEquipmentPhoto || t.defectPhoto || '';
+        form.dataset.defectPhoto = t.defectPhoto || '';
+        form.dataset.defectPhoto2 = t.defectPhoto2 || '';
+        form.dataset.defectVideo = t.defectVideo || '';
+        form.noValidate = true;
+      }
       document.querySelectorAll('#ticket-open-form input[type="file"]').forEach(function(el){ el.required = false; });
       setValue('ticket-open-unit', t.unitId);
       setValue('ticket-open-seller', t.userId);

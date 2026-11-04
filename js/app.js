@@ -1610,7 +1610,7 @@ const App = {
 
         // Apaga uploads temporários do servidor ao cancelar
         try {
-          const fileInputs = ['ticket-open-photo-defect', 'ticket-open-video-defect'];
+          const fileInputs = ['ticket-open-photo-defect', 'ticket-open-photo-defect-1', 'ticket-open-photo-defect-2'];
           for (const inputId of fileInputs) {
             const inp = document.getElementById(inputId);
             if (inp && inp.dataset.uploadedUrl) {
@@ -1625,10 +1625,12 @@ const App = {
         } catch(e) { /* silencioso */ }
 
         if (formEl) { formEl.reset(); delete formEl.dataset.editingId; const b = formEl.querySelector('button[type="submit"]'); if (b) b.textContent = 'Abrir Chamado Corretivo'; }
-        const previewCont = document.getElementById('preview-ticket-open-photo-container');
-        if (previewCont) previewCont.style.display = 'none';
+        ['preview-ticket-open-photo-container', 'preview-ticket-open-defect-1-container', 'preview-ticket-open-defect-2-container'].forEach(id => {
+          const previewCont = document.getElementById(id);
+          if (previewCont) previewCont.style.display = 'none';
+        });
         // Limpa status de upload
-        ['ticket-open-photo-defect', 'ticket-open-video-defect'].forEach(id => {
+        ['ticket-open-photo-defect', 'ticket-open-photo-defect-1', 'ticket-open-photo-defect-2'].forEach(id => {
           const statusEl = document.getElementById(`upload-status-${id}`);
           if (statusEl) statusEl.innerHTML = '';
         });
@@ -2227,6 +2229,11 @@ const App = {
 
     bindInstantTicketUpload(ticketOpenPhotoInput, ticketOpenPhotoPreviewImg, ticketOpenPhotoPreviewContainer, 'image');
 
+    const ticketOpenDefect1Input = document.getElementById('ticket-open-photo-defect-1');
+    const ticketOpenDefect2Input = document.getElementById('ticket-open-photo-defect-2');
+    bindInstantTicketUpload(ticketOpenDefect1Input, document.getElementById('preview-img-ticket-open-defect-1'), document.getElementById('preview-ticket-open-defect-1-container'), 'image');
+    bindInstantTicketUpload(ticketOpenDefect2Input, document.getElementById('preview-img-ticket-open-defect-2'), document.getElementById('preview-ticket-open-defect-2-container'), 'image');
+
     // Vídeo do defeito
     const ticketOpenVideoInput = document.getElementById('ticket-open-video-defect');
     if (ticketOpenVideoInput) {
@@ -2278,21 +2285,22 @@ const App = {
         const ticketId = 'CH-' + Math.floor(100 + Math.random() * 900);
 
         // Process photos/videos — usa URL já enviada em background se disponível
-        let defectPhotoUrl = '';
+        let openingEquipmentPhotoUrl = '';
         const photoInput = document.getElementById('ticket-open-photo-defect');
         if (photoInput && photoInput.dataset.uploadedUrl) {
-          defectPhotoUrl = photoInput.dataset.uploadedUrl;
+          openingEquipmentPhotoUrl = photoInput.dataset.uploadedUrl;
         } else if (photoInput && photoInput.files && photoInput.files[0]) {
-          defectPhotoUrl = await this.uploadFile(photoInput.files[0]);
+          openingEquipmentPhotoUrl = await this.uploadFile(photoInput.files[0]);
         }
 
-        let defectVideoUrl = '';
-        const videoInput = document.getElementById('ticket-open-video-defect');
-        if (videoInput && videoInput.dataset.uploadedUrl) {
-          defectVideoUrl = videoInput.dataset.uploadedUrl;
-        } else if (videoInput && videoInput.files && videoInput.files[0]) {
-          defectVideoUrl = await this.uploadFile(videoInput.files[0]);
-        }
+        const resolveOpeningPhoto = async inputId => {
+          const input = document.getElementById(inputId);
+          if (input && input.dataset.uploadedUrl) return input.dataset.uploadedUrl;
+          if (input && input.files && input.files[0]) return this.uploadFile(input.files[0]);
+          return '';
+        };
+        const defectPhotoUrl = await resolveOpeningPhoto('ticket-open-photo-defect-1');
+        const defectPhoto2Url = await resolveOpeningPhoto('ticket-open-photo-defect-2');
 
         try {
           const result = await this.fetchFromApi('/api/chamados', {
@@ -2314,8 +2322,9 @@ const App = {
               title,
               priority,
               defectPhoto: defectPhotoUrl,
-              openingEquipmentPhoto: defectPhotoUrl,
-              defectVideo: defectVideoUrl,
+              defectPhoto2: defectPhoto2Url,
+              openingEquipmentPhoto: openingEquipmentPhotoUrl,
+              defectVideo: '',
               observations: obs
             })
           });
@@ -2323,7 +2332,7 @@ const App = {
           await this.loadTickets();
           ticketOpenForm.reset();
           // Limpa status de upload (mensagem verde) e dados temporários
-          ['ticket-open-photo-defect', 'ticket-open-video-defect'].forEach(id => {
+          ['ticket-open-photo-defect', 'ticket-open-photo-defect-1', 'ticket-open-photo-defect-2'].forEach(id => {
             const inp = document.getElementById(id);
             if (inp) { inp.dataset.uploadedUrl = ''; inp.dataset.uploadId = ''; }
             const statusEl = document.getElementById(`upload-status-${id}`);
@@ -2341,7 +2350,10 @@ const App = {
           // Limpa badge de modelo detectado
           const modelBadge = document.getElementById('ticket-eq-model-badge');
           if (modelBadge) modelBadge.textContent = '';
-          if (ticketOpenPhotoPreviewContainer) ticketOpenPhotoPreviewContainer.style.display = 'none';
+          ['preview-ticket-open-photo-container', 'preview-ticket-open-defect-1-container', 'preview-ticket-open-defect-2-container'].forEach(id => {
+            const previewCont = document.getElementById(id);
+            if (previewCont) previewCont.style.display = 'none';
+          });
           const historyContainer = document.getElementById('ticket-open-history-container');
           if (historyContainer) historyContainer.innerHTML = '';
 
@@ -2411,13 +2423,13 @@ const App = {
         if (!serviceDescription) {
           alert('Descreva o serviço realizado antes de concluir o atendimento.');
           delete ticketForm.dataset.saving;
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico'; }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Enviar Finalização da Manutenção'; }
           return;
         }
         if (!fotoAntesUrl || !fotoDepoisUrl) {
           alert('As fotos do equipamento antes e depois do reparo são obrigatórias. Aguarde o envio ou selecione-as novamente.');
           delete ticketForm.dataset.saving;
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico'; }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || 'Enviar Finalização da Manutenção'; }
           return;
         }
 
@@ -2449,7 +2461,7 @@ const App = {
           delete ticketForm.dataset.saving;
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = submitBtn.dataset.originalText || 'Registrar Atendimento Técnico';
+            submitBtn.textContent = submitBtn.dataset.originalText || 'Enviar Finalização da Manutenção';
           }
         }
       });
@@ -3703,7 +3715,7 @@ const App = {
         body: JSON.stringify({ status: 'Em Atendimento' })
       });
       await this.loadTickets();
-      this.showToast(`Atendimento do chamado ${id} iniciado!`);
+      this.showToast(`Chamado ${id} iniciado e registrado como Em manutenção.`);
       this.openFichaTecnica(id);
     } catch (err) {
       alert('Erro ao iniciar atendimento: ' + err.message);
@@ -7546,7 +7558,9 @@ App.showTicketDetails = function(id) {
   const isValidPhoto = (url) => url && url !== 'null' && url !== 'undefined' && url !== '/uploads/null' && url !== '/uploads/undefined' && url !== '/uploads/';
 
   const mediaList = [];
-  if (isValidPhoto(ticket.defectPhoto)) mediaList.push({ url: ticket.defectPhoto, label: 'Foto Defeito' });
+  if (isValidPhoto(ticket.openingEquipmentPhoto)) mediaList.push({ url: ticket.openingEquipmentPhoto, label: 'Equipamento Completo na Abertura' });
+  if (isValidPhoto(ticket.defectPhoto)) mediaList.push({ url: ticket.defectPhoto, label: 'Foto do Defeito 1' });
+  if (isValidPhoto(ticket.defectPhoto2)) mediaList.push({ url: ticket.defectPhoto2, label: 'Foto do Defeito 2' });
   if (isValidPhoto(ticket.fotoAntes)) mediaList.push({ url: ticket.fotoAntes, label: 'Foto Antes' });
   if (isValidPhoto(ticket.fotoDepois)) mediaList.push({ url: ticket.fotoDepois, label: 'Foto Depois' });
   if (isValidPhoto(ticket.fotoPlaqueta)) mediaList.push({ url: ticket.fotoPlaqueta, label: 'Foto Plaqueta' });
@@ -7647,7 +7661,9 @@ App.generateTicketPdf = function(id) {
     fotoAntes: ticket.fotoAntes,
     fotoDepois: ticket.fotoDepois,
     fotoPlaqueta: ticket.fotoPlaqueta,
-    defectPhoto: ticket.defectPhoto
+    openingEquipmentPhoto: ticket.openingEquipmentPhoto,
+    defectPhoto: ticket.defectPhoto,
+    defectPhoto2: ticket.defectPhoto2
   });
 };
 
@@ -7717,7 +7733,9 @@ App.generateTicketPdfFromForm = function() {
   const fotoAntes = getPhotoUrl('preview-img-ticket-foto-antes', ticket.fotoAntes);
   const fotoDepois = getPhotoUrl('preview-img-ticket-foto-depois', ticket.fotoDepois);
   const fotoPlaqueta = getPhotoUrl('preview-img-ticket-foto-plaqueta', ticket.fotoPlaqueta);
+  const openingEquipmentPhoto = ticket.openingEquipmentPhoto || '';
   const defectPhoto = ticket.defectPhoto || '';
+  const defectPhoto2 = ticket.defectPhoto2 || '';
 
   App.printTicketData({
     id,
@@ -7747,7 +7765,9 @@ App.generateTicketPdfFromForm = function() {
     fotoAntes,
     fotoDepois,
     fotoPlaqueta,
-    defectPhoto
+    openingEquipmentPhoto,
+    defectPhoto,
+    defectPhoto2
   });
 };
 
@@ -8033,7 +8053,9 @@ App.printTicketData = function(ticket) {
 
   <h3>6. Fotos da Visita</h3>
   <div class="photos">
-    ${addPhoto(ticket.defectPhoto, 'Foto Defeito')}
+    ${addPhoto(ticket.openingEquipmentPhoto, 'Equipamento Completo na Abertura')}
+    ${addPhoto(ticket.defectPhoto, 'Foto do Defeito 1')}
+    ${addPhoto(ticket.defectPhoto2, 'Foto do Defeito 2')}
     ${addPhoto(ticket.fotoAntes, 'Foto Antes')}
     ${addPhoto(ticket.fotoDepois, 'Foto Depois')}
     ${addPhoto(ticket.fotoPlaqueta, 'Foto Plaqueta')}

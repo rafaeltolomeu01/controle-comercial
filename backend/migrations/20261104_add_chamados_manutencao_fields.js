@@ -5,6 +5,7 @@ exports.up = async function up(knex) {
   const columns = {
     equipmentBrand: table => table.string('equipmentBrand').nullable(),
     openingEquipmentPhoto: table => table.string('openingEquipmentPhoto').nullable(),
+    defectPhoto2: table => table.string('defectPhoto2').nullable(),
     openedAt: table => table.timestamp('openedAt', { useTz: true }).nullable(),
     maintenanceStartedAt: table => table.timestamp('maintenanceStartedAt', { useTz: true }).nullable(),
     serviceDescription: table => table.text('serviceDescription').nullable(),

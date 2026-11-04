@@ -91,6 +91,16 @@
       .amaretto-ticket-extra strong{display:block;overflow-wrap:anywhere;white-space:pre-wrap;font-size:.82rem}
       .amaretto-ticket-extra .wide{grid-column:1/-1}
       .amaretto-opening-photo{display:block;width:min(260px,100%);max-height:220px;object-fit:cover;border-radius:8px;border:1px solid var(--border-color);cursor:pointer}
+      @media(min-width:901px){
+        #view-chamados .table-responsive{overflow-x:visible!important}
+        #view-chamados .table-responsive table{width:100%!important;min-width:0!important;table-layout:fixed!important}
+        #tickets-table-body{display:table-row-group!important}
+        #tickets-table-body tr{display:table-row!important}
+        #tickets-table-body td,#view-chamados .table-responsive th{display:table-cell!important;padding:7px 4px!important;font-size:.66rem!important;line-height:1.25!important;white-space:normal!important;overflow-wrap:anywhere;vertical-align:top}
+        #tickets-table-body td::before{display:none!important}
+        #tickets-table-body .btn{padding:5px 6px!important;font-size:.6rem!important;line-height:1.15!important;white-space:normal!important}
+        #tickets-table-body .badge-status{font-size:.6rem!important;white-space:normal!important}
+      }
       @media(max-width:768px){
         #modal-ficha-tecnica{padding:0!important;align-items:flex-start!important}
         #modal-ficha-tecnica>.login-card{width:100%!important;max-width:none!important;max-height:100dvh!important;min-height:100dvh;border-radius:0!important;padding:14px!important}
@@ -121,9 +131,10 @@
     body.innerHTML = visible.map(ticket => {
       const priorityClass = ticket.priority === 'Alta' ? 'badge-danger' : ticket.priority === 'Média' ? 'badge-warning' : 'badge-primary';
       const statusClass = ticket.status === 'Resolvido' ? 'badge-success' : ticket.status === 'Em Atendimento' ? 'badge-primary' : 'badge-warning';
+      const displayStatus = ticket.status === 'Em Atendimento' ? 'Em manutenção' : (ticket.status || '—');
       let action = '<span style="font-size:.75rem;color:var(--text-muted)">Aberto</span>';
       if (ticket.status === 'Aberto' && staff) action = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.startTicketService('${esc(ticket.id)}')">INICIAR ATENDIMENTO</button>`;
-      if (ticket.status === 'Em Atendimento') action = staff ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();App.openFichaTecnica('${esc(ticket.id)}')">FICHA TÉCNICA</button>` : '<span style="font-size:.75rem;color:var(--text-muted)">Em Atendimento</span>';
+      if (ticket.status === 'Em Atendimento') action = staff ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();App.openFichaTecnica('${esc(ticket.id)}')">FICHA TÉCNICA</button>` : '<span style="font-size:.75rem;color:var(--text-muted)">Em manutenção</span>';
       if (ticket.status === 'Resolvido') action = `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.openFichaTecnica('${esc(ticket.id)}')">VER LAUDO</button>`;
       if (admin && typeof App.editTicketAdmin === 'function') action += ` <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();App.editTicketAdmin('${esc(ticket.id)}')">Editar</button>`;
       return `<tr class="mobile-summary-row" onclick="App.showTicketDetails('${esc(ticket.id)}')">
@@ -139,7 +150,7 @@
         <td data-label="Serviço Realizado" class="normal-wrap">${esc(serviceText(ticket) || '—')}</td>
         <td data-label="Estado Pós">${esc(ticket.eqStatusAfter || '—')}</td>
         <td data-label="Prioridade"><span class="badge-status ${priorityClass}">${esc(ticket.priority || '—')}</span></td>
-        <td data-label="Status"><span class="badge-status ${statusClass}">${esc(ticket.status || '—')}</span></td>
+        <td data-label="Status"><span class="badge-status ${statusClass}">${esc(displayStatus)}</span></td>
         <td data-label="Ação">${action}</td>
       </tr>`;
     }).join('') || '<tr><td colspan="14" style="text-align:center;padding:24px;color:var(--text-muted)">Nenhum chamado encontrado para os filtros selecionados.</td></tr>';
@@ -200,7 +211,11 @@
         const ticket = ((Store.getTickets && Store.getTickets()) || []).find(item => String(item.id) === String(id));
         const content = document.getElementById('modal-ticket-details-mobile-content');
         if (!ticket || !content || content.querySelector('.amaretto-ticket-extra')) return;
-        const photo = ticket.openingEquipmentPhoto || ticket.defectPhoto || '';
+        const media = [
+          { label: 'Foto do equipamento completo na abertura', url: ticket.openingEquipmentPhoto || '' },
+          { label: 'Foto do defeito 1', url: ticket.defectPhoto || '' },
+          { label: 'Foto do defeito 2', url: ticket.defectPhoto2 || '' }
+        ].filter(item => validMedia(item.url));
         const section = document.createElement('section');
         section.className = 'amaretto-ticket-extra';
         section.innerHTML = `<div class="amaretto-ticket-extra-grid">
@@ -209,10 +224,12 @@
           <div><small>Início da manutenção</small><strong>${esc(formatDateTime(maintenanceDate(ticket)))}</strong></div>
           <div><small>Tempo de espera</small><strong>${esc(waitingTime(ticket))}</strong></div>
           <div class="wide"><small>Descrição do serviço realizado</small><strong>${esc(serviceText(ticket) || '—')}</strong></div>
-          ${validMedia(photo) ? `<div class="wide"><small>Foto do equipamento completo na abertura</small><img class="amaretto-opening-photo" src="${esc(photo)}" alt="Equipamento completo"></div>` : ''}
+          ${media.map((item, index) => `<div><small>${esc(item.label)}</small><img class="amaretto-opening-photo" data-photo-index="${index}" src="${esc(item.url)}" alt="${esc(item.label)}"></div>`).join('')}
         </div>`;
-        const openingImage = section.querySelector('.amaretto-opening-photo');
-        if (openingImage) openingImage.addEventListener('click', () => App.showFacadeImage(photo));
+        section.querySelectorAll('.amaretto-opening-photo').forEach(image => {
+          const item = media[Number(image.dataset.photoIndex)];
+          if (item) image.addEventListener('click', () => App.showFacadeImage(item.url));
+        });
         content.insertAdjacentElement('afterbegin', section);
       }, 120);
     };
@@ -241,7 +258,7 @@
     patchAdminEditor();
   }
 
-  window.AmarettoMaintenance = { openingDate, maintenanceDate, waitingTime, formatDateTime, serviceText };
+  window.AmarettoMaintenance = { openingDate, maintenanceDate, waitingTime, formatDateTime, serviceText, renderTickets };
   install();
   document.addEventListener('DOMContentLoaded', install);
   window.addEventListener('hashchange', () => window.setTimeout(install, 80));

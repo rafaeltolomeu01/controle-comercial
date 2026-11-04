@@ -638,6 +638,7 @@ async function initDb() {
       table.string('priority').notNullable().defaultTo('Média');
       table.text('observations').nullable();
       table.string('defectPhoto').nullable();
+      table.string('defectPhoto2').nullable();
       table.string('defectVideo').nullable();
       table.string('openingEquipmentPhoto').nullable();
       table.string('status').notNullable().defaultTo('Aberto');
@@ -683,6 +684,7 @@ async function initDb() {
       priority: t => t.string('priority').notNullable().defaultTo('Média'),
       observations: t => t.text('observations').nullable(),
       defectPhoto: t => t.string('defectPhoto').nullable(),
+      defectPhoto2: t => t.string('defectPhoto2').nullable(),
       defectVideo: t => t.string('defectVideo').nullable(),
       openingEquipmentPhoto: t => t.string('openingEquipmentPhoto').nullable(),
       status: t => t.string('status').notNullable().defaultTo('Aberto'),
@@ -6396,6 +6398,11 @@ app.post('/api/chamados', async (req, res) => {
     if (!openingEquipmentPhoto) {
       return res.status(400).json({ error: 'A foto do equipamento completo é obrigatória.' });
     }
+    const defectPhoto = String(body.defectPhoto || '').trim();
+    const defectPhoto2 = String(body.defectPhoto2 || '').trim();
+    if (!defectPhoto || !defectPhoto2) {
+      return res.status(400).json({ error: 'As duas fotos do defeito são obrigatórias.' });
+    }
     const typeCheck = await validateMechanicalEquipmentType(req, body.equipmentType);
     // Aceita o tipo mesmo que não esteja na lista global (ex: importado da planilha)
     const resolvedEquipmentType = typeCheck.ok ? typeCheck.typeName : String(body.equipmentType || '').trim();
@@ -6421,7 +6428,8 @@ app.post('/api/chamados', async (req, res) => {
       title: body.title || '',
       priority: body.priority || 'Média',
       observations: body.observations || '',
-      defectPhoto: body.defectPhoto || '',
+      defectPhoto,
+      defectPhoto2,
       defectVideo: body.defectVideo || '',
       openingEquipmentPhoto,
       status: 'Aberto',
@@ -6514,7 +6522,7 @@ app.put('/api/chamados/:id', async (req, res) => {
     const updates = { updated_at: new Date().toISOString() };
     const allowed = [
       'unitId', 'userId', 'equipmentSerial', 'equipmentType', 'equipmentBrand', 'client', 'fantasyName', 'city', 'address',
-      'clientCode', 'clientSeller', 'clientGroup', 'title', 'priority', 'observations', 'defectPhoto', 'defectVideo', 'openingEquipmentPhoto',
+      'clientCode', 'clientSeller', 'clientGroup', 'title', 'priority', 'observations', 'defectPhoto', 'defectPhoto2', 'defectVideo', 'openingEquipmentPhoto',
       'status', 'mechanic', 'date', 'startTime', 'endTime', 'faultDescription', 'solutionDescription',
       'serviceDescription', 'eqStatusAfter', 'gasCharge', 'additionalNotes', 'fotoAntes', 'fotoDepois', 'fotoPlaqueta', 'fotoComplementar', 'videoAtendimento'
     ];

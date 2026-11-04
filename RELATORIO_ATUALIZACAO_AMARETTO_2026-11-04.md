@@ -47,13 +47,16 @@ As estruturas antigas (`parts`, `services`, `gasCharge`, `videoAtendimento`, lau
 - A marca é preenchida automaticamente quando a busca por patrimônio retorna essa informação, mas pode ser corrigida no chamado.
 - A correção não altera o cadastro patrimonial original.
 - A foto obrigatória foi identificada como **Foto do Equipamento Completo**, com orientação e suporte à câmera traseira do celular.
+- Foram adicionadas **Foto do Defeito 1** e **Foto do Defeito 2**, ambas obrigatórias e também validadas pelo backend.
 - A fotografia da abertura é armazenada separadamente das fotos do atendimento.
-- O backend também valida marca e foto, evitando contornar a obrigatoriedade pela API.
+- O vídeo de abertura saiu do formulário novo, mas vídeos existentes continuam preservados e acessíveis nos registros históricos.
+- O backend também valida marca e as três fotografias, evitando contornar a obrigatoriedade pela API.
 
 ## 4. Datas e tempo de espera
 
 - `openedAt`: registrado na criação do chamado.
 - `maintenanceStartedAt`: registrado somente no primeiro clique de início.
+- Ao clicar em **Iniciar Atendimento**, o chamado passa imediatamente a ser exibido como **Em manutenção**, com data e hora persistidas.
 - O início não é regravado em edições ou novas aberturas da ficha.
 - O tempo de espera é calculado entre esses dois timestamps, exibindo dias completos e horas restantes.
 - Sem início, a interface mostra **Aguardando início**.
@@ -67,6 +70,7 @@ As estruturas antigas (`parts`, `services`, `gasCharge`, `videoAtendimento`, lau
 - Mantidos os escopos de empresa, unidade, hierarquia de vendedores e equipe técnica.
 - Mantidos login, autenticação, auditoria e regras de edição/exclusão.
 - PDFs foram atualizados para incluir marca, abertura, início, espera, descrição única e novas fotografias, mantendo seções históricas.
+- O dossiê, a exportação e o PDF incluem a foto do equipamento completo, as duas fotos do defeito e as fotos do atendimento.
 - Exportações de chamados incluem os novos campos sem remover as colunas antigas.
 - A opção **Recolhimento necessário** apenas registra a necessidade; nenhuma movimentação patrimonial é criada automaticamente.
 
@@ -80,6 +84,7 @@ Novas colunas:
 
 - `equipmentBrand`
 - `openingEquipmentPhoto`
+- `defectPhoto2`
 - `openedAt`
 - `maintenanceStartedAt`
 - `serviceDescription`
@@ -101,11 +106,14 @@ O rollback foi deliberadamente deixado não destrutivo para não apagar dados. O
 - Filtros usam grade adaptativa: duas colunas em celular maior e uma em telas estreitas.
 - Fotos aceitam câmera do celular e mantêm pré-visualização/substituição já existentes.
 - A fila exibe todas as informações em cartões responsivos no celular, sem remover dados importantes.
+- Em computador, a fila usa uma tabela estilo planilha com as 14 colunas alinhadas aos cabeçalhos e quebra de texto interna para não cortar a lateral.
+- A mudança da fila para formato planilha foi limitada a telas de computador; o formato de cartões do celular foi mantido.
+- O botão final do atendimento foi renomeado para **Enviar Finalização da Manutenção**.
 
 ## 8. Validações executadas
 
 - Verificação de sintaxe JavaScript: 5 arquivos principais aprovados.
-- Testes específicos da atualização: **4/4 aprovados**.
+- Testes específicos da atualização: **5/5 aprovados**.
 - Suíte de regressões de segurança e funcionamento existente: **69/69 aprovados**.
 - Verificação de IDs HTML combinados entre `index.html` e `pages/chamados.html`: **272 IDs únicos**.
 - Verificação nominal de arquivos sensíveis reais (`.env`, chaves e credenciais): nenhum encontrado; somente exemplos de configuração permanecem.

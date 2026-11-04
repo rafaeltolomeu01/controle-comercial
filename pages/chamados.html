@@ -95,8 +95,20 @@
                     </div>
                   </div>
                   <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
-                    <label for="ticket-open-video-defect" style="font-weight:600; font-size:0.75rem;">Vídeos do Defeito (opcional)</label>
-                    <input type="file" id="ticket-open-video-defect" accept="video/*" style="font-size:0.75rem; margin-top:4px;">
+                    <label for="ticket-open-photo-defect-1" style="font-weight:600; font-size:0.75rem;">Foto do Defeito 1 *</label>
+                    <p class="field-help">Mostre de perto o defeito ou a área afetada.</p>
+                    <input type="file" id="ticket-open-photo-defect-1" accept="image/*" capture="environment" required style="font-size:0.75rem; margin-top:4px;">
+                    <div id="preview-ticket-open-defect-1-container" style="display:none; margin-top:6px;">
+                      <img id="preview-img-ticket-open-defect-1" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
+                    </div>
+                  </div>
+                  <div class="form-group" style="background-color:rgba(255,255,255,0.01); border:1px solid var(--border-color); border-radius:6px; padding:10px;">
+                    <label for="ticket-open-photo-defect-2" style="font-weight:600; font-size:0.75rem;">Foto do Defeito 2 *</label>
+                    <p class="field-help">Registre um segundo ângulo ou detalhe do problema.</p>
+                    <input type="file" id="ticket-open-photo-defect-2" accept="image/*" capture="environment" required style="font-size:0.75rem; margin-top:4px;">
+                    <div id="preview-ticket-open-defect-2-container" style="display:none; margin-top:6px;">
+                      <img id="preview-img-ticket-open-defect-2" src="" style="max-height:60px; border-radius:4px; border:1px solid var(--border-color);">
+                    </div>
                   </div>
                 </div>
 
