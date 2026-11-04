@@ -1,7 +1,7 @@
 {
-  "version": "20261104.03",
+  "version": "20261104.04",
   "updatedAt": "2026-11-04T00:00:00-03:00",
-  "description": "Status e laudo sincronizados, datas preenchidas e dez chamados por pagina",
-  "build": "20261104-03-manutencao-amaretto",
+  "description": "Visualizacoes de PDF com acao padronizada para fechar",
+  "build": "20261104-04-manutencao-amaretto",
   "buildDate": "2026-11-04T00:00:00-03:00"
 }

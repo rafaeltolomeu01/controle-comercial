@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20261104-03-manutencao-amaretto';
+const CACHE_VERSION = '20261104-04-manutencao-amaretto';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

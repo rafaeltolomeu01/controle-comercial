@@ -7057,8 +7057,9 @@ const App = {
     const printWin = window.open('', '_blank');
     printWin.document.write(`<!doctype html><html><head><title>Dossiê de Movimentação #${mov.id}</title>
       <style>
-        body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:24px;font-size:12px} h1{font-size:20px;color:#2563eb;margin:0 0 12px} h3{font-size:14px;color:#2563eb;border-bottom:1px solid #bbb;padding-bottom:5px} .header{display:flex;justify-content:space-between;border:1px solid #bbb;padding:10px;border-radius:8px;margin-bottom:14px}.pdf-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pdf-box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.danger h4{color:#dc2626}.success h4{color:#059669}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.pdf-photo{border:1px solid #bbb;padding:8px;text-align:center;border-radius:8px}.pdf-photo img{max-width:100%;max-height:180px}.pdf-photo-label{font-weight:bold;margin-bottom:6px}.blank{height:26px;border-bottom:1px solid #111;margin:6px 0 12px}.parecer{height:80px;border:1px solid #111;margin-top:6px}
+        body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:24px;font-size:12px} h1{font-size:20px;color:#2563eb;margin:0 0 12px} h3{font-size:14px;color:#2563eb;border-bottom:1px solid #bbb;padding-bottom:5px} .pdf-actions{display:flex;gap:8px;margin-bottom:14px}.pdf-actions button{border:0;border-radius:7px;padding:9px 14px;font-weight:700;cursor:pointer}.pdf-actions .print-btn{background:#2563eb;color:#fff}.pdf-actions .close-btn{background:#475569;color:#fff}.header{display:flex;justify-content:space-between;border:1px solid #bbb;padding:10px;border-radius:8px;margin-bottom:14px}.pdf-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pdf-box{border:1px solid #bbb;border-radius:8px;padding:10px;margin-bottom:12px}.danger h4{color:#dc2626}.success h4{color:#059669}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.pdf-photo{border:1px solid #bbb;padding:8px;text-align:center;border-radius:8px}.pdf-photo img{max-width:100%;max-height:180px}.pdf-photo-label{font-weight:bold;margin-bottom:6px}.blank{height:26px;border-bottom:1px solid #111;margin:6px 0 12px}.parecer{height:80px;border:1px solid #111;margin-top:6px}@media print{.pdf-actions{display:none}}
       </style></head><body>
+      <div class="pdf-actions"><button class="print-btn" onclick="window.print()">Imprimir</button><button class="close-btn" onclick="window.close()">Fechar</button></div>
       <h1>Dossiê de Movimentação #${mov.id}</h1>
       <div class="header"><div><b>Tipo de Operação:</b> ${mov.tipo_solicitacao}</div><div><b>Status:</b> ${mov.status}</div></div>
       <div class="grid"><div class="pdf-box"><h3>Dados do Cliente</h3><p><b>Código:</b> ${mov.cliente_codigo || '-'}</p><p><b>Nome Fantasia:</b> ${mov.cliente_nome || '-'}</p><p><b>Cidade:</b> ${mov.cliente_cidade || '-'}</p><p><b>Endereço:</b> ${mov.cliente_endereco || '-'}</p><p><b>Vendedor do Cliente:</b> ${mov.cliente_vendedor || '-'}</p></div>
@@ -7913,13 +7914,18 @@ App.printTicketData = function(ticket) {
       padding-top: 6px;
       text-align: center;
     }
+    .pdf-actions { display:flex; gap:8px; margin-bottom:14px; }
+    .pdf-actions button { border:0; border-radius:7px; padding:9px 14px; font-weight:700; cursor:pointer; }
+    .pdf-actions .print-btn { background:#2563eb; color:#fff; }
+    .pdf-actions .close-btn { background:#475569; color:#fff; }
     @media print {
-      button { display: none; }
+      .pdf-actions { display: none; }
       body { margin: 10px; }
     }
   </style>
 </head>
 <body>
+  <div class="pdf-actions"><button class="print-btn" onclick="window.print()">Imprimir</button><button class="close-btn" onclick="window.close()">Fechar</button></div>
   <table class="header-table">
     <tr>
       <td class="title-cell" colspan="2">Ficha Técnica de Manutenção - Ordem de Serviço</td>

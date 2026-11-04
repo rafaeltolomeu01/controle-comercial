@@ -17,6 +17,13 @@ As alterações solicitadas foram implementadas de forma aditiva e compatível c
 - A lista de Chamados Mecânicos foi limitada a **10 chamados por página**, preservando filtros e ordenação.
 - A correção foi isolada ao módulo de Chamados Mecânicos; os demais módulos e suas paginações não foram alterados.
 
+### Padronização das visualizações de PDF
+
+- As telas internas de PDF mantêm o botão de impressão e passam a exibir uma ação visível **Fechar**.
+- As janelas de impressão de dossiê de movimentação, ficha técnica e solicitações de saldo receberam a mesma ação de fechamento.
+- O conteúdo, os cálculos e os anexos dos documentos não foram modificados.
+- PDFs baixados diretamente continuam fechados normalmente pelo visualizador nativo do navegador ou do dispositivo.
+
 ## 1. Histórico de movimentações
 
 - Adicionado o filtro **Operação**, preenchido pelos tipos reais presentes nas movimentações (`tipo_solicitacao`, `operacao`, `operation` ou `tipo_operacao`).
@@ -122,7 +129,7 @@ O rollback foi deliberadamente deixado não destrutivo para não apagar dados. O
 ## 8. Validações executadas
 
 - Verificação de sintaxe JavaScript: 5 arquivos principais aprovados.
-- Testes específicos da atualização: **5/5 aprovados**.
+- Testes específicos da atualização: **6/6 aprovados**.
 - Suíte de regressões de segurança e funcionamento existente: **69/69 aprovados**.
 - Verificação de IDs HTML combinados entre `index.html` e `pages/chamados.html`: **272 IDs únicos**.
 - Verificação nominal de arquivos sensíveis reais (`.env`, chaves e credenciais): nenhum encontrado; somente exemplos de configuração permanecem.

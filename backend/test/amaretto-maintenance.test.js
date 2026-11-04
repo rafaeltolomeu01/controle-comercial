@@ -89,3 +89,13 @@ test('filtro Operação integra a filtragem e exportação existentes', () => {
   assert.match(compatibility, /const compatibleRows = this\.filterData/);
   assert.match(compatibility, /if \(useFiltered\) list = this\.filterData/);
 });
+
+test('visualizações de PDF possuem ação visível para fechar', () => {
+  const app = read('js/app.js');
+  const compatibility = read('js/compatibilidade-consolidada.js');
+  const page = read('pages/pdf.html');
+  assert.match(page, />Fechar<\/button>/);
+  assert.match(app, /class="close-btn" onclick="window\.close\(\)">Fechar<\/button>/);
+  assert.match(app, /id="pdf-preview-close"[^>]*>Fechar<\/button>/);
+  assert.match(compatibility, /onclick="window\.close\(\)">Fechar<\/button>/);
+});
