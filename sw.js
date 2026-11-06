@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20261106-07-nomes-clientes-sem-duplicacao';
+const CACHE_VERSION = '20261106-08-movimentacoes-mobile-completas';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

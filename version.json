@@ -1,7 +1,7 @@
 {
-  "version": "20261106.07",
+  "version": "20261106.08",
   "updatedAt": "2026-11-06T00:00:00-03:00",
-  "description": "Identificacao fiel de razao social e nome fantasia nos chamados",
-  "build": "20261106-07-nomes-clientes-sem-duplicacao",
+  "description": "Cartoes mobile completos para movimentacoes de equipamentos",
+  "build": "20261106-08-movimentacoes-mobile-completas",
   "buildDate": "2026-11-06T00:00:00-03:00"
 }

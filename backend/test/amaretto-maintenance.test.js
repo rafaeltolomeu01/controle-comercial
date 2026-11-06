@@ -123,7 +123,10 @@ test('listas exibem fantasia, vendedores e cidade em computador e celular', () =
   assert.match(movementsPage, /<th>Nome Fantasia<\/th>[\s\S]*<th>Cidade<\/th>[\s\S]*<th>Vendedor do Cliente<\/th>[\s\S]*<th>Solicitante<\/th>/);
   assert.match(ui, /data-label="Vendedor do Cliente"/);
   assert.match(ui, /data-label="Solicitante"/);
-  assert.match(maintenance, /#movements-table-body td\[data-label="Cidade"\]/);
+  assert.match(maintenance, /#movements-table-body tr\.movement-mobile-compact td\[data-label="Cidade"\]/);
+  assert.match(maintenance, /grid-row:7!important/);
+  assert.match(maintenance, /content:"Patrimônio: "/);
+  assert.match(maintenance, /data-label="Ações"\] button\{width:100%/);
 });
 
 test('rascunhos preservam formulários em erro e só limpam no reset confirmado', () => {
