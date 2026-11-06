@@ -72,6 +72,21 @@
   };
 
   const serviceText = ticket => String(ticket.serviceDescription || ticket.solutionDescription || ticket.faultDescription || '').trim();
+  const normalizeClientName = value => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase();
+  const legalNameText = ticket => {
+    const legalName = String(ticket.client || '').trim();
+    const fantasyName = String(ticket.fantasyName || '').trim();
+    if (!legalName) return '—';
+    // Registros antigos receberam o nome fantasia nos dois campos. Não exibe
+    // essa cópia como se fosse uma razão social realmente cadastrada.
+    if (fantasyName && normalizeClientName(legalName) === normalizeClientName(fantasyName)) return '—';
+    return legalName;
+  };
   let latestTickets = new Map();
   const rememberTickets = tickets => {
     latestTickets = new Map((Array.isArray(tickets) ? tickets : []).map(ticket => [String(ticket.id), ticket]));
@@ -119,8 +134,8 @@
       }
       @media(max-width:900px){
         #tickets-table-body td[data-label="Nome Fantasia"]{display:block!important;font-size:var(--mobile-title-size,.94rem)!important;font-weight:750!important;color:var(--text-main)!important;line-height:1.3!important;padding-right:95px!important;margin-bottom:4px!important;white-space:normal!important}
-        #tickets-table-body td[data-label="Cliente"]{display:block!important;font-size:.76rem!important;font-weight:500!important;color:var(--text-muted)!important;padding-right:0!important;margin-bottom:7px!important}
-        #tickets-table-body td[data-label="Cliente"]::before{display:inline!important;content:"Razão social: "!important;font-weight:700!important}
+        #tickets-table-body td[data-label="Razão Social"]{display:block!important;font-size:.76rem!important;font-weight:500!important;color:var(--text-muted)!important;padding-right:0!important;margin-bottom:7px!important}
+        #tickets-table-body td[data-label="Razão Social"]::before{display:inline!important;content:"Razão social: "!important;font-weight:700!important}
         #movements-table-body td[data-label="Nome Fantasia"]{display:block!important;font-size:var(--mobile-title-size,.94rem)!important;font-weight:750!important;color:var(--text-main)!important;line-height:1.3!important;padding-right:95px!important;margin-bottom:6px!important;white-space:normal!important}
         #movements-table-body td[data-label="Cidade"],#movements-table-body td[data-label="Vendedor do Cliente"],#movements-table-body td[data-label="Solicitante"]{display:block!important;font-size:.76rem!important;color:var(--text-muted)!important;margin:4px 0!important;padding:0!important;white-space:normal!important}
         #movements-table-body td[data-label="Cidade"]::before{display:inline!important;content:"Cidade: "!important;font-weight:700!important}
@@ -162,7 +177,7 @@
         <td data-label="Mecânico">${esc(ticket.mechanic || '—')}</td>
         <td data-label="Equipamento">${esc(ticket.equipmentSerial || '—')}</td>
         <td data-label="Marca">${esc(ticket.equipmentBrand || '—')}</td>
-        <td data-label="Cliente">${esc(ticket.client || '—')}</td>
+        <td data-label="Razão Social">${esc(legalNameText(ticket))}</td>
         <td data-label="Nome Fantasia">${esc(ticket.fantasyName || '—')}</td>
         <td data-label="Falha Relatada" class="normal-wrap">${esc(ticket.title || '—')}</td>
         <td data-label="Serviço Realizado" class="normal-wrap">${esc(serviceText(ticket) || '—')}</td>

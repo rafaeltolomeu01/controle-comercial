@@ -117,6 +117,8 @@ test('listas exibem fantasia, vendedores e cidade em computador e celular', () =
   const ui = read('js/ui.js');
   const maintenance = read('js/amaretto-manutencao-20261104.js');
   assert.match(ticketsPage, /<th>Razão Social<\/th>\s*<th>Nome Fantasia<\/th>/);
+  assert.match(maintenance, /normalizeClientName\(legalName\) === normalizeClientName\(fantasyName\)/);
+  assert.match(maintenance, /data-label="Razão Social">\$\{esc\(legalNameText\(ticket\)\)\}/);
   assert.match(maintenance, /data-label="Nome Fantasia">\$\{esc\(ticket\.fantasyName/);
   assert.match(movementsPage, /<th>Nome Fantasia<\/th>[\s\S]*<th>Cidade<\/th>[\s\S]*<th>Vendedor do Cliente<\/th>[\s\S]*<th>Solicitante<\/th>/);
   assert.match(ui, /data-label="Vendedor do Cliente"/);

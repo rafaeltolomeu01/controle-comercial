@@ -1,7 +1,7 @@
 {
-  "version": "20261106.06",
+  "version": "20261106.07",
   "updatedAt": "2026-11-06T00:00:00-03:00",
-  "description": "Rascunhos persistentes, abertura robusta e identificacao completa nas listas",
-  "build": "20261106-06-rascunhos-chamados-movimentacoes",
+  "description": "Identificacao fiel de razao social e nome fantasia nos chamados",
+  "build": "20261106-07-nomes-clientes-sem-duplicacao",
   "buildDate": "2026-11-06T00:00:00-03:00"
 }
