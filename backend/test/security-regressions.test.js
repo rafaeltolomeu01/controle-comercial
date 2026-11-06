@@ -308,7 +308,9 @@ test('envio de movimentacao aguarda upload e nao falha por erro de notificacao',
   const route = server.slice(routeStart, routeEnd);
   assert.match(route, /Movimentação salva, mas a notificação não foi enviada/);
   assert.match(route, /res\.json\(\{ success: true, id: newId \}\)/);
-  assert.match(compatibility, /if \(id === 'movement-form'\) return/);
+  // O formulário não pode mais ser limpo por um temporizador global após o
+  // clique. Cada fluxo limpa somente depois da confirmação do servidor.
+  assert.match(compatibility, /Não limpar formulários no simples clique de envio/);
   assert.match(appClient, /'movimentacoes'/);
 });
 

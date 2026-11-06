@@ -1,7 +1,7 @@
 {
-  "version": "20261104.04",
-  "updatedAt": "2026-11-04T00:00:00-03:00",
-  "description": "Visualizacoes de PDF com acao padronizada para fechar",
-  "build": "20261104-04-manutencao-amaretto",
-  "buildDate": "2026-11-04T00:00:00-03:00"
+  "version": "20261106.06",
+  "updatedAt": "2026-11-06T00:00:00-03:00",
+  "description": "Rascunhos persistentes, abertura robusta e identificacao completa nas listas",
+  "build": "20261106-06-rascunhos-chamados-movimentacoes",
+  "buildDate": "2026-11-06T00:00:00-03:00"
 }

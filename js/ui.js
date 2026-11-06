@@ -681,7 +681,7 @@ const UI = {
     if (delBtn) delBtn.style.display = isAdmin ? 'inline-flex' : 'none';
 
     if (movements.length === 0) {
-      listBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted);">Nenhuma movimentação registrada.</td></tr>`;
+      listBody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted);">Nenhuma movimentação registrada.</td></tr>`;
       return;
     }
 
@@ -699,6 +699,10 @@ const UI = {
       const modeloStr = mov.tipo_solicitacao === 'Troca' 
         ? `${mov.modelo} → ${mov.modelo_novo}` 
         : (mov.modelo || mov.modelo_novo || '-');
+      const requesterName = (() => {
+        const resolved = UI.getUserName ? UI.getUserName(mov.vendedor_solicitante) : '';
+        return resolved && !/não localizado|nao localizado/i.test(resolved) ? resolved : (mov.vendedor_solicitante || '-');
+      })();
 
       return `
         <tr class="mobile-summary-row movement-mobile-compact" onclick="App.showMovementDetails('${mov.id}')">
@@ -706,9 +710,10 @@ const UI = {
           <td data-label="ID" style="font-family:monospace; font-size:0.75rem;">#${mov.id}</td>
           <td data-label="Data">${dataStr}</td>
           <td data-label="Operação"><strong style="text-transform: uppercase; font-size: 0.72rem; color: var(--primary-color);">${mov.tipo_solicitacao}</strong></td>
-          <td data-label="Cliente" style="font-weight:600;">${mov.cliente_nome || '-'}</td>
+          <td data-label="Nome Fantasia" style="font-weight:600;">${mov.cliente_nome || '-'}</td>
           <td data-label="Cidade">${mov.cliente_cidade || '-'}</td>
-          <td data-label="Vendedor">${mov.vendedor_solicitante || '-'}</td>
+          <td data-label="Vendedor do Cliente">${mov.cliente_vendedor || requesterName || '-'}</td>
+          <td data-label="Solicitante">${requesterName}</td>
           <td data-label="Patrimônio" style="font-family:monospace; font-size:0.75rem;">${patrimonioStr}</td>
           <td data-label="Modelo">${modeloStr}</td>
           <td data-label="Status"><span class="badge-status ${statusClass}">${mov.status}</span></td>

@@ -65,6 +65,7 @@
     try {
       Object.keys(localStorage).forEach(k => {
         const lk = k.toLowerCase();
+        if (lk.startsWith('controle_campo_form_draft_v1:')) return;
         if ((lk.includes('draft') || lk.includes('rascunho') || lk.includes('form')) && transientKeys.some(t => lk.includes(t))) localStorage.removeItem(k);
       });
       Object.keys(sessionStorage).forEach(k => {
@@ -76,20 +77,9 @@
   function markFormsNoAutocomplete(){
     document.querySelectorAll('form').forEach(f => f.setAttribute('autocomplete','off'));
   }
-  document.addEventListener('submit', (e) => {
-    const id = (e.target && e.target.id || '').toLowerCase();
-    // Fotos podem estar sendo enviadas: o fluxo da movimentação limpa o
-    // formulário somente depois da confirmação de gravação do servidor.
-    if (id === 'movement-form') return;
-    if (/prospect|client|cliente|mov|ticket|despesa|saldo|simulador|exchange/.test(id) && !/user|usuario|unit|config|login/.test(id)) {
-      setTimeout(() => {
-        if (!document.body.contains(e.target)) return;
-        try { e.target.reset(); } catch(_){ }
-        e.target.querySelectorAll('input[type=file]').forEach(i => i.value = '');
-        clearTemporaryFormCache();
-      }, 900);
-    }
-  }, true);
+  // Não limpar formulários no simples clique de envio. Cada fluxo operacional
+  // já chama reset() depois que o servidor confirma o sucesso; em caso de erro,
+  // os dados precisam permanecer para correção e reenvio.
   window.addEventListener('hashchange', () => { clearTemporaryFormCache(); setTimeout(markFormsNoAutocomplete, 200); });
 
   // 02 - PWA instalável (registro seguro do service worker existente).
@@ -4099,7 +4089,7 @@
         const anexos = mediaItems(ticket).length;
         const anexosText = anexos ? ' • ' + anexos + ' anexo' + (anexos > 1 ? 's' : '') : '';
         return '<tr class=\"mobile-summary-row cc-ticket-compact-row\" onclick=\"App.showTicketDetails(\'' + esc(ticket.id) + '\')\">' +
-          '<td colspan=\"12\">' +
+          '<td colspan=\"15\">' +
             '<div style=\"display:grid;gap:4px;\">' +
               '<div style=\"display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;\"><div class=\"cc-line\" style=\"font-size:.82rem;font-weight:800;\"><span style=\"font-family:monospace;font-weight:900;\">' + esc(ticket.id || '') + '</span> • ' + esc(clientName) + esc(city) + '</div><span style=\"display:flex;align-items:center;gap:4px;flex-shrink:0;\"><span class=\"badge-status ' + priorityClass(ticket.priority) + '\">' + esc(ticket.priority || '—') + '</span><span class=\"badge-status ' + statusClass(ticket.status) + '\">' + esc(ticket.status || '—') + '</span></span></div>' +
               '<div class=\"cc-line\" style=\"font-size:.72rem;color:var(--text-muted);font-weight:700;\">' + esc(equip) + ' • ' + esc(ticket.date || 'S/D') + (resp ? ' • ' + esc(resp) : '') + esc(anexosText) + '</div>' +
@@ -8537,7 +8527,7 @@
     if (!body) return;
     const { filtered, pageItems, start, end } = paginatedItems(moduleKey, raw);
     if (!pageItems.length) {
-      const colspan = moduleKey === 'chamados' ? 14 : (moduleKey === 'clientes' ? 10 : 11);
+      const colspan = moduleKey === 'chamados' ? 15 : (moduleKey === 'clientes' ? 10 : 12);
       const msg = moduleKey === 'chamados' ? 'Nenhum chamado mecânico encontrado.' : 
                   moduleKey === 'clientes' ? 'Nenhum cliente cadastrado.' : 'Nenhuma movimentação registrada.';
       body.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-muted); padding:18px;">${msg}</td></tr>`;

@@ -99,3 +99,42 @@ test('visualizações de PDF possuem ação visível para fechar', () => {
   assert.match(app, /id="pdf-preview-close"[^>]*>Fechar<\/button>/);
   assert.match(compatibility, /onclick="window\.close\(\)">Fechar<\/button>/);
 });
+
+test('abertura de chamado evita colisão e trata o envio das fotos', () => {
+  const app = read('js/app.js');
+  const server = read('backend/src/index.js');
+  assert.doesNotMatch(app, /id: ticketId/);
+  assert.match(app, /inputEl\._instantUploadPromise = uploadPromise/);
+  assert.match(app, /if \(input\._instantUploadPromise\) await input\._instantUploadPromise/);
+  assert.match(app, /Não foi possível salvar todas as fotos obrigatórias/);
+  assert.match(server, /const generateTicketId = \(\) => `CH-\$\{Date\.now\(\)\.toString\(36\)/);
+  assert.match(server, /if \(await db\('chamados_tecnicos'\)\.where\(\{ id \}\)\.first\(\)\) id = generateTicketId\(\)/);
+});
+
+test('listas exibem fantasia, vendedores e cidade em computador e celular', () => {
+  const ticketsPage = read('pages/chamados.html');
+  const movementsPage = read('pages/movimentacao.html');
+  const ui = read('js/ui.js');
+  const maintenance = read('js/amaretto-manutencao-20261104.js');
+  assert.match(ticketsPage, /<th>Razão Social<\/th>\s*<th>Nome Fantasia<\/th>/);
+  assert.match(maintenance, /data-label="Nome Fantasia">\$\{esc\(ticket\.fantasyName/);
+  assert.match(movementsPage, /<th>Nome Fantasia<\/th>[\s\S]*<th>Cidade<\/th>[\s\S]*<th>Vendedor do Cliente<\/th>[\s\S]*<th>Solicitante<\/th>/);
+  assert.match(ui, /data-label="Vendedor do Cliente"/);
+  assert.match(ui, /data-label="Solicitante"/);
+  assert.match(maintenance, /#movements-table-body td\[data-label="Cidade"\]/);
+});
+
+test('rascunhos preservam formulários em erro e só limpam no reset confirmado', () => {
+  const drafts = read('js/form-drafts-20261106.js');
+  const compatibility = read('js/compatibilidade-consolidada.js');
+  const html = read('index.html');
+  assert.match(drafts, /'ticket-open-form', 'ticket-form', 'client-form', 'movement-form'/);
+  assert.match(drafts, /'prospect-form', 'expense-form', 'solicitacao-despesas-form'/);
+  assert.match(drafts, /document\.addEventListener\('submit', event => save\(event\.target\), true\)/);
+  assert.match(drafts, /document\.addEventListener\('reset'/);
+  assert.match(drafts, /localStorage\.removeItem\(storageKey\(form\)\)/);
+  assert.match(drafts, /\['password', 'submit', 'button', 'reset', 'image'\]/);
+  assert.match(compatibility, /controle_campo_form_draft_v1/);
+  assert.doesNotMatch(compatibility, /setTimeout\(\(\) => \{[\s\S]{0,250}e\.target\.reset\(\)/);
+  assert.match(html, /js\/form-drafts-20261106\.js/);
+});

@@ -6382,7 +6382,11 @@ app.post('/api/chamados', async (req, res) => {
   try {
     const now = new Date();
     const body = req.body || {};
-    const id = body.id || ('CH-' + Math.floor(100 + Math.random() * 900) + '-' + Date.now().toString().slice(-4));
+    // O servidor é a fonte do identificador. Timestamp base-36 + aleatório evita
+    // colisões que ocorriam quando o navegador sorteava apenas CH-100..CH-999.
+    const generateTicketId = () => `CH-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    let id = String(body.id || '').trim() || generateTicketId();
+    if (await db('chamados_tecnicos').where({ id }).first()) id = generateTicketId();
     const ownerId = req.user.profile === 'Vendedor' ? req.user.id : (body.userId || req.user.id);
     const allowedOwnerIds = await getPermittedSellerIds(req.user, db);
     if (!allowedOwnerIds.map(String).includes(String(ownerId))) {

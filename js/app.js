@@ -2169,7 +2169,7 @@ const App = {
         const localUrl = URL.createObjectURL(file);
 
         const startUpload = () => {
-          (async () => {
+          const uploadPromise = (async () => {
             try {
               statusEl.innerHTML = '<span style="color:#f59e0b;">⏳ Enviando para o servidor...</span>';
               const savedUrl = await this.uploadFile(file);
@@ -2177,14 +2177,18 @@ const App = {
                 inputEl.dataset.uploadedUrl = savedUrl;
                 inputEl.dataset.uploadId = savedUrl.includes('/api/uploads/') ? savedUrl.split('/').pop() : '';
                 statusEl.innerHTML = '<span style="color:#10b981;">✅ Arquivo salvo!</span>';
+                return savedUrl;
               } else {
                 throw new Error('Servidor retornou link vazio.');
               }
             } catch (err) {
               statusEl.innerHTML = `<span style="color:#ef4444;">❌ Falha no envio. Será tentado ao salvar.</span>`;
               console.error(`Erro no upload instantâneo (${inputEl.id}):`, err);
+              return '';
             }
           })();
+          inputEl._instantUploadPromise = uploadPromise;
+          return uploadPromise;
         };
 
         if (mediaType === 'image') {
@@ -2282,31 +2286,32 @@ const App = {
         const priority = document.getElementById('ticket-open-priority').value;
         const obs = document.getElementById('ticket-open-obs').value.trim();
 
-        const ticketId = 'CH-' + Math.floor(100 + Math.random() * 900);
-
-        // Process photos/videos — usa URL já enviada em background se disponível
-        let openingEquipmentPhotoUrl = '';
-        const photoInput = document.getElementById('ticket-open-photo-defect');
-        if (photoInput && photoInput.dataset.uploadedUrl) {
-          openingEquipmentPhotoUrl = photoInput.dataset.uploadedUrl;
-        } else if (photoInput && photoInput.files && photoInput.files[0]) {
-          openingEquipmentPhotoUrl = await this.uploadFile(photoInput.files[0]);
-        }
-
-        const resolveOpeningPhoto = async inputId => {
-          const input = document.getElementById(inputId);
-          if (input && input.dataset.uploadedUrl) return input.dataset.uploadedUrl;
-          if (input && input.files && input.files[0]) return this.uploadFile(input.files[0]);
-          return '';
-        };
-        const defectPhotoUrl = await resolveOpeningPhoto('ticket-open-photo-defect-1');
-        const defectPhoto2Url = await resolveOpeningPhoto('ticket-open-photo-defect-2');
-
         try {
+          // Aguarda um envio instantâneo que ainda esteja em andamento e evita
+          // enviar a mesma foto duas vezes ao clicar em salvar rapidamente.
+          const resolveOpeningPhoto = async inputId => {
+            const input = document.getElementById(inputId);
+            if (!input) return '';
+            if (input.dataset.uploadedUrl) return input.dataset.uploadedUrl;
+            if (input._instantUploadPromise) await input._instantUploadPromise;
+            if (input.dataset.uploadedUrl) return input.dataset.uploadedUrl;
+            if (input.files && input.files[0]) {
+              const savedUrl = await this.uploadFile(input.files[0]);
+              input.dataset.uploadedUrl = savedUrl || '';
+              return savedUrl || '';
+            }
+            return '';
+          };
+          const openingEquipmentPhotoUrl = await resolveOpeningPhoto('ticket-open-photo-defect');
+          const defectPhotoUrl = await resolveOpeningPhoto('ticket-open-photo-defect-1');
+          const defectPhoto2Url = await resolveOpeningPhoto('ticket-open-photo-defect-2');
+          if (!openingEquipmentPhotoUrl || !defectPhotoUrl || !defectPhoto2Url) {
+            throw new Error('Não foi possível salvar todas as fotos obrigatórias. Verifique a conexão e tente novamente.');
+          }
+
           const result = await this.fetchFromApi('/api/chamados', {
             method: 'POST',
             body: JSON.stringify({
-              id: ticketId,
               unitId,
               userId,
               equipmentSerial: serial,
@@ -2362,7 +2367,7 @@ const App = {
 
           const emails = Store.getNotificationEmails();
           console.log(`[Notificação] E-mail de novo chamado enviado para: ${emails.join(', ')}`);
-          this.showToast(`Chamado aberto com sucesso! OS: ${result.id || ticketId}`);
+          this.showToast(`Chamado aberto com sucesso! OS: ${result.id || 'gerada pelo servidor'}`);
         } catch (err) {
           alert('Erro ao abrir chamado: ' + err.message);
         } finally {

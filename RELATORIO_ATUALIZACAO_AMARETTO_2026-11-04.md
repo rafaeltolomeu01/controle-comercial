@@ -1,6 +1,7 @@
 # Relatório de atualização — Controle Comercial Amaretto
 
 Data: 04/11/2026  
+Atualização complementar: 06/11/2026  
 Escopo: histórico de movimentações e chamados mecânicos  
 Ambiente alterado: somente a cópia local recebida; nenhuma ação foi executada em produção.
 
@@ -23,6 +24,24 @@ As alterações solicitadas foram implementadas de forma aditiva e compatível c
 - As janelas de impressão de dossiê de movimentação, ficha técnica e solicitações de saldo receberam a mesma ação de fechamento.
 - O conteúdo, os cálculos e os anexos dos documentos não foram modificados.
 - PDFs baixados diretamente continuam fechados normalmente pelo visualizador nativo do navegador ou do dispositivo.
+
+### Abertura de chamados e informações nas listas
+
+- A geração do número do chamado passou para o servidor e usa um identificador de alta unicidade, eliminando colisões do antigo sorteio `CH-100` a `CH-999`.
+- O envio instantâneo das fotografias agora é aguardado antes da abertura e não duplica o mesmo upload quando o usuário salva rapidamente.
+- Falhas de upload ou do servidor mantêm o formulário disponível para correção e nova tentativa.
+- A lista de chamados exibe separadamente **Razão Social** e **Nome Fantasia**.
+- A lista de movimentações exibe **Nome Fantasia**, **Cidade**, **Vendedor do Cliente** e **Solicitante**, com nome do usuário resolvido quando o registro guarda seu código.
+- As novas informações aparecem tanto no computador quanto nos cartões do celular.
+
+### Rascunhos persistentes dos formulários
+
+- Os principais formulários operacionais salvam automaticamente um rascunho local por empresa, usuário e formulário.
+- Em erro, queda, fechamento, atualização da página ou troca de tela, os campos de texto, seleções, caixas e opções marcadas são recuperados.
+- A limpeza automática que ocorria logo após clicar em enviar foi removida; agora o rascunho só é apagado quando o fluxo confirmado chama `reset()` ou quando o usuário cancela intencionalmente.
+- Senhas nunca são armazenadas.
+- Arquivos não enviados não podem ser restaurados por restrição do navegador. Nos campos com upload instantâneo, a URL já salva no servidor é preservada e recuperada.
+- A camada foi adicionada sem modificar as regras de envio, aprovação, permissões ou cálculos de despesas.
 
 ## 1. Histórico de movimentações
 
@@ -129,7 +148,7 @@ O rollback foi deliberadamente deixado não destrutivo para não apagar dados. O
 ## 8. Validações executadas
 
 - Verificação de sintaxe JavaScript: 5 arquivos principais aprovados.
-- Testes específicos da atualização: **6/6 aprovados**.
+- Testes específicos da atualização: **9/9 aprovados**.
 - Suíte de regressões de segurança e funcionamento existente: **69/69 aprovados**.
 - Verificação de IDs HTML combinados entre `index.html` e `pages/chamados.html`: **272 IDs únicos**.
 - Verificação nominal de arquivos sensíveis reais (`.env`, chaves e credenciais): nenhum encontrado; somente exemplos de configuração permanecem.

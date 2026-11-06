@@ -117,6 +117,16 @@
         .general-filter-bar .filter-fields-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px!important}
         .general-filter-bar .filter-group{min-width:0!important;width:100%!important}
       }
+      @media(max-width:900px){
+        #tickets-table-body td[data-label="Nome Fantasia"]{display:block!important;font-size:var(--mobile-title-size,.94rem)!important;font-weight:750!important;color:var(--text-main)!important;line-height:1.3!important;padding-right:95px!important;margin-bottom:4px!important;white-space:normal!important}
+        #tickets-table-body td[data-label="Cliente"]{display:block!important;font-size:.76rem!important;font-weight:500!important;color:var(--text-muted)!important;padding-right:0!important;margin-bottom:7px!important}
+        #tickets-table-body td[data-label="Cliente"]::before{display:inline!important;content:"Razão social: "!important;font-weight:700!important}
+        #movements-table-body td[data-label="Nome Fantasia"]{display:block!important;font-size:var(--mobile-title-size,.94rem)!important;font-weight:750!important;color:var(--text-main)!important;line-height:1.3!important;padding-right:95px!important;margin-bottom:6px!important;white-space:normal!important}
+        #movements-table-body td[data-label="Cidade"],#movements-table-body td[data-label="Vendedor do Cliente"],#movements-table-body td[data-label="Solicitante"]{display:block!important;font-size:.76rem!important;color:var(--text-muted)!important;margin:4px 0!important;padding:0!important;white-space:normal!important}
+        #movements-table-body td[data-label="Cidade"]::before{display:inline!important;content:"Cidade: "!important;font-weight:700!important}
+        #movements-table-body td[data-label="Vendedor do Cliente"]::before{display:inline!important;content:"Vendedor do cliente: "!important;font-weight:700!important}
+        #movements-table-body td[data-label="Solicitante"]::before{display:inline!important;content:"Solicitante: "!important;font-weight:700!important}
+      }
       @media(max-width:430px){.general-filter-bar .filter-fields-row{grid-template-columns:1fr}.general-filter-bar{padding:10px!important}}
     `;
     document.head.appendChild(style);
@@ -153,6 +163,7 @@
         <td data-label="Equipamento">${esc(ticket.equipmentSerial || '—')}</td>
         <td data-label="Marca">${esc(ticket.equipmentBrand || '—')}</td>
         <td data-label="Cliente">${esc(ticket.client || '—')}</td>
+        <td data-label="Nome Fantasia">${esc(ticket.fantasyName || '—')}</td>
         <td data-label="Falha Relatada" class="normal-wrap">${esc(ticket.title || '—')}</td>
         <td data-label="Serviço Realizado" class="normal-wrap">${esc(serviceText(ticket) || '—')}</td>
         <td data-label="Estado Pós">${esc(ticket.eqStatusAfter || '—')}</td>
@@ -160,7 +171,7 @@
         <td data-label="Status"><span class="badge-status ${statusClass}">${esc(displayStatus)}</span></td>
         <td data-label="Ação">${action}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="14" style="text-align:center;padding:24px;color:var(--text-muted)">Nenhum chamado encontrado para os filtros selecionados.</td></tr>';
+    }).join('') || '<tr><td colspan="15" style="text-align:center;padding:24px;color:var(--text-muted)">Nenhum chamado encontrado para os filtros selecionados.</td></tr>';
   }
 
   function enhanceFicha() {
