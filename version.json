@@ -1,7 +1,7 @@
 {
-  "version": "20261106.08",
-  "updatedAt": "2026-11-06T00:00:00-03:00",
-  "description": "Cartoes mobile completos para movimentacoes de equipamentos",
-  "build": "20261106-08-movimentacoes-mobile-completas",
-  "buildDate": "2026-11-06T00:00:00-03:00"
+  "version": "20261109.09",
+  "updatedAt": "2026-11-09T00:00:00-03:00",
+  "description": "Preferencias locais de colunas e fonte nas tabelas desktop",
+  "build": "20261109-09-preferencias-tabelas-desktop",
+  "buildDate": "2026-11-09T00:00:00-03:00"
 }

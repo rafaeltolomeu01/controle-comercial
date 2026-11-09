@@ -143,3 +143,19 @@ test('rascunhos preservam formulários em erro e só limpam no reset confirmado'
   assert.doesNotMatch(compatibility, /setTimeout\(\(\) => \{[\s\S]{0,250}e\.target\.reset\(\)/);
   assert.match(html, /js\/form-drafts-20261106\.js/);
 });
+
+test('preferências de colunas e fonte ficam locais por usuário e somente no desktop', () => {
+  const preferences = read('js/table-preferences-20261109.js');
+  const html = read('index.html');
+  assert.match(preferences, /tbodyId: 'movements-table-body'/);
+  assert.match(preferences, /tbodyId: 'tickets-table-body'/);
+  assert.match(preferences, /user\.id \|\| user\.username \|\| user\.email/);
+  assert.match(preferences, /localStorage\.setItem\(storageKey\(config\)/);
+  assert.match(preferences, /hiddenColumns/);
+  assert.match(preferences, /fontScale/);
+  assert.match(preferences, /@media\(min-width:901px\)/);
+  assert.match(preferences, /@media\(max-width:900px\)\{\.cc-table-preferences\{display:none!important\}\}/);
+  assert.match(preferences, /cc-user-hidden-column/);
+  assert.match(preferences, /Restaurar visual padrão/);
+  assert.match(html, /js\/table-preferences-20261109\.js/);
+});
