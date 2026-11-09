@@ -154,8 +154,13 @@ test('preferências de colunas e fonte ficam locais por usuário e somente no de
   assert.match(preferences, /hiddenColumns/);
   assert.match(preferences, /fontScale/);
   assert.match(preferences, /@media\(min-width:901px\)/);
-  assert.match(preferences, /@media\(max-width:900px\)\{\.cc-table-preferences\{display:none!important\}\}/);
+  assert.match(preferences, /@media\(max-width:900px\)\{\.cc-table-preferences-host,\.cc-table-preferences\{display:none!important\}\}/);
   assert.match(preferences, /cc-user-hidden-column/);
+  assert.match(preferences, /cc-table-preferences-host/);
+  assert.match(preferences, /if \(scanTimer\) return/);
+  assert.match(preferences, /setInterval\(\(\) => CONFIGS\.forEach\(enhance\), 1500\)/);
+  assert.match(preferences, /#tickets-table-body td\.cc-user-hidden-column\{display:none!important\}/);
+  assert.match(preferences, /#tickets-table-body td\{font-size:var\(--cc-user-table-font-size\)!important\}/);
   assert.match(preferences, /Restaurar visual padrão/);
   assert.match(html, /js\/table-preferences-20261109\.js/);
 });
