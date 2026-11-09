@@ -9,8 +9,8 @@
   const MAX_SCALE = 1.4;
   const STEP = 0.1;
   const CONFIGS = [
-    { key: 'movimentacao', tbodyId: 'movements-table-body', title: 'Movimentações', baseSize: 0.75 },
-    { key: 'chamados', tbodyId: 'tickets-table-body', title: 'Chamados', baseSize: 0.66 }
+    { key: 'movimentacao', pageName: 'movimentacao', renderMethod: 'renderMovements', tbodyId: 'movements-table-body', title: 'Movimentações', baseSize: 0.75 },
+    { key: 'chamados', pageName: 'chamados', renderMethod: 'renderTickets', tbodyId: 'tickets-table-body', title: 'Chamados', baseSize: 0.66 }
   ];
 
   const normalize = value => String(value || '')
@@ -250,6 +250,40 @@
     applyState(config);
   }
 
+  function wrapPageLoader() {
+    if (!window.App || typeof App.loadPageContent !== 'function' || App.loadPageContent.__ccTablePreferencesWrapped) return;
+    const original = App.loadPageContent;
+    const wrapped = async function (pageName) {
+      const result = await original.apply(this, arguments);
+      const config = CONFIGS.find(item => item.pageName === pageName);
+      if (config) enhance(config);
+      return result;
+    };
+    wrapped.__ccTablePreferencesWrapped = true;
+    App.loadPageContent = wrapped;
+  }
+
+  function wrapRenderers() {
+    if (!window.UI) return;
+    CONFIGS.forEach(config => {
+      const original = UI[config.renderMethod];
+      if (typeof original !== 'function' || original.__ccTablePreferencesWrapped) return;
+      const wrapped = function () {
+        const result = original.apply(this, arguments);
+        enhance(config);
+        return result;
+      };
+      Object.keys(original).forEach(key => { wrapped[key] = original[key]; });
+      wrapped.__ccTablePreferencesWrapped = true;
+      UI[config.renderMethod] = wrapped;
+    });
+  }
+
+  function installImmediateHooks() {
+    wrapPageLoader();
+    wrapRenderers();
+  }
+
   let scanTimer = null;
   function scheduleScan(delay) {
     // Agrupa mutações sem adiar indefinidamente quando a página está atualizando.
@@ -303,13 +337,31 @@
   }
 
   injectStyles();
-  scheduleScan(0);
-  document.addEventListener('DOMContentLoaded', () => scheduleScan(0));
-  window.addEventListener('hashchange', () => scheduleScan(180));
+  installImmediateHooks();
+  CONFIGS.forEach(enhance);
+  document.addEventListener('DOMContentLoaded', () => {
+    installImmediateHooks();
+    CONFIGS.forEach(enhance);
+  });
+  window.addEventListener('hashchange', () => {
+    installImmediateHooks();
+    CONFIGS.forEach(enhance);
+    scheduleScan(0);
+  });
   document.addEventListener('click', event => {
     if (!event.target.closest('.cc-table-preferences')) closeMenus(null);
   });
-  new MutationObserver(() => scheduleScan(60)).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(mutations => {
+    const immediate = new Set();
+    mutations.forEach(mutation => Array.from(mutation.addedNodes || []).forEach(node => {
+      if (!node || node.nodeType !== 1) return;
+      CONFIGS.forEach(config => {
+        if (node.id === config.tbodyId || (node.querySelector && node.querySelector(`#${config.tbodyId}`))) immediate.add(config);
+      });
+    }));
+    if (immediate.size) immediate.forEach(enhance);
+    else scheduleScan(0);
+  }).observe(document.documentElement, { childList: true, subtree: true });
   // Garantia leve para páginas legadas que recriam partes do conteúdo depois do carregamento.
   setInterval(() => CONFIGS.forEach(enhance), 1500);
 
