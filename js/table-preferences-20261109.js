@@ -169,7 +169,7 @@
     renderColumnMenu(config, toolbar);
   }
 
-  function createToolbar(config, cardHeader) {
+  function createToolbar(config, host) {
     const toolbar = document.createElement('div');
     toolbar.className = 'cc-table-preferences no-print';
     toolbar.dataset.module = config.key;
@@ -216,8 +216,7 @@
       applyState(config);
     });
 
-    cardHeader.classList.add('cc-table-header-with-preferences');
-    cardHeader.appendChild(toolbar);
+    host.appendChild(toolbar);
     renderColumnMenu(config, toolbar);
     updateToolbar(config, readState(config));
     return toolbar;
@@ -227,23 +226,38 @@
     const table = tableFor(config);
     if (!table) return;
     const card = table.closest('.card');
-    const cardHeader = card && card.querySelector(':scope > .card-header');
-    if (!cardHeader) return;
+    const tableWrap = table.closest('.table-responsive');
+    if (!card || !tableWrap) return;
 
-    let toolbar = cardHeader.querySelector(`.cc-table-preferences[data-module="${config.key}"]`);
+    // O cabeçalho das páginas pode ser reconstruído pelos filtros legados.
+    // Mantém os controles em uma faixa própria e estável, imediatamente acima da tabela.
+    card.querySelectorAll(`.card-header .cc-table-preferences[data-module="${config.key}"]`).forEach(old => old.remove());
+    let host = card.querySelector(`:scope > .cc-table-preferences-host[data-module="${config.key}"]`);
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'cc-table-preferences-host no-print';
+      host.dataset.module = config.key;
+      card.insertBefore(host, tableWrap);
+    }
+
+    let toolbar = host.querySelector(`.cc-table-preferences[data-module="${config.key}"]`);
     const key = storageKey(config);
     if (toolbar && toolbar.dataset.storageKey !== key) {
       toolbar.remove();
       toolbar = null;
     }
-    if (!toolbar) toolbar = createToolbar(config, cardHeader);
+    if (!toolbar) toolbar = createToolbar(config, host);
     applyState(config);
   }
 
   let scanTimer = null;
   function scheduleScan(delay) {
-    clearTimeout(scanTimer);
-    scanTimer = setTimeout(() => CONFIGS.forEach(enhance), delay == null ? 80 : delay);
+    // Agrupa mutações sem adiar indefinidamente quando a página está atualizando.
+    if (scanTimer) return;
+    scanTimer = setTimeout(() => {
+      scanTimer = null;
+      CONFIGS.forEach(enhance);
+    }, delay == null ? 80 : delay);
   }
 
   function injectStyles() {
@@ -251,10 +265,9 @@
     const style = document.createElement('style');
     style.id = 'cc-table-preferences-style';
     style.textContent = `
-      .cc-table-preferences{display:none}
+      .cc-table-preferences-host,.cc-table-preferences{display:none}
       @media(min-width:901px){
-        .cc-table-header-with-preferences{display:flex!important;align-items:center!important;gap:12px!important;flex-wrap:wrap!important}
-        .cc-table-header-with-preferences>.card-title{margin-right:auto!important}
+        .cc-table-preferences-host{display:flex!important;align-items:center!important;justify-content:flex-end!important;min-height:50px;padding:8px 14px;border-bottom:1px solid var(--border-color);background:rgba(255,255,255,.012);overflow:visible!important;position:relative;z-index:12}
         .cc-table-preferences{display:flex;align-items:center;gap:8px;margin-left:auto;position:relative;z-index:12}
         .cc-column-control{position:relative}
         .cc-table-control{height:32px;min-width:36px;padding:0 10px;border:1px solid var(--border-color);border-radius:7px;background:rgba(255,255,255,.04);color:var(--text-main);font:inherit;font-size:.76rem;font-weight:700;cursor:pointer}
@@ -276,8 +289,15 @@
         table.cc-user-configurable-table td>strong,table.cc-user-configurable-table .badge-status{font-size:inherit!important}
         table.cc-user-configurable-table td .btn{font-size:var(--cc-user-table-button-size)!important}
         table.cc-user-configurable-table .cc-user-hidden-column{display:none!important}
+        /* Chamados possui regras legadas com ID + !important. Estes seletores,
+           carregados por último, permitem que a preferência do usuário prevaleça. */
+        #view-chamados table.cc-user-configurable-table th{font-size:var(--cc-user-table-font-size)!important}
+        #tickets-table-body td{font-size:var(--cc-user-table-font-size)!important}
+        #tickets-table-body td>strong,#tickets-table-body .badge-status{font-size:inherit!important}
+        #tickets-table-body td .btn{font-size:var(--cc-user-table-button-size)!important}
+        #view-chamados table.cc-user-configurable-table th.cc-user-hidden-column,#tickets-table-body td.cc-user-hidden-column{display:none!important}
       }
-      @media(max-width:900px){.cc-table-preferences{display:none!important}}
+      @media(max-width:900px){.cc-table-preferences-host,.cc-table-preferences{display:none!important}}
     `;
     document.head.appendChild(style);
   }
@@ -290,6 +310,8 @@
     if (!event.target.closest('.cc-table-preferences')) closeMenus(null);
   });
   new MutationObserver(() => scheduleScan(60)).observe(document.documentElement, { childList: true, subtree: true });
+  // Garantia leve para páginas legadas que recriam partes do conteúdo depois do carregamento.
+  setInterval(() => CONFIGS.forEach(enhance), 1500);
 
   window.TablePreferences = { applyState, readState, storageKey, scan: () => CONFIGS.forEach(enhance) };
 })();

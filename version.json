@@ -1,7 +1,7 @@
 {
-  "version": "20261109.09",
+  "version": "20261109.11",
   "updatedAt": "2026-11-09T00:00:00-03:00",
-  "description": "Preferencias locais de colunas e fonte nas tabelas desktop",
-  "build": "20261109-09-preferencias-tabelas-desktop",
+  "description": "Preferencias de colunas e fonte corrigidas nos chamados",
+  "build": "20261109-11-preferencias-chamados-corrigidas",
   "buildDate": "2026-11-09T00:00:00-03:00"
 }

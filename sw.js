@@ -1,4 +1,4 @@
-const CACHE_VERSION = '20261109-09-preferencias-tabelas-desktop';
+const CACHE_VERSION = '20261109-11-preferencias-chamados-corrigidas';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
